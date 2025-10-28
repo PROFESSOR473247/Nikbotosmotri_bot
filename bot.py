@@ -2,8 +2,8 @@ import logging
 import asyncio
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
-    Application, CommandHandler, ContextTypes, MessageHandler, filters,
-    ConversationHandler, CallbackQueryHandler
+    Updater, CommandHandler, MessageHandler, Filters, 
+    CallbackContext, ConversationHandler, CallbackQueryHandler
 )
 from config import BOT_TOKEN
 from authorized_users import is_authorized, is_admin, add_user, remove_user, get_users_list, get_admin_id
@@ -1409,9 +1409,11 @@ def main():
 
     # Запуск бота
     print("✅ Бот запущен и готов к работе!")
-    application.run_polling()
+    updater.start_polling()
+updater.idle()
 
 
 if __name__ == '__main__':
 
     main()
+
