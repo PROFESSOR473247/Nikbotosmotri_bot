@@ -1332,7 +1332,7 @@ def main():
         asyncio.set_event_loop(loop)
 
     # Создаем приложение
-    application = Application.builder().token(BOT_TOKEN).build()
+    updater = Updater(BOT_TOKEN)
 
     # ConversationHandler для добавления пользователя
     add_user_conv_handler = ConversationHandler(
@@ -1413,4 +1413,5 @@ def main():
 
 
 if __name__ == '__main__':
+
     main()
