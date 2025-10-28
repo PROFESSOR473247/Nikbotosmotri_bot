@@ -2,8 +2,8 @@ import logging
 import asyncio
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
-    Updater, CommandHandler, MessageHandler, Filters, 
-    CallbackContext, ConversationHandler, CallbackQueryHandler
+    Application, CommandHandler, MessageHandler, filters, 
+    ContextTypes, ConversationHandler, CallbackQueryHandler
 )
 from config import BOT_TOKEN
 from authorized_users import is_authorized, is_admin, add_user, remove_user, get_users_list, get_admin_id
@@ -1332,14 +1332,14 @@ def main():
         asyncio.set_event_loop(loop)
 
     # Создаем приложение
-    updater = Updater(BOT_TOKEN)
+    application = Application.builder().token(BOT_TOKEN).build()
 
     # ConversationHandler для добавления пользователя
     add_user_conv_handler = ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("^➕ Добавить пользователя$"), add_user_start)],
         states={
-            ADD_USER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_user_id)],
-            ADD_USER_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_user_name)],
+            ADD_USER_ID: [MessageHandler(filters.TEXT& ~filters.COMMAND, add_user_id)],
+            ADD_USER_NAME: [MessageHandler(filters.TEXT& ~filters.COMMAND, add_user_name)],
         },
         fallbacks=[CommandHandler("cancel", cancel)]
     )
@@ -1405,15 +1405,15 @@ def main():
     application.add_handler(MessageHandler(filters.Regex("^❌ .* \\(ID: \\d+\\)$"), remove_user_selected))
 
     # Обработчик для всех текстовых сообщений
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    application.add_handler(MessageHandler(filters.TEXT& ~filters.COMMAND, handle_text))
 
     # Запуск бота
     print("✅ Бот запущен и готов к работе!")
-    updater.start_polling()
-updater.idle()
+    application.run_polling()
 
 
 if __name__ == '__main__':
 
     main()
+
 
