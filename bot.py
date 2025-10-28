@@ -3,7 +3,8 @@ import asyncio
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, filters, 
-    ContextTypes, ConversationHandler, CallbackQueryHandler
+    ContextTypes, ConversationHandler, CallbackQueryHandler,
+    JobQueue  # ← ДОБАВЛЕНО ЗДЕСЬ
 )
 from config import BOT_TOKEN
 from authorized_users import is_authorized, is_admin, add_user, remove_user, get_users_list, get_admin_id
@@ -1332,7 +1333,12 @@ def main():
         asyncio.set_event_loop(loop)
 
     # Создаем приложение
-    application = Application.builder().token(BOT_TOKEN).build()
+    application = (
+    Application.builder()
+    .token(BOT_TOKEN)
+    .job_queue(JobQueue())
+    .build()
+)
 
     # ConversationHandler для добавления пользователя
     add_user_conv_handler = ConversationHandler(
@@ -1415,5 +1421,6 @@ def main():
 if __name__ == '__main__':
 
     main()
+
 
 
