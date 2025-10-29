@@ -1,10 +1,10 @@
-import logging
+        import logging
 import asyncio
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, filters, 
     ContextTypes, ConversationHandler, CallbackQueryHandler,
-    JobQueue  # ← ДОБАВЛЕНО ЗДЕСЬ
+    JobQueue
 )
 from config import BOT_TOKEN
 from authorized_users import is_authorized, is_admin, add_user, remove_user, get_users_list, get_admin_id
@@ -13,6 +13,9 @@ import pytz
 from datetime import timedelta
 import sys
 import os
+import requests
+import threading
+import time
 
 # Принудительно перезагружаем модуль templates
 if 'templates' in sys.modules:
@@ -56,6 +59,28 @@ logging.basicConfig(
 active_jobs = {}
 test_jobs = {}
 
+# Функция для поддержания бота онлайн (решение проблемы отключения)
+def keep_alive():
+    """Периодически пингует приложение чтобы не дать ему заснуть"""
+    def ping():
+        while True:
+            try:
+                # Получаем URL из переменной окружения Render
+                render_url = os.environ.get('RENDER_EXTERNAL_URL')
+                if render_url:
+                    response = requests.get(render_url, timeout=10)
+                    print(f"🔄 Пинг отправлен: {response.status_code}")
+                else:
+                    # Если URL нет, просто логируем
+                    print("🔄 Keep-alive: бот активен")
+            except Exception as e:
+                print(f"⚠️ Ошибка пинга: {e}")
+            time.sleep(300)  # Пинг каждые 5 минут
+    
+    # Запускаем в отдельном потоке
+    ping_thread = threading.Thread(target=ping, daemon=True)
+    ping_thread.start()
+    print("✅ Keep-alive система запущена")
 
 async def send_template_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int, template_name: str):
     """Отправляет сообщение по шаблону с изображением"""
@@ -397,7 +422,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f'ID чата: {chat_id}\n'
             f'Ваш ID: {user_id}\n\n'
             '❌ У ВАС НЕДОСТАТОЧНО ПРАВ\n\n'
-            'Для доступа к функциям бота обратитесь к администратору\n\n'
+            'Для доступа к функции бота обратитесь к администратору\n\n'
             '🎹 Доступные функции:\n'
             '• 🆔 Получить ID - узнать ваш идентификатор\n'
             '• /help - справка по командам'
@@ -569,6 +594,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @admin_required
 async def user_management(update: Update, _: ContextTypes.DEFAULT_TYPE):
     """Меню управления пользователями"""
+    print(f"🔍 DEBUG: user_management вызван пользователем {update.effective_user.id}")
     await update.message.reply_text(
         "👥 Управление пользователями\n\n"
         "Выберите действие:",
@@ -579,6 +605,7 @@ async def user_management(update: Update, _: ContextTypes.DEFAULT_TYPE):
 @admin_required
 async def add_user_start(update: Update, _: ContextTypes.DEFAULT_TYPE):
     """Начало процесса добавления пользователя"""
+    print(f"🔍 DEBUG: add_user_start вызван пользователем {update.effective_user.id}")
     await update.message.reply_text(
         "➕ ДОБАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯ\n\n"
         "Шаг 1 из 2:\n"
@@ -593,7 +620,8 @@ async def add_user_start(update: Update, _: ContextTypes.DEFAULT_TYPE):
 async def add_user_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка ID пользователя"""
     user_id_text = update.message.text.strip()
-
+    print(f"🔍 DEBUG: add_user_id вызван с текстом: '{user_id_text}'")
+    
     try:
         user_id = int(user_id_text)
         # Сохраняем user_id в контексте
@@ -607,6 +635,7 @@ async def add_user_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ADD_USER_NAME
         
     except ValueError:
+        print(f"❌ DEBUG: Ошибка преобразования ID: {user_id_text}")
         await update.message.reply_text(
             "❌ Ошибка: ID должен состоять только из цифр!\n"
             "Пожалуйста, введите корректный ID:"
@@ -619,6 +648,7 @@ async def add_user_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка имени пользователя"""
     username = update.message.text.strip()
     user_id = context.user_data.get('add_user_id')
+    print(f"🔍 DEBUG: add_user_name вызван с именем: '{username}', ID: {user_id}")
 
     if not user_id:
         await update.message.reply_text(
@@ -778,6 +808,36 @@ async def cancel(update: Update, _: ContextTypes.DEFAULT_TYPE):
         reply_markup=get_user_management_keyboard() if is_admin(user_id) else get_main_keyboard()
     )
     return ConversationHandler.END
+
+
+# Альтернативная команда для добавления пользователя (если ConversationHandler не работает)
+@admin_required
+async def quick_add_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Быстрое добавление пользователя через команду"""
+    print(f"🔍 DEBUG: quick_add_user вызван с аргументами: {context.args}")
+    
+    if len(context.args) < 2:
+        await update.message.reply_text(
+            "❌ Использование: /adduser <ID> <Имя>\n"
+            "Пример: /adduser 123456789 Иван Иванов"
+        )
+        return
+    
+    try:
+        user_id = int(context.args[0])
+        username = ' '.join(context.args[1:])
+        
+        success, message = add_user(user_id, username)
+        await update.message.reply_text(
+            f"✅ {message}" if success else f"❌ {message}",
+            reply_markup=get_user_management_keyboard()
+        )
+        
+    except ValueError:
+        await update.message.reply_text(
+            "❌ Ошибка: ID должен быть числом",
+            reply_markup=get_user_management_keyboard()
+        )
 
 
 # Hongqi шаблоны
@@ -1325,6 +1385,9 @@ def main():
     """Запуск бота"""
     print("🚀 Запуск бота...")
 
+    # Запускаем keep-alive систему
+    keep_alive()
+
     # Явно создаем event loop для Python 3.14
     try:
         loop = asyncio.get_event_loop()
@@ -1334,18 +1397,18 @@ def main():
 
     # Создаем приложение
     application = (
-    Application.builder()
-    .token(BOT_TOKEN)
-    .job_queue(JobQueue())
-    .build()
-)
+        Application.builder()
+        .token(BOT_TOKEN)
+        .job_queue(JobQueue())
+        .build()
+    )
 
     # ConversationHandler для добавления пользователя
     add_user_conv_handler = ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("^➕ Добавить пользователя$"), add_user_start)],
         states={
-            ADD_USER_ID: [MessageHandler(filters.TEXT& ~filters.COMMAND, add_user_id)],
-            ADD_USER_NAME: [MessageHandler(filters.TEXT& ~filters.COMMAND, add_user_name)],
+            ADD_USER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_user_id)],
+            ADD_USER_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_user_name)],
         },
         fallbacks=[CommandHandler("cancel", cancel)]
     )
@@ -1357,6 +1420,7 @@ def main():
     application.add_handler(CommandHandler("now", now))
     application.add_handler(CommandHandler("status", status))
     application.add_handler(CommandHandler("update_menu", update_menu))
+    application.add_handler(CommandHandler("adduser", quick_add_user))  # Альтернативная команда
 
     # Обработчики кнопок
     application.add_handler(MessageHandler(filters.Regex("^📋 Шаблоны$"), handle_text))
@@ -1411,7 +1475,7 @@ def main():
     application.add_handler(MessageHandler(filters.Regex("^❌ .* \\(ID: \\d+\\)$"), remove_user_selected))
 
     # Обработчик для всех текстовых сообщений
-    application.add_handler(MessageHandler(filters.TEXT& ~filters.COMMAND, handle_text))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     # Запуск бота
     print("✅ Бот запущен и готов к работе!")
@@ -1449,7 +1513,3 @@ if __name__ == '__main__':
     
     # Запускаем основного бота
     main()
-
-
-
-
