@@ -143,7 +143,6 @@ async def send_template_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int
     except Exception as send_error:
         print(f"❌ [{current_time}] Ошибка отправки {template_name}: {send_error}")
 
-
 async def send_test_template_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int, template_name: str):
     """Отправляет тестовое сообщение по шаблону с изображением"""
     current_time = datetime.datetime.now(pytz.timezone('Europe/Moscow')).strftime("%H:%M:%S")
@@ -197,10 +196,8 @@ async def send_test_template_message(context: ContextTypes.DEFAULT_TYPE, chat_id
     except Exception as test_error:
         print(f"❌ [{current_time}] Ошибка тестовой отправки {template_name}: {test_error}")
 
-
 # Состояния для ConversationHandler
 ADD_USER_ID, ADD_USER_NAME = range(2)
-
 
 # Декоратор для проверки авторизации
 def authorization_required(func):
@@ -215,9 +212,7 @@ def authorization_required(func):
             print(f"🚫 Неавторизованный доступ от user_id: {user_id} к функции: {func.__name__}")
             return None
         return await func(update, context, *args, **kwargs)
-
     return wrapper
-
 
 # Декоратор для проверки прав администратора
 def admin_required(func):
@@ -231,9 +226,7 @@ def admin_required(func):
             print(f"🚫 Попытка доступа к админ-функции от user_id: {user_id}")
             return None
         return await func(update, context, *args, **kwargs)
-
     return wrapper
-
 
 def get_main_keyboard():
     """Создает главное меню для авторизованных пользователей"""
@@ -244,7 +237,6 @@ def get_main_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, input_field_placeholder="Выберите раздел...")
 
-
 def get_unauthorized_keyboard():
     """Создает меню для неавторизованных пользователей"""
     keyboard = [
@@ -254,7 +246,6 @@ def get_unauthorized_keyboard():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True,
                                input_field_placeholder="Для доступа обратитесь к администратору")
 
-
 def get_templates_keyboard():
     """Создает меню выбора бренда"""
     keyboard = [
@@ -262,7 +253,6 @@ def get_templates_keyboard():
         ["🔙 Главное меню"]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
 
 def get_hongqi_keyboard():
     """Создает меню Hongqi"""
@@ -272,7 +262,6 @@ def get_hongqi_keyboard():
         ["🔙 К выбору бренда", "🔙 Главное меню"]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
 
 def get_turbomatiz_keyboard():
     """Создает меню TurboMatiz"""
@@ -284,7 +273,6 @@ def get_turbomatiz_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-
 def get_testing_keyboard():
     """Создает меню тестирования"""
     keyboard = [
@@ -294,7 +282,6 @@ def get_testing_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-
 def get_test_hongqi_keyboard():
     """Создает меню тестирования Hongqi"""
     keyboard = [
@@ -302,7 +289,6 @@ def get_test_hongqi_keyboard():
         ["🔙 К тестированию", "🔙 Главное меню"]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
 
 def get_test_turbomatiz_keyboard():
     """Создает меню тестирования TurboMatiz"""
@@ -312,7 +298,6 @@ def get_test_turbomatiz_keyboard():
         ["🔙 К тестированию", "🔙 Главное меню"]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
 
 def get_more_keyboard(user_id):
     """Создает меню дополнительных функций"""
@@ -326,9 +311,7 @@ def get_more_keyboard(user_id):
         keyboard.append(["👥 Управление пользователями"])
 
     keyboard.append(["🔙 Главное меню"])
-
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
 
 def get_user_management_keyboard():
     """Создает меню управления пользователями"""
@@ -338,7 +321,6 @@ def get_user_management_keyboard():
         ["🔙 Назад к ЕЩЕ"]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
 
 def get_remove_user_keyboard():
     """Создает клавиатуру для удаления пользователей"""
@@ -356,7 +338,6 @@ def get_remove_user_keyboard():
     keyboard.append(["🔙 Назад к управлению"])
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-
 def get_confirmation_keyboard(user_id):
     """Создает клавиатуру подтверждения удаления"""
     keyboard = [
@@ -367,12 +348,10 @@ def get_confirmation_keyboard(user_id):
     ]
     return InlineKeyboardMarkup(keyboard)
 
-
 def get_back_to_management_keyboard():
     """Создает кнопку возврата к управлению пользователями"""
     keyboard = [["🔙 Назад к управлению"]]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
 
 def moscow_to_utc(time_str):
     """Конвертирует время из московского в UTC"""
@@ -385,7 +364,6 @@ def moscow_to_utc(time_str):
         return utc_time.time()
     except Exception as time_error:
         raise ValueError(f"Ошибка конвертации времени: {time_error}")
-
 
 def format_time_delta(delta):
     """Форматирует разницу времени в читаемый вид"""
@@ -408,7 +386,6 @@ def format_time_delta(delta):
 
     return " ".join(parts) if parts else "менее секунды"
 
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
@@ -422,7 +399,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f'ID чата: {chat_id}\n'
             f'Ваш ID: {user_id}\n\n'
             '❌ У ВАС НЕДОСТАТОЧНО ПРАВ\n\n'
-            'Для доступа к функции бота обратитесь к администратору\n\n'
+            'Для доступа к функциям бота обратитесь к администратору\n\n'
             '🎹 Доступные функции:\n'
             '• 🆔 Получить ID - узнать ваш идентификатор\n'
             '• /help - справка по командам'
@@ -454,7 +431,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     print(f"✅ Отправлено главное меню в чат {chat_id} для user_id: {user_id}")
 
-
 @authorization_required
 async def update_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Принудительно обновляет меню на новую версию"""
@@ -477,7 +453,6 @@ async def update_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• ⚙️ ЕЩЕ - дополнительные функции",
         reply_markup=get_main_keyboard()
     )
-
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать справку по командам - доступно всем"""
@@ -508,7 +483,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(help_text, reply_markup=get_unauthorized_keyboard())
 
-
 @authorization_required
 async def now(update: Update, _: ContextTypes.DEFAULT_TYPE):
     """Показывает текущее время"""
@@ -517,7 +491,6 @@ async def now(update: Update, _: ContextTypes.DEFAULT_TYPE):
         f'🕒 Текущее время: {current_time} (МСК)',
         reply_markup=get_main_keyboard()
     )
-
 
 # Эта функция должна быть БЕЗ декоратора @authorization_required
 async def my_id(update: Update, _: ContextTypes.DEFAULT_TYPE):
@@ -541,7 +514,6 @@ async def my_id(update: Update, _: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
     print(f"📋 Показан ID для user_id: {user_id}")
-
 
 @authorization_required
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -589,7 +561,6 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(status_text, reply_markup=get_main_keyboard())
 
-
 # Функции управления пользователями
 @admin_required
 async def user_management(update: Update, _: ContextTypes.DEFAULT_TYPE):
@@ -600,7 +571,6 @@ async def user_management(update: Update, _: ContextTypes.DEFAULT_TYPE):
         "Выберите действие:",
         reply_markup=get_user_management_keyboard()
     )
-
 
 @admin_required
 async def add_user_start(update: Update, _: ContextTypes.DEFAULT_TYPE):
@@ -614,7 +584,6 @@ async def add_user_start(update: Update, _: ContextTypes.DEFAULT_TYPE):
         reply_markup=ReplyKeyboardRemove()
     )
     return ADD_USER_ID
-
 
 @admin_required
 async def add_user_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -641,7 +610,6 @@ async def add_user_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Пожалуйста, введите корректный ID:"
         )
         return ADD_USER_ID
-
 
 @admin_required
 async def add_user_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -675,7 +643,6 @@ async def add_user_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     return ConversationHandler.END
 
-
 @admin_required
 async def remove_user_start(update: Update, _: ContextTypes.DEFAULT_TYPE):
     """Начало процесса удаления пользователя"""
@@ -697,7 +664,6 @@ async def remove_user_start(update: Update, _: ContextTypes.DEFAULT_TYPE):
         "Выберите пользователя для удаления:",
         reply_markup=get_remove_user_keyboard()
     )
-
 
 @admin_required
 async def remove_user_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -732,7 +698,6 @@ async def remove_user_selected(update: Update, context: ContextTypes.DEFAULT_TYP
             f"Это действие нельзя отменить!",
             reply_markup=get_confirmation_keyboard(user_id)
         )
-
 
 async def remove_user_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка подтверждения удаления"""
@@ -778,7 +743,6 @@ async def remove_user_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
             reply_markup=get_user_management_keyboard()
         )
 
-
 @admin_required
 async def list_users(update: Update, _: ContextTypes.DEFAULT_TYPE):
     """Показывает список пользователей"""
@@ -799,7 +763,6 @@ async def list_users(update: Update, _: ContextTypes.DEFAULT_TYPE):
         reply_markup=get_back_to_management_keyboard()
     )
 
-
 async def cancel(update: Update, _: ContextTypes.DEFAULT_TYPE):
     """Отмена любого действия"""
     user_id = update.effective_user.id
@@ -808,7 +771,6 @@ async def cancel(update: Update, _: ContextTypes.DEFAULT_TYPE):
         reply_markup=get_user_management_keyboard() if is_admin(user_id) else get_main_keyboard()
     )
     return ConversationHandler.END
-
 
 # Альтернативная команда для добавления пользователя (если ConversationHandler не работает)
 @admin_required
@@ -838,7 +800,6 @@ async def quick_add_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "❌ Ошибка: ID должен быть числом",
             reply_markup=get_user_management_keyboard()
         )
-
 
 # Hongqi шаблоны
 @authorization_required
@@ -877,7 +838,6 @@ async def start_hongqi_template1(update: Update, context: ContextTypes.DEFAULT_T
         reply_markup=get_hongqi_keyboard()
     )
 
-
 @authorization_required
 async def start_hongqi_template2(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Запускает Hongqi шаблон 2: каждый понедельник в 07:00 МСК"""
@@ -914,7 +874,6 @@ async def start_hongqi_template2(update: Update, context: ContextTypes.DEFAULT_T
         reply_markup=get_hongqi_keyboard()
     )
 
-
 @authorization_required
 async def stop_hongqi_templates(update: Update, _: ContextTypes.DEFAULT_TYPE):
     """Останавливает все Hongqi шаблоны"""
@@ -935,7 +894,6 @@ async def stop_hongqi_templates(update: Update, _: ContextTypes.DEFAULT_TYPE):
         f'❌ Остановлено Hongqi шаблонов: {stopped_count}',
         reply_markup=get_hongqi_keyboard()
     )
-
 
 # TurboMatiz шаблоны
 @authorization_required
@@ -974,7 +932,6 @@ async def start_turbomatiz_template1(update: Update, context: ContextTypes.DEFAU
         reply_markup=get_turbomatiz_keyboard()
     )
 
-
 @authorization_required
 async def start_turbomatiz_template2(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Запускает TurboMatiz шаблон 2: каждый вторник и пятницу в 16:00 МСК"""
@@ -1010,7 +967,6 @@ async def start_turbomatiz_template2(update: Update, context: ContextTypes.DEFAU
         f'✉️ Текст: напоминание об осмотре',
         reply_markup=get_turbomatiz_keyboard()
     )
-
 
 @authorization_required
 async def start_turbomatiz_template3(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1048,7 +1004,6 @@ async def start_turbomatiz_template3(update: Update, context: ContextTypes.DEFAU
         reply_markup=get_turbomatiz_keyboard()
     )
 
-
 @authorization_required
 async def stop_turbomatiz_templates(update: Update, _: ContextTypes.DEFAULT_TYPE):
     """Останавливает все TurboMatiz шаблоны"""
@@ -1069,7 +1024,6 @@ async def stop_turbomatiz_templates(update: Update, _: ContextTypes.DEFAULT_TYPE
         f'❌ Остановлено TurboMatiz шаблонов: {stopped_count}',
         reply_markup=get_turbomatiz_keyboard()
     )
-
 
 @authorization_required
 async def stop_all(update: Update, _: ContextTypes.DEFAULT_TYPE):
@@ -1098,7 +1052,6 @@ async def stop_all(update: Update, _: ContextTypes.DEFAULT_TYPE):
         reply_markup=get_main_keyboard()
     )
 
-
 @authorization_required
 async def cancel_tests(update: Update, _: ContextTypes.DEFAULT_TYPE):
     """Отменяет все тестовые отправки"""
@@ -1116,7 +1069,6 @@ async def cancel_tests(update: Update, _: ContextTypes.DEFAULT_TYPE):
         f'❌ Отменено тестов: {stopped_count}',
         reply_markup=get_testing_keyboard()
     )
-
 
 # Тестовые функции для Hongqi
 @authorization_required
@@ -1148,7 +1100,6 @@ async def test_hongqi_template1(update: Update, context: ContextTypes.DEFAULT_TY
         reply_markup=get_test_hongqi_keyboard()
     )
 
-
 @authorization_required
 async def test_hongqi_template2(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Тестирует Hongqi шаблон 2 (отправка через 10 секунд)"""
@@ -1177,7 +1128,6 @@ async def test_hongqi_template2(update: Update, context: ContextTypes.DEFAULT_TY
         f'⏰ Осталось: 10 секунд',
         reply_markup=get_test_hongqi_keyboard()
     )
-
 
 # Тестовые функции для TurboMatiz
 @authorization_required
@@ -1209,7 +1159,6 @@ async def test_turbomatiz_template1(update: Update, context: ContextTypes.DEFAUL
         reply_markup=get_test_turbomatiz_keyboard()
     )
 
-
 @authorization_required
 async def test_turbomatiz_template2(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Тестирует TurboMatiz шаблон 2 (отправка через 10 секунд)"""
@@ -1239,7 +1188,6 @@ async def test_turbomatiz_template2(update: Update, context: ContextTypes.DEFAUL
         reply_markup=get_test_turbomatiz_keyboard()
     )
 
-
 @authorization_required
 async def test_turbomatiz_template3(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Тестирует TurboMatiz шаблон 3 (отправка через 10 секунд)"""
@@ -1268,7 +1216,6 @@ async def test_turbomatiz_template3(update: Update, context: ContextTypes.DEFAUL
         f'⏰ Осталось: 10 секунд',
         reply_markup=get_test_turbomatiz_keyboard()
     )
-
 
 # Обработчики текстовых сообщений
 @authorization_required
@@ -1380,7 +1327,6 @@ async def handle_text(update: Update, _: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_main_keyboard() if is_authorized(user_id) else get_unauthorized_keyboard()
         )
 
-
 def main():
     """Запуск бота"""
     print("🚀 Запуск бота...")
@@ -1480,7 +1426,6 @@ def main():
     # Запуск бота
     print("✅ Бот запущен и готов к работе!")
     application.run_polling()
-
 
 if __name__ == '__main__':
     # Для Render Web Service - добавляем обработку порта
