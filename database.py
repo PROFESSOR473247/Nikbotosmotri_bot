@@ -1,24 +1,30 @@
 import json
 import os
-from datetime import datetime, timedelta
 import logging
+from datetime import datetime, timedelta
+import pytz
 
 # Files for data storage
 TASKS_FILE = 'active_tasks.json'
 GROUPS_FILE = 'bot_groups.json'
 USER_GROUPS_FILE = 'user_groups.json'
+TEMPLATES_FILE = 'templates.json'
+USER_ROLES_FILE = 'user_roles.json'
 
 def init_database():
-    """Initialize database"""
-    for file in [TASKS_FILE, GROUPS_FILE, USER_GROUPS_FILE]:
+    """Initialize all database files"""
+    files_config = {
+        TASKS_FILE: {"tasks": {}},
+        GROUPS_FILE: {"groups": {}},
+        USER_GROUPS_FILE: {"user_groups": {}},
+        TEMPLATES_FILE: {"templates": {}},
+        USER_ROLES_FILE: {"user_roles": {}}
+    }
+    
+    for file, default_data in files_config.items():
         if not os.path.exists(file):
             with open(file, 'w', encoding='utf-8') as f:
-                if file == TASKS_FILE:
-                    json.dump({"tasks": {}}, f, ensure_ascii=False, indent=2)
-                elif file == GROUPS_FILE:
-                    json.dump({"groups": {}}, f, ensure_ascii=False, indent=2)
-                else:
-                    json.dump({"user_groups": {}}, f, ensure_ascii=False, indent=2)
+                json.dump(default_data, f, ensure_ascii=False, indent=2)
             print(f"Created file: {file}")
 
 def load_tasks():
@@ -78,6 +84,44 @@ def save_user_groups(user_groups_data):
         logging.error(f"Error saving user_groups: {e}")
         return False
 
+def load_templates():
+    """Load templates"""
+    try:
+        with open(TEMPLATES_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        logging.error(f"Error loading templates: {e}")
+        return {"templates": {}}
+
+def save_templates(templates_data):
+    """Save templates"""
+    try:
+        with open(TEMPLATES_FILE, 'w', encoding='utf-8') as f:
+            json.dump(templates_data, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        logging.error(f"Error saving templates: {e}")
+        return False
+
+def load_user_roles():
+    """Load user roles"""
+    try:
+        with open(USER_ROLES_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        logging.error(f"Error loading user_roles: {e}")
+        return {"user_roles": {}}
+
+def save_user_roles(user_roles_data):
+    """Save user roles"""
+    try:
+        with open(USER_ROLES_FILE, 'w', encoding='utf-8') as f:
+            json.dump(user_roles_data, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        logging.error(f"Error saving user_roles: {e}")
+        return False
+
 def add_task(task_id, task_data):
     """Add new task"""
     tasks_data = load_tasks()
@@ -128,3 +172,43 @@ def add_user_to_group(user_id, group_id):
         user_groups_data["user_groups"][user_id_str].append(group_id)
     
     return save_user_groups(user_groups_data)
+
+def get_user_role(user_id):
+    """Get user role"""
+    user_roles_data = load_user_roles()
+    return user_roles_data.get("user_roles", {}).get(str(user_id), "guest")
+
+def set_user_role(user_id, role):
+    """Set user role"""
+    user_roles_data = load_user_roles()
+    if "user_roles" not in user_roles_data:
+        user_roles_data["user_roles"] = {}
+    
+    user_roles_data["user_roles"][str(user_id)] = role
+    return save_user_roles(user_roles_data)
+
+def get_all_users():
+    """Get all users with roles"""
+    return load_user_roles().get("user_roles", {})
+
+def add_template(template_id, template_data):
+    """Add new template"""
+    templates_data = load_templates()
+    templates_data["templates"][template_id] = template_data
+    return save_templates(templates_data)
+
+def remove_template(template_id):
+    """Remove template"""
+    templates_data = load_templates()
+    if template_id in templates_data["templates"]:
+        # Remove associated image if exists
+        template = templates_data["templates"][template_id]
+        if "image" in template and os.path.exists(template["image"]):
+            try:
+                os.remove(template["image"])
+            except Exception as e:
+                logging.error(f"Error removing template image: {e}")
+        
+        del templates_data["templates"][template_id]
+        return save_templates(templates_data)
+    return False
