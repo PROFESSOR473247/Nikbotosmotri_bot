@@ -19,7 +19,6 @@ import requests
 import threading
 import time
 import json
-import sys
 
 # Принудительный сброс и создание администратора (только если файлов нет)
 def reset_admin():
@@ -57,7 +56,7 @@ def reset_admin():
     print(f"🎉 Настройка завершена! Администратор: ID {admin_id}")
 
 # Keep alive для Render
-def keep_alive():
+def start_keep_alive():
     """Функция для поддержания активности приложения на Render"""
     def ping():
         while True:
@@ -81,10 +80,12 @@ print("🔄 Инициализация системы...")
 init_database()
 reset_admin()
 
+# Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
+logger = logging.getLogger(__name__)
 
 def authorization_required(func):
     """Декоратор для проверки авторизации"""
@@ -296,13 +297,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=get_main_menu(user_id) if is_authorized(user_id) else get_guest_keyboard()
     )
 
-async def main():
-    """Основная функция запуска"""
-    print("🚀 Запуск бота...")
-    
-    # Запускаем keep-alive систему
-    keep_alive()
-
+def setup_application():
+    """Настройка и возврат приложения"""
     application = (
         Application.builder()
         .token(BOT_TOKEN)
@@ -311,11 +307,7 @@ async def main():
     )
 
     # Восстанавливаем задачи
-    try:
-        await task_manager.restore_tasks(application)
-        print("✅ Задачи восстановлены")
-    except Exception as e:
-        print(f"❌ Ошибка восстановления задач: {e}")
+    asyncio.create_task(task_manager.restore_tasks(application))
 
     # Обработчики команд
     application.add_handler(CommandHandler("start", start))
@@ -338,21 +330,34 @@ async def main():
     # Обработчик обновления информации о группах
     application.add_handler(MessageHandler(filters.ALL, group_manager.update_group_info))
 
+    return application
+
+def main():
+    """Основная функция запуска"""
+    print("🚀 Запуск бота...")
+    
+    # Запускаем keep-alive систему
+    start_keep_alive()
+
+    # Создаем и настраиваем приложение
+    application = setup_application()
+
     print("✅ Бот запущен и готов к работе!")
     print("🤖 Бот работает в режиме polling...")
     
-    # Запускаем polling
-    await application.run_polling(drop_pending_updates=True)
-
-if __name__ == '__main__':
-    # Простой запуск без сложной обработки ошибок
+    # Запускаем polling с простой обработкой ошибок
     try:
-        asyncio.run(main())
+        application.run_polling(
+            drop_pending_updates=True,
+            allowed_updates=Update.ALL_TYPES
+        )
     except KeyboardInterrupt:
         print("⏹️ Бот остановлен пользователем")
     except Exception as e:
         print(f"❌ Критическая ошибка: {e}")
-        print("🔄 Перезапуск через 10 секунд...")
-        time.sleep(10)
-        # Выходим с кодом ошибки, чтобы Render перезапустил сервис
-        sys.exit(1)
+        # Завершаем процесс, чтобы Render перезапустил его
+        os._exit(1)
+
+if __name__ == '__main__':
+    # Простой синхронный запуск
+    main()
