@@ -92,8 +92,8 @@ def get_group_selection_keyboard(user_id):
     for group_id, group_info in accessible_groups.items():
         keyboard.append([f"Group: {group_info.get('title', f'Group {group_id}')}"])
     
-    keyboard.append(["Back to Main Menu"])
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        keyboard.append(["Back to Main Menu"])
+         return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
