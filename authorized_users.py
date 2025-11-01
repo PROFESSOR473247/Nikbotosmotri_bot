@@ -17,7 +17,7 @@ def load_users():
                     "812934047": {
                         "name": "Никита",
                         "role": "admin",
-                        "groups": []  # Admin has access to all groups
+                        "groups": ["all"]  # Admin has access to all groups
                     }
                 },
                 "admin_id": 812934047
@@ -46,7 +46,8 @@ def is_authorized(user_id):
 def is_admin(user_id):
     """Check if user is administrator"""
     users_data = load_users()
-    return user_id == users_data.get('admin_id')
+    admin_id = users_data.get('admin_id')
+    return str(user_id) == str(admin_id) if admin_id else False
 
 def get_user_access_level(user_id):
     """Get user access level based on role"""
@@ -57,7 +58,7 @@ def get_user_access_level(user_id):
         "водитель": 2,
         "гость": 1
     }
-    return role_levels.get(role, 1)
+    return role_levels.get(role, 0)  # 0 for unauthorized
 
 def add_user(user_id, username, role='гость', groups=None):
     """Add user with role and groups"""
@@ -95,7 +96,7 @@ def remove_user(user_id):
     if user_id_str not in users_data.get('users', {}):
         return False, "Пользователь не найден"
     
-    if user_id == users_data.get('admin_id'):
+    if is_admin(user_id):
         return False, "Нельзя удалить администратора"
     
     username = users_data['users'][user_id_str]['name']
@@ -128,3 +129,12 @@ def update_user_role(user_id, new_role):
         set_user_role(user_id, new_role)
         return save_users(users_data)
     return False
+
+def get_user_info(user_id):
+    """Get user information including role"""
+    users_data = load_users()
+    user_id_str = str(user_id)
+    
+    if user_id_str in users_data.get('users', {}):
+        return users_data['users'][user_id_str]
+    return None
