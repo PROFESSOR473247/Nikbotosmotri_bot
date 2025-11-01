@@ -15,7 +15,7 @@ def load_users():
             default_users = {
                 "users": {
                     "812934047": {
-                        "name": "Nikita",
+                        "name": "Никита",
                         "role": "admin",
                         "groups": []  # Admin has access to all groups
                     }
@@ -33,10 +33,10 @@ def save_users(users_data):
     try:
         with open(USERS_FILE, 'w', encoding='utf-8') as f:
             json.dump(users_data, f, ensure_ascii=False, indent=4)
-        return True, "Users saved"
+        return True, "Пользователи сохранены"
     except Exception as e:
         print(f"Error saving users: {e}")
-        return False, f"Save error: {e}"
+        return False, f"Ошибка сохранения: {e}"
 
 def is_authorized(user_id):
     """Check if user is authorized"""
@@ -59,12 +59,12 @@ def get_user_access_level(user_id):
     }
     return role_levels.get(role, 1)
 
-def add_user(user_id, username, role='guest', groups=None):
+def add_user(user_id, username, role='гость', groups=None):
     """Add user with role and groups"""
     users_data = load_users()
     
     if str(user_id) in users_data.get('users', {}):
-        return False, "User already exists"
+        return False, "Пользователь уже существует"
     
     users_data['users'][str(user_id)] = {
         "name": username,
@@ -83,7 +83,7 @@ def add_user(user_id, username, role='guest', groups=None):
     success, message = save_users(users_data)
     
     if success:
-        return True, f"User {username} (ID: {user_id}) added as {role}"
+        return True, f"Пользователь {username} (ID: {user_id}) добавлен как {role}"
     else:
         return False, message
 
@@ -93,10 +93,10 @@ def remove_user(user_id):
     user_id_str = str(user_id)
     
     if user_id_str not in users_data.get('users', {}):
-        return False, "User not found"
+        return False, "Пользователь не найден"
     
     if user_id == users_data.get('admin_id'):
-        return False, "Cannot remove administrator"
+        return False, "Нельзя удалить администратора"
     
     username = users_data['users'][user_id_str]['name']
     del users_data['users'][user_id_str]
@@ -104,7 +104,7 @@ def remove_user(user_id):
     success, message = save_users(users_data)
     
     if success:
-        return True, f"User {username} (ID: {user_id}) removed"
+        return True, f"Пользователь {username} (ID: {user_id}) удален"
     else:
         return False, message
 
