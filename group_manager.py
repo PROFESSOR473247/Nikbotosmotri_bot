@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from telegram import Update
 from telegram.ext import ContextTypes
-from database import load_groups, save_groups, load_user_groups, save_user_groups, get_user_accessible_groups
+from database import load_groups, save_groups, get_user_accessible_groups
 
 class GroupManager:
     def __init__(self):
@@ -25,28 +25,13 @@ class GroupManager:
             groups_data["groups"][str(chat.id)] = group_data
             save_groups(groups_data)
             
-            logging.info(f"Updated group info: {chat.title} (ID: {chat.id})")
-
-    async def get_bot_groups(self, context: ContextTypes.DEFAULT_TYPE):
-        """Get list of groups where bot is present (limited in Telegram Bot API)"""
-        # In reality this method is limited, so we rely on manual addition
-        # and tracking when bot is added to groups
-        groups_data = load_groups()
-        return groups_data.get("groups", {})
-
-    async def check_user_membership(self, context: ContextTypes.DEFAULT_TYPE, user_id, group_id):
-        """Check if user is member of group"""
-        try:
-            # Try to get user information in group
-            chat_member = await context.bot.get_chat_member(group_id, user_id)
-            return chat_member.status in ['member', 'administrator', 'creator']
-        except Exception as e:
-            logging.error(f"Error checking membership: {e}")
-            return False
+            logging.info(f"✅ Updated group info: {chat.title} (ID: {chat.id})")
 
     def get_accessible_groups_for_user(self, user_id):
-        """Get groups accessible to user"""
-        return get_user_accessible_groups(user_id)
+        """Get groups accessible to user - simplified for now"""
+        # For now, return all groups until user-group system is fully implemented
+        groups_data = load_groups()
+        return groups_data.get("groups", {})
 
 # Global group manager instance
 group_manager = GroupManager()
