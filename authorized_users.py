@@ -1,5 +1,6 @@
 import json
 import os
+from database import add_user_to_group
 
 USERS_FILE = 'authorized_users.json'
 
@@ -13,9 +14,13 @@ def load_users():
             # Создаем файл с администратором по умолчанию
             default_users = {
                 "users": {
-                    "812934047": "Никита"  # Ваш user_id
+                    "812934047": {
+                        "name": "Никита",
+                        "role": "admin",
+                        "groups": []  # Админ имеет доступ ко всем группам
+                    }
                 },
-                "admin_id": 812934047  # Ваш user_id
+                "admin_id": 812934047
             }
             save_users(default_users)
             return default_users
@@ -43,18 +48,34 @@ def is_admin(user_id):
     users_data = load_users()
     return user_id == users_data.get('admin_id')
 
-def add_user(user_id, username):
+def get_user_role(user_id):
+    """Получает роль пользователя"""
+    users_data = load_users()
+    user_data = users_data.get('users', {}).get(str(user_id), {})
+    return user_data.get('role', 'guest')
+
+def add_user(user_id, username, role='guest', groups=None):
     """Добавляет пользователя"""
     users_data = load_users()
     
     if str(user_id) in users_data.get('users', {}):
         return False, "Пользователь уже существует"
     
-    users_data['users'][str(user_id)] = username
+    users_data['users'][str(user_id)] = {
+        "name": username,
+        "role": role,
+        "groups": groups or []
+    }
+    
+    # Добавляем пользователя в группы в системе групп
+    if groups:
+        for group_id in groups:
+            add_user_to_group(user_id, group_id)
+    
     success, message = save_users(users_data)
     
     if success:
-        return True, f"Пользователь {username} (ID: {user_id}) добавлен"
+        return True, f"Пользователь {username} (ID: {user_id}) добавлен как {role}"
     else:
         return False, message
 
@@ -69,7 +90,7 @@ def remove_user(user_id):
     if user_id == users_data.get('admin_id'):
         return False, "Нельзя удалить администратора"
     
-    username = users_data['users'][user_id_str]
+    username = users_data['users'][user_id_str]['name']
     del users_data['users'][user_id_str]
     
     success, message = save_users(users_data)
