@@ -377,7 +377,7 @@ def main():
     application.add_handler(MessageHandler(filters.ALL, group_manager.update_group_info))
 
     print("Bot started and ready!")
-    application.run_polling()
+    import asyncio  async def main_async():     await application.run_polling()  if __name__ == "__main__":     asyncio.run(main_async())
 
 if __name__ == '__main__':
     main()
