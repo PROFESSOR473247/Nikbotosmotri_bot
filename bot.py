@@ -297,18 +297,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=get_main_menu(user_id) if is_authorized(user_id) else get_guest_keyboard()
     )
 
-def setup_application():
-    """Настройка и возврат приложения"""
-    application = (
-        Application.builder()
-        .token(BOT_TOKEN)
-        .job_queue(JobQueue())
-        .build()
-    )
-
-    # Восстанавливаем задачи
-    asyncio.create_task(task_manager.restore_tasks(application))
-
+def setup_handlers(application):
+    """Настройка обработчиков"""
     # Обработчики команд
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
@@ -330,34 +320,45 @@ def setup_application():
     # Обработчик обновления информации о группах
     application.add_handler(MessageHandler(filters.ALL, group_manager.update_group_info))
 
-    return application
-
-def main():
-    """Основная функция запуска"""
+async def main():
+    """Основная асинхронная функция запуска"""
     print("🚀 Запуск бота...")
     
     # Запускаем keep-alive систему
     start_keep_alive()
 
-    # Создаем и настраиваем приложение
-    application = setup_application()
+    # Создаем приложение
+    application = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .job_queue(JobQueue())
+        .build()
+    )
+
+    # Настраиваем обработчики
+    setup_handlers(application)
+
+    # Восстанавливаем задачи
+    await task_manager.restore_tasks(application)
 
     print("✅ Бот запущен и готов к работе!")
     print("🤖 Бот работает в режиме polling...")
     
-    # Запускаем polling с простой обработкой ошибок
+    # Запускаем polling
+    await application.run_polling(
+        drop_pending_updates=True,
+        allowed_updates=Update.ALL_TYPES
+    )
+
+if __name__ == '__main__':
+    # Простой асинхронный запуск
     try:
-        application.run_polling(
-            drop_pending_updates=True,
-            allowed_updates=Update.ALL_TYPES
-        )
+        asyncio.run(main())
     except KeyboardInterrupt:
         print("⏹️ Бот остановлен пользователем")
     except Exception as e:
         print(f"❌ Критическая ошибка: {e}")
+        print("🔄 Перезапуск через 10 секунд...")
+        time.sleep(10)
         # Завершаем процесс, чтобы Render перезапустил его
         os._exit(1)
-
-if __name__ == '__main__':
-    # Простой синхронный запуск
-    main()
