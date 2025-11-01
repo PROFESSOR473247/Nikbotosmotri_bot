@@ -1,10 +1,15 @@
 from telegram import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
-from authorized_users import get_user_role, is_admin
+from authorized_users import get_user_role, is_admin, get_user_info
 from database import get_user_accessible_groups, load_groups
 
 def get_main_menu(user_id):
     """Get main menu based on user role"""
-    user_role = get_user_role(user_id)
+    user_info = get_user_info(user_id)
+    
+    if not user_info:  # User not authorized
+        return get_guest_keyboard()
+    
+    user_role = user_info.get('role', 'гость')
     
     if user_role == "admin":
         keyboard = [
@@ -17,20 +22,25 @@ def get_main_menu(user_id):
             ["📋 Задачи", "📁 Шаблоны"],
             ["🏘️ Группы", "ℹ️ Еще"]
         ]
-    else:  # гость and others
+    elif user_role == "водитель":
         keyboard = [
-            ["📋 Задачи", "📁 Шаблоны"],
-            ["ℹ️ Еще"]
+            ["📋 Задачи", "ℹ️ Еще"]
         ]
+    else:  # гость - минимальные права
+        return get_guest_keyboard()
     
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-def get_unauthorized_keyboard():
+def get_guest_keyboard():
+    """Keyboard for guests - only Get ID button"""
     keyboard = [
-        ["🆔 Получить ID"],
-        ["❓ Помощь"]
+        ["🆔 Получить ID"]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_unauthorized_keyboard():
+    """Alias for guest keyboard"""
+    return get_guest_keyboard()
 
 def get_templates_menu():
     """Get templates management menu"""
@@ -78,12 +88,23 @@ def get_groups_menu(user_id):
     
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-def get_more_menu():
-    """Get more options menu"""
-    keyboard = [
-        ["📊 Статус задач", "🕒 Текущее время"],
-        ["🆔 Мой ID", "🔙 Назад в главное меню"]
-    ]
+def get_more_menu(user_id):
+    """Get more options menu based on role"""
+    user_role = get_user_role(user_id)
+    
+    if user_role in ["admin", "руководитель"]:
+        keyboard = [
+            ["📊 Статус задач", "🕒 Текущее время"],
+            ["🆔 Мой ID", "🔙 Назад в главное меню"]
+        ]
+    elif user_role == "водитель":
+        keyboard = [
+            ["📊 Статус задач", "🕒 Текущее время"],
+            ["🆔 Мой ID", "🔙 Назад в главное меню"]
+        ]
+    else:  # гость
+        return get_guest_keyboard()
+    
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def get_group_selection_keyboard(user_id):
