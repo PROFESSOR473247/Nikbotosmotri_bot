@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import logging
 import asyncio
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
