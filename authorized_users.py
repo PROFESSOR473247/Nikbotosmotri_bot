@@ -1,6 +1,6 @@
 import json
 import os
-from database import add_user_to_group
+from database import add_user_to_group, get_user_role, set_user_role, get_all_users
 
 USERS_FILE = 'authorized_users.json'
 
@@ -48,14 +48,19 @@ def is_admin(user_id):
     users_data = load_users()
     return user_id == users_data.get('admin_id')
 
-def get_user_role(user_id):
-    """Get user role"""
-    users_data = load_users()
-    user_data = users_data.get('users', {}).get(str(user_id), {})
-    return user_data.get('role', 'guest')
+def get_user_access_level(user_id):
+    """Get user access level based on role"""
+    role = get_user_role(user_id)
+    role_levels = {
+        "admin": 4,
+        "руководитель": 3,
+        "водитель": 2,
+        "гость": 1
+    }
+    return role_levels.get(role, 1)
 
 def add_user(user_id, username, role='guest', groups=None):
-    """Add user"""
+    """Add user with role and groups"""
     users_data = load_users()
     
     if str(user_id) in users_data.get('users', {}):
@@ -66,6 +71,9 @@ def add_user(user_id, username, role='guest', groups=None):
         "role": role,
         "groups": groups or []
     }
+    
+    # Set role in roles database
+    set_user_role(user_id, role)
     
     # Add user to groups in group system
     if groups:
@@ -109,3 +117,14 @@ def get_admin_id():
     """Return administrator ID"""
     users_data = load_users()
     return users_data.get('admin_id')
+
+def update_user_role(user_id, new_role):
+    """Update user role"""
+    users_data = load_users()
+    user_id_str = str(user_id)
+    
+    if user_id_str in users_data.get('users', {}):
+        users_data['users'][user_id_str]['role'] = new_role
+        set_user_role(user_id, new_role)
+        return save_users(users_data)
+    return False
