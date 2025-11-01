@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -13,34 +14,33 @@ class TaskManager:
         self.test_tasks = {}
 
     async def restore_tasks(self, application):
-        """Восстановление задач при запуске бота"""
+        """Restore tasks on bot startup"""
         tasks_data = load_tasks()
-        
+        
         for task_id, task_data in tasks_data.get("tasks", {}).items():
             try:
                 chat_id = task_data["chat_id"]
                 template_name = task_data["template_name"]
                 schedule_type = task_data.get("schedule_type", "main")
-                
+                
                 if schedule_type == "main":
                     await self.schedule_main_task(application, chat_id, template_name, task_data)
                 elif schedule_type == "test":
-                    # Тестовые задачи не восстанавливаются
+                    # Test tasks are not restored
                     continue
-                    
+                    
             except Exception as e:
-                logging.error(f"Ошибка восстановления задачи {task_id}: {e}")
+                logging.error(f"Error restoring task {task_id}: {e}")
 
     async def schedule_main_task(self, application, chat_id, template_name, task_data):
-        """Планирование основной задачи"""
+        """Schedule main task"""
         try:
-            # Здесь будет логика планирования на основе task_data
-            # Пока упрощенная версия
+            # Simplified scheduling logic for now
             if template_name in TEMPLATES:
                 if chat_id not in self.active_tasks:
                     self.active_tasks[chat_id] = {}
-                
-                # Создаем задание (упрощенно - нужно доработать под конкретное расписание)
+                
+                # Create job (simplified - needs refinement for specific schedule)
                 job = application.job_queue.run_daily(
                     self.send_scheduled_message,
                     time=task_data.get("scheduled_time", datetime.now().time()),
@@ -48,25 +48,25 @@ class TaskManager:
                     chat_id=chat_id,
                     data={"template_name": template_name, "chat_id": chat_id}
                 )
-                
+                
                 self.active_tasks[chat_id][template_name] = job
-                logging.info(f"✅ Восстановлена задача: {template_name} для чата {chat_id}")
-                
+                logging.info(f"Restored task: {template_name} for chat {chat_id}")
+                
         except Exception as e:
-            logging.error(f"Ошибка планирования задачи: {e}")
+            logging.error(f"Error scheduling task: {e}")
 
     async def send_scheduled_message(self, context: ContextTypes.DEFAULT_TYPE):
-        """Отправка запланированного сообщения"""
+        """Send scheduled message"""
         job = context.job
         template_name = job.data["template_name"]
         chat_id = job.data["chat_id"]
-        
+        
         try:
             if template_name in TEMPLATES:
                 template = TEMPLATES[template_name]
                 text = template["text"]
                 image_path = template.get("image")
-                
+                
                 if image_path and os.path.exists(image_path):
                     with open(image_path, 'rb') as photo:
                         await context.bot.send_photo(
@@ -79,15 +79,15 @@ class TaskManager:
                         chat_id=chat_id,
                         text=text
                     )
-                logging.info(f"✅ Отправлено запланированное сообщение {template_name} в чат {chat_id}")
-                
+                logging.info(f"Sent scheduled message {template_name} to chat {chat_id}")
+                
         except Exception as e:
-            logging.error(f"Ошибка отправки запланированного сообщения: {e}")
+            logging.error(f"Error sending scheduled message: {e}")
 
     async def create_task(self, user_id, group_id, template_name, task_type="main"):
-        """Создание новой задачи"""
+        """Create new task"""
         task_id = f"{group_id}_{template_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
+        
         task_data = {
             "task_id": task_id,
             "user_id": user_id,
@@ -97,21 +97,21 @@ class TaskManager:
             "created_at": datetime.now().isoformat(),
             "schedule_type": "main" if task_type == "main" else "test"
         }
-        
+        
         if add_task(task_id, task_data):
             return True, task_id
         return False, None
 
     def get_user_tasks(self, user_id):
-        """Получение задач пользователя"""
+        """Get user tasks"""
         tasks_data = load_tasks()
         user_tasks = {}
-        
+        
         for task_id, task_data in tasks_data.get("tasks", {}).items():
             if task_data["user_id"] == user_id:
                 user_tasks[task_id] = task_data
-                
+                
         return user_tasks
 
-# Глобальный экземпляр менеджера задач
+# Global task manager instance
 task_manager = TaskManager()
