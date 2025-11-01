@@ -108,7 +108,7 @@ class TaskManager:
         user_tasks = {}
         
         for task_id, task_data in tasks_data.get("tasks", {}).items():
-            if task_data["user_id"] == user_id:
+            if task_data.get("user_id") == user_id:
                 user_tasks[task_id] = task_data
                 
         return user_tasks
