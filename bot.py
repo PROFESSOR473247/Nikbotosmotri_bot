@@ -319,8 +319,12 @@ async def main():
         .build()
     )
 
-    # Восстанавливаем задачи
-    await task_manager.restore_tasks(application)
+    # Восстанавливаем задачи (только один раз)
+    try:
+        await task_manager.restore_tasks(application)
+        print("✅ Задачи восстановлены")
+    except Exception as e:
+        print(f"❌ Ошибка восстановления задач: {e}")
 
     # Обработчики команд
     application.add_handler(CommandHandler("start", start))
@@ -345,7 +349,18 @@ async def main():
 
     print("✅ Бот запущен и готов к работе!")
     
-    await application.run_polling()
+    # Запускаем polling без перезапуска при ошибках
+    await application.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    # Запускаем бота один раз без рекурсивных перезапусков
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("⏹️ Бот остановлен пользователем")
+    except Exception as e:
+        print(f"❌ Критическая ошибка: {e}")
+        print("🔄 Перезапуск через 10 секунд...")
+        time.sleep(10)
+        # Вместо рекурсивного вызова, завершаем процесс и позволяем Render перезапустить
+        os._exit(1)
