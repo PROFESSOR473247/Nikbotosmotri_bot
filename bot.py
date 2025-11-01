@@ -211,11 +211,11 @@ async def handle_task_status(update: Update, context: ContextTypes.DEFAULT_TYPE)
         for task_id, task_data in user_tasks.items():
             groups_data = load_groups()
             group_info = groups_data["groups"].get(str(task_data.get("group_id", "")), {})
-            group_name = group_info.get('title', f'Group {task_data.get("group_id", "")}')
+            group_name = group_info.get('title', f'Группа {task_data.get("group_id", "")}')
             
             templates_data = load_templates()
-            template_name = task_data.get("template_name", "Unknown")
-            template_text = templates_data.get("templates", {}).get(template_name, {}).get("text", "Template")[:50]
+            template_name = task_data.get("template_name", "Неизвестно")
+            template_text = templates_data.get("templates", {}).get(template_name, {}).get("text", "Шаблон")[:50]
             
             status_text += f"📝 Шаблон: {template_text}...\n"
             status_text += f"   🏘️ Группа: {group_name}\n"
