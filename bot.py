@@ -333,8 +333,8 @@ def keep_alive():
     ping_thread.start()
     print("Keep-alive system started")
 
-def main():
-    """Start bot"""
+async def main_async():
+    """Start bot - async version"""
     print("Starting bot...")
     
     # Initialize database
@@ -352,7 +352,7 @@ def main():
     )
 
     # Restore tasks on startup
-    asyncio.run(task_manager.restore_tasks(application))
+    await task_manager.restore_tasks(application)
 
     # Command handlers
     application.add_handler(CommandHandler("start", start))
@@ -377,7 +377,13 @@ def main():
     application.add_handler(MessageHandler(filters.ALL, group_manager.update_group_info))
 
     print("Bot started and ready!")
-    import asyncio  async def main_async():     await application.run_polling()  if __name__ == "__main__":     asyncio.run(main_async())
+    
+    # Start polling
+    await application.run_polling()
+
+def main():
+    """Main entry point"""
+    asyncio.run(main_async())
 
 if __name__ == '__main__':
     main()
