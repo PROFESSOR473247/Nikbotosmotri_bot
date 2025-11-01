@@ -3,13 +3,13 @@ import os
 from datetime import datetime, timedelta
 import logging
 
-# Файлы для хранения данных
+# Files for data storage
 TASKS_FILE = 'active_tasks.json'
 GROUPS_FILE = 'bot_groups.json'
 USER_GROUPS_FILE = 'user_groups.json'
 
 def init_database():
-    """Инициализация базы данных"""
+    """Initialize database"""
     for file in [TASKS_FILE, GROUPS_FILE, USER_GROUPS_FILE]:
         if not os.path.exists(file):
             with open(file, 'w', encoding='utf-8') as f:
@@ -19,73 +19,73 @@ def init_database():
                     json.dump({"groups": {}}, f, ensure_ascii=False, indent=2)
                 else:
                     json.dump({"user_groups": {}}, f, ensure_ascii=False, indent=2)
-            print(f"✅ Создан файл: {file}")
+            print(f"Created file: {file}")
 
 def load_tasks():
-    """Загрузка активных задач"""
+    """Load active tasks"""
     try:
         with open(TASKS_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
-        logging.error(f"Ошибка загрузки задач: {e}")
+        logging.error(f"Error loading tasks: {e}")
         return {"tasks": {}}
 
 def save_tasks(tasks_data):
-    """Сохранение задач"""
+    """Save tasks"""
     try:
         with open(TASKS_FILE, 'w', encoding='utf-8') as f:
             json.dump(tasks_data, f, ensure_ascii=False, indent=2)
         return True
     except Exception as e:
-        logging.error(f"Ошибка сохранения задач: {e}")
+        logging.error(f"Error saving tasks: {e}")
         return False
 
 def load_groups():
-    """Загрузка информации о группах"""
+    """Load group information"""
     try:
         with open(GROUPS_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
-        logging.error(f"Ошибка загрузки групп: {e}")
+        logging.error(f"Error loading groups: {e}")
         return {"groups": {}}
 
 def save_groups(groups_data):
-    """Сохранение информации о группах"""
+    """Save group information"""
     try:
         with open(GROUPS_FILE, 'w', encoding='utf-8') as f:
             json.dump(groups_data, f, ensure_ascii=False, indent=2)
         return True
     except Exception as e:
-        logging.error(f"Ошибка сохранения групп: {e}")
+        logging.error(f"Error saving groups: {e}")
         return False
 
 def load_user_groups():
-    """Загрузка привязок пользователей к группам"""
+    """Load user-group mappings"""
     try:
         with open(USER_GROUPS_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
-        logging.error(f"Ошибка загрузки user_groups: {e}")
+        logging.error(f"Error loading user_groups: {e}")
         return {"user_groups": {}}
 
 def save_user_groups(user_groups_data):
-    """Сохранение привязок пользователей к группам"""
+    """Save user-group mappings"""
     try:
         with open(USER_GROUPS_FILE, 'w', encoding='utf-8') as f:
             json.dump(user_groups_data, f, ensure_ascii=False, indent=2)
         return True
     except Exception as e:
-        logging.error(f"Ошибка сохранения user_groups: {e}")
+        logging.error(f"Error saving user_groups: {e}")
         return False
 
 def add_task(task_id, task_data):
-    """Добавление новой задачи"""
+    """Add new task"""
     tasks_data = load_tasks()
     tasks_data["tasks"][task_id] = task_data
     return save_tasks(tasks_data)
 
 def remove_task(task_id):
-    """Удаление задачи"""
+    """Remove task"""
     tasks_data = load_tasks()
     if task_id in tasks_data["tasks"]:
         del tasks_data["tasks"][task_id]
@@ -93,7 +93,7 @@ def remove_task(task_id):
     return False
 
 def get_user_accessible_groups(user_id):
-    """Получение групп, доступных пользователю"""
+    """Get groups accessible to user"""
     user_groups_data = load_user_groups()
     groups_data = load_groups()
     
@@ -108,13 +108,13 @@ def get_user_accessible_groups(user_id):
     return accessible_groups
 
 def add_group(group_id, group_data):
-    """Добавление новой группы"""
+    """Add new group"""
     groups_data = load_groups()
     groups_data["groups"][group_id] = group_data
     return save_groups(groups_data)
 
 def add_user_to_group(user_id, group_id):
-    """Добавление пользователя в группу"""
+    """Add user to group"""
     user_groups_data = load_user_groups()
     user_id_str = str(user_id)
     
