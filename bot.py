@@ -1,17 +1,19 @@
 # -*- coding: utf-8 -*-
 import logging
 import asyncio
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, filters,
     ContextTypes, ConversationHandler, CallbackQueryHandler,
     JobQueue
 )
 from config import BOT_TOKEN
-from authorized_users import is_authorized, is_admin, add_user, remove_user, get_users_list, get_admin_id
-from database import init_database
+from authorized_users import is_authorized, is_admin, get_user_role, get_user_access_level
+from database import init_database, get_user_accessible_groups, load_groups, load_templates
 from task_manager import task_manager
 from group_manager import group_manager
+from menu_manager import *
+from conversation_handlers import add_user_conversation, create_template_conversation
 import datetime
 import pytz
 from datetime import timedelta
@@ -24,28 +26,10 @@ import time
 # Initialize database on startup
 init_database()
 
-# Force reload templates module
-if 'templates' in sys.modules:
-    del sys.modules['templates']
-
-# Import templates
-TEMPLATES = {}
-try:
-    from templates import TEMPLATES as IMPORTED_TEMPLATES
-    TEMPLATES = IMPORTED_TEMPLATES
-    print("Templates loaded successfully")
-except ImportError as import_error:
-    print(f"Error loading templates: {import_error}")
-    exit(1)
-
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
-
-# States for ConversationHandler
-ADD_USER_ID, ADD_USER_NAME = range(2)
-SELECT_GROUP, SELECT_TEMPLATE = range(2, 4)
 
 # Authorization decorator
 def authorization_required(func):
@@ -53,8 +37,8 @@ def authorization_required(func):
         user_id = update.effective_user.id
         if not is_authorized(user_id):
             await update.message.reply_text(
-                "INSUFFICIENT PERMISSIONS\n\n"
-                "Contact administrator for bot access",
+                "❌ НЕДОСТАТОЧНО ПРАВ\n\n"
+                "Свяжитесь с администратором для доступа к боту",
                 reply_markup=get_unauthorized_keyboard()
             )
             print(f"Unauthorized access from user_id: {user_id} to function: {func.__name__}")
@@ -62,38 +46,31 @@ def authorization_required(func):
         return await func(update, context, *args, **kwargs)
     return wrapper
 
-# Main menu
-def get_main_keyboard():
-    keyboard = [
-        ["Templates", "Testing"],
-        ["Task Status", "MORE"]
-    ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
-def get_unauthorized_keyboard():
-    keyboard = [
-        ["Get ID"],
-        ["Help"]
-    ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
-def get_templates_keyboard():
-    keyboard = [
-        ["Hongqi 476 group", "Matiz 476 group"],
-        ["Back to Main Menu"]
-    ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
-def get_group_selection_keyboard(user_id):
-    """Keyboard for group selection"""
-    accessible_groups = group_manager.get_accessible_groups_for_user(user_id)
-    keyboard = []
-    
-    for group_id, group_info in accessible_groups.items():
-        keyboard.append([f"Group: {group_info.get('title', f'Group {group_id}')}"])
-    
-    keyboard.append(["Back to Main Menu"])
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+# Role-based access decorator
+def role_required(required_role):
+    def decorator(func):
+        async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+            user_id = update.effective_user.id
+            user_role = get_user_role(user_id)
+            role_levels = {
+                "admin": 4,
+                "руководитель": 3,
+                "водитель": 2,
+                "гость": 1
+            }
+            user_level = role_levels.get(user_role, 1)
+            required_level = role_levels.get(required_role, 1)
+            
+            if user_level < required_level:
+                await update.message.reply_text(
+                    f"❌ НЕДОСТАТОЧНО ПРАВ\n\n"
+                    f"Эта функция доступна только для {required_role} и выше",
+                    reply_markup=get_main_menu(user_id)
+                )
+                return None
+            return await func(update, context, *args, **kwargs)
+        return wrapper
+    return decorator
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -109,14 +86,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not is_authorized(user_id):
         welcome_text = (
-            f'BOT FOR SCHEDULED MESSAGES\n\n'
-            f'Hello! This bot is for creating scheduled messages in Telegram groups and channels.\n\n'
-            f'Your ID: `{user_id}`\n'
-            f'Current time: {current_time} (Moscow)\n\n'
-            f'INSUFFICIENT PERMISSIONS\n\n'
-            f'To start working with the bot, click "Get ID" and send it to @ProfeSSor471. '
-            f'He will add you to the user list and explain further work with the bot.\n\n'
-            f'Enjoy!'
+            f'🤖 БОТ ДЛЯ ОТЛОЖЕННЫХ СООБЩЕНИЙ\n\n'
+            f'Привет! Этот бот предназначен для создания отложенных сообщений в Telegram группах и каналах.\n\n'
+            f'Ваш ID: `{user_id}`\n'
+            f'Текущее время: {current_time} (Москва)\n\n'
+            f'❌ НЕДОСТАТОЧНО ПРАВ\n\n'
+            f'Для начала работы с ботом нажмите "🆔 Получить ID" и сообщите его @ProfeSSor471. '
+            f'Он внесёт вас в список пользователей и объяснит дальнейшую работу с ботом.\n\n'
+            f'Приятного пользования!'
         )
 
         await update.message.reply_text(
@@ -126,79 +103,128 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    user_role = get_user_role(user_id)
     welcome_text = (
-        f'BOT FOR SCHEDULED MESSAGES\n'
-        f'Current time: {current_time} (Moscow)\n'
-        f'Your ID: {user_id}\n\n'
-        f'Use menu buttons for navigation!'
+        f'🤖 БОТ ДЛЯ ОТЛОЖЕННЫХ СООБЩЕНИЙ\n'
+        f'Текущее время: {current_time} (Москва)\n'
+        f'Ваш ID: {user_id}\n'
+        f'Ваша роль: {user_role}\n\n'
+        f'Используйте кнопки меню для навигации!'
     )
 
     await update.message.reply_text(
         welcome_text,
-        reply_markup=get_main_keyboard()
+        reply_markup=get_main_menu(user_id)
     )
 
 @authorization_required
 async def handle_templates(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for Templates button"""
     user_id = update.effective_user.id
+    user_role = get_user_role(user_id)
     
-    accessible_groups = group_manager.get_accessible_groups_for_user(user_id)
-    if not accessible_groups:
+    # Check if user has permission to manage templates
+    if user_role in ["гость", "водитель"]:
         await update.message.reply_text(
-            "You don't have access to any groups\n\n"
-            "Contact administrator for access",
-            reply_markup=get_main_keyboard()
+            "❌ НЕДОСТАТОЧНО ПРАВ\n\n"
+            "Управление шаблонами доступно только для администраторов и руководителей",
+            reply_markup=get_main_menu(user_id)
         )
         return
     
     await update.message.reply_text(
-        "Select group for working with templates:",
-        reply_markup=get_group_selection_keyboard(user_id)
+        "📁 УПРАВЛЕНИЕ ШАБЛОНАМИ\n\n"
+        "Выберите действие:",
+        reply_markup=get_templates_menu()
     )
 
 @authorization_required 
-async def handle_testing(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler for Testing button"""
+async def handle_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for Tasks button"""
     user_id = update.effective_user.id
     
-    accessible_groups = group_manager.get_accessible_groups_for_user(user_id)
+    accessible_groups = get_user_accessible_groups(user_id)
     if not accessible_groups:
         await update.message.reply_text(
-            "You don't have access to any groups",
-            reply_markup=get_main_keyboard()
+            "❌ У вас нет доступа к группам\n\n"
+            "Обратитесь к администратору для предоставления доступа",
+            reply_markup=get_main_menu(user_id)
         )
         return
     
     await update.message.reply_text(
-        "TESTING TEMPLATES\n\n"
-        "Select group for test sending:",
-        reply_markup=get_group_selection_keyboard(user_id)
+        "📋 УПРАВЛЕНИЕ ЗАДАЧАМИ\n\n"
+        "Выберите действие:",
+        reply_markup=get_tasks_menu()
     )
 
 @authorization_required
-async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+@role_required("admin")
+async def handle_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle users management - admin only"""
+    await update.message.reply_text(
+        "👥 УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ\n\n"
+        "Выберите действие:",
+        reply_markup=get_users_menu()
+    )
+
+@authorization_required
+async def handle_groups(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle groups management"""
+    user_id = update.effective_user.id
+    user_role = get_user_role(user_id)
+    
+    if user_role == "гость":
+        await update.message.reply_text(
+            "❌ НЕДОСТАТОЧНО ПРАВ\n\n"
+            "Управление группами доступно только для администраторов и руководителей",
+            reply_markup=get_main_menu(user_id)
+        )
+        return
+    
+    await update.message.reply_text(
+        "🏘️ УПРАВЛЕНИЕ ГРУППАМИ\n\n"
+        "Выберите действие:",
+        reply_markup=get_groups_menu(user_id)
+    )
+
+@authorization_required
+async def handle_more(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle more options"""
+    user_id = update.effective_user.id
+    await update.message.reply_text(
+        "ℹ️ ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ\n\n"
+        "Выберите действие:",
+        reply_markup=get_more_menu()
+    )
+
+@authorization_required
+async def handle_task_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show user task status"""
     user_id = update.effective_user.id
     user_tasks = task_manager.get_user_tasks(user_id)
     
     if not user_tasks:
-        status_text = "TASK STATUS\n\nNo active tasks"
+        status_text = "📊 СТАТУС ЗАДАЧ\n\nНет активных задач"
     else:
-        status_text = "YOUR ACTIVE TASKS:\n\n"
+        status_text = "📊 ВАШИ АКТИВНЫЕ ЗАДАЧИ:\n\n"
         for task_id, task_data in user_tasks.items():
             groups_data = load_groups()
-            group_info = groups_data["groups"].get(str(task_data["group_id"]), {})
-            group_name = group_info.get('title', f'Group {task_data["group_id"]}')
+            group_info = groups_data["groups"].get(str(task_data.get("group_id", "")), {})
+            group_name = group_info.get('title', f'Group {task_data.get("group_id", "")}')
             
-            status_text += f"Template: {TEMPLATES.get(task_data['template_name'], {}).get('text', 'Template')[:50]}...\n"
-            status_text += f"   Group: {group_name}\n"
-            status_text += f"   Created: {task_data['created_at'][:16]}\n"
-            status_text += f"   Type: {'Main' if task_data['task_type'] == 'main' else 'Test'}\n\n"
+            templates_data = load_templates()
+            template_name = task_data.get("template_name", "Unknown")
+            template_text = templates_data.get("templates", {}).get(template_name, {}).get("text", "Template")[:50]
+            
+            status_text += f"📝 Шаблон: {template_text}...\n"
+            status_text += f"   🏘️ Группа: {group_name}\n"
+            status_text += f"   🕒 Создана: {task_data.get('created_at', '')[:16]}\n"
+            status_text += f"   🔧 Тип: {'Основная' if task_data.get('task_type') == 'main' else 'Тестовая'}\n\n"
     
     await update.message.reply_text(
         status_text,
-        reply_markup=get_main_keyboard()
+        reply_markup=get_main_menu(user_id)
     )
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -210,60 +236,62 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type in ["group", "supergroup", "channel"]:
         return
     
-    if text == "Templates":
+    # Main menu handlers
+    if text == "📋 Задачи":
+        await handle_tasks(update, context)
+    elif text == "📁 Шаблоны":
         await handle_templates(update, context)
-    elif text == "Testing":
-        await handle_testing(update, context)
-    elif text == "Task Status":
-        await handle_status(update, context)
-    elif text == "MORE":
+    elif text == "👥 Пользователи":
+        await handle_users(update, context)
+    elif text == "🏘️ Группы":
+        await handle_groups(update, context)
+    elif text == "ℹ️ Еще":
+        await handle_more(update, context)
+    elif text == "🔙 Назад в главное меню":
         await update.message.reply_text(
-            "ADDITIONAL FUNCTIONS",
-            reply_markup=get_more_keyboard(user_id)
+            "Возврат в главное меню",
+            reply_markup=get_main_menu(user_id)
         )
-    elif text == "Back to Main Menu":
-        await update.message.reply_text(
-            "Back to main menu",
-            reply_markup=get_main_keyboard()
-        )
-    elif text == "Get ID":
+    elif text == "🆔 Получить ID":
         await my_id(update, context)
-    elif text == "Help":
+    elif text == "❓ Помощь":
         await help_command(update, context)
+    elif text == "📊 Статус задач":
+        await handle_task_status(update, context)
+    elif text == "🕒 Текущее время":
+        await now(update, context)
+    elif text == "🆔 Мой ID":
+        await my_id(update, context)
     else:
         await update.message.reply_text(
-            "Unknown command",
-            reply_markup=get_main_keyboard() if is_authorized(user_id) else get_unauthorized_keyboard()
+            "Неизвестная команда",
+            reply_markup=get_main_menu(user_id) if is_authorized(user_id) else get_unauthorized_keyboard()
         )
 
-# Keep existing functions from original bot.py
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show help - available to everyone"""
     user_id = update.effective_user.id
 
     help_text = """
-BOT COMMAND HELP:
+🤖 СПРАВКА ПО КОМАНДАМ БОТА:
 
-AVAILABLE TO ALL:
-/start - restart bot
-/my_id - show your ID (for access)
-/help - this help
+ДОСТУПНО ВСЕМ:
+/start - перезапустить бота
+/my_id - показать ваш ID (для доступа)
+/help - эта справка
 
-AUTHORIZED ONLY:
-Templates - manage main broadcasts
-Testing - test sending
-Task Status - task status
-MORE - additional functions
-/update_menu - update menu
-/status - template status
-/now - current time
+ТОЛЬКО ДЛЯ АВТОРИЗОВАННЫХ:
+📋 Задачи - управление задачами
+📁 Шаблоны - управление шаблонами (админы/руководители)
+👥 Пользователи - управление пользователями (только админы)
+🏘️ Группы - управление группами (админы/руководители)
+ℹ️ Еще - дополнительные функции
 
-For access contact administrator
+Для доступа свяжитесь с администратором
 """
 
-    # Determine which keyboard to show
     if is_authorized(user_id):
-        await update.message.reply_text(help_text, reply_markup=get_main_keyboard())
+        await update.message.reply_text(help_text, reply_markup=get_main_menu(user_id))
     else:
         await update.message.reply_text(help_text, reply_markup=get_unauthorized_keyboard())
 
@@ -272,44 +300,29 @@ async def my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
 
-    # Determine which keyboard to show based on authorization
     if is_authorized(user_id):
-        reply_markup = get_main_keyboard()
-        additional_text = "You are authorized and have access to all bot functions"
+        reply_markup = get_main_menu(user_id)
+        additional_text = "Вы авторизованы и имеете доступ ко всем функциям бота"
     else:
         reply_markup = get_unauthorized_keyboard()
-        additional_text = "You are not authorized. Contact administrator for access"
+        additional_text = "Вы не авторизованы. Свяжитесь с администратором для доступа"
 
     await update.message.reply_text(
-        f'Your ID: `{user_id}`\n'
-        f'Chat ID: `{chat_id}`\n\n'
+        f'🆔 Ваш ID: `{user_id}`\n'
+        f'💬 ID чата: `{chat_id}`\n\n'
         f'{additional_text}',
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
-    print(f"Shown ID for user_id: {user_id}")
 
 async def now(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show current time"""
     current_time = datetime.datetime.now(pytz.timezone('Europe/Moscow')).strftime("%H:%M:%S")
+    user_id = update.effective_user.id
     await update.message.reply_text(
-        f'Current time: {current_time} (Moscow)',
-        reply_markup=get_main_keyboard()
+        f'🕒 Текущее время: {current_time} (Москва)',
+        reply_markup=get_main_menu(user_id)
     )
-
-def get_more_keyboard(user_id):
-    """Create additional functions menu"""
-    keyboard = [
-        ["Status", "Current Time"],
-        ["My ID"]
-    ]
-
-    # Add user management button only for administrator
-    if is_admin(user_id):
-        keyboard.append(["User Management"])
-
-    keyboard.append(["Back to Main Menu"])
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 # Keep alive function for Render
 def keep_alive():
@@ -317,25 +330,22 @@ def keep_alive():
     def ping():
         while True:
             try:
-                # Get URL from Render environment variable
                 render_url = os.environ.get('RENDER_EXTERNAL_URL')
                 if render_url:
                     response = requests.get(render_url, timeout=10)
                     print(f"Ping sent: {response.status_code}")
                 else:
-                    # If no URL, just log
                     print("Keep-alive: bot active")
             except Exception as e:
                 print(f"Ping error: {e}")
             time.sleep(300)  # Ping every 5 minutes
     
-    # Start in separate thread
     ping_thread = threading.Thread(target=ping, daemon=True)
     ping_thread.start()
     print("Keep-alive system started")
 
 def main():
-    """Start bot - simplified version for Render"""
+    """Start bot"""
     print("Starting bot...")
     
     # Initialize database
@@ -352,7 +362,7 @@ def main():
         .build()
     )
 
-    # Restore tasks on startup - use run_until_complete for async operations
+    # Restore tasks on startup
     try:
         loop = asyncio.get_event_loop()
     except RuntimeError:
@@ -366,16 +376,23 @@ def main():
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("my_id", my_id))
     application.add_handler(CommandHandler("now", now))
-    application.add_handler(CommandHandler("status", handle_status))
+
+    # Conversation handlers
+    application.add_handler(add_user_conversation)
+    application.add_handler(create_template_conversation)
 
     # Main menu button handlers
-    application.add_handler(MessageHandler(filters.Regex("^Templates$"), handle_text))
-    application.add_handler(MessageHandler(filters.Regex("^Testing$"), handle_text))
-    application.add_handler(MessageHandler(filters.Regex("^Task Status$"), handle_text))
-    application.add_handler(MessageHandler(filters.Regex("^MORE$"), handle_text))
-    application.add_handler(MessageHandler(filters.Regex("^Back to Main Menu$"), handle_text))
-    application.add_handler(MessageHandler(filters.Regex("^Get ID$"), handle_text))
-    application.add_handler(MessageHandler(filters.Regex("^Help$"), handle_text))
+    application.add_handler(MessageHandler(filters.Regex("^📋 Задачи$"), handle_text))
+    application.add_handler(MessageHandler(filters.Regex("^📁 Шаблоны$"), handle_text))
+    application.add_handler(MessageHandler(filters.Regex("^👥 Пользователи$"), handle_text))
+    application.add_handler(MessageHandler(filters.Regex("^🏘️ Группы$"), handle_text))
+    application.add_handler(MessageHandler(filters.Regex("^ℹ️ Еще$"), handle_text))
+    application.add_handler(MessageHandler(filters.Regex("^🔙 Назад в главное меню$"), handle_text))
+    application.add_handler(MessageHandler(filters.Regex("^🆔 Получить ID$"), handle_text))
+    application.add_handler(MessageHandler(filters.Regex("^❓ Помощь$"), handle_text))
+    application.add_handler(MessageHandler(filters.Regex("^📊 Статус задач$"), handle_text))
+    application.add_handler(MessageHandler(filters.Regex("^🕒 Текущее время$"), handle_text))
+    application.add_handler(MessageHandler(filters.Regex("^🆔 Мой ID$"), handle_text))
 
     # Handler for all text messages
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
@@ -385,7 +402,7 @@ def main():
 
     print("Bot started and ready!")
     
-    # Start polling - this will handle the event loop internally
+    # Start polling
     application.run_polling()
 
 if __name__ == '__main__':
