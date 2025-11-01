@@ -7,7 +7,7 @@ from telegram.ext import (
     JobQueue
 )
 from config import BOT_TOKEN
-from authorized_users import is_authorized, is_admin, add_user, remove_user, get_users_list, get_admin_id
+from authorized_users import is_authorized, is_admin
 from database import init_database, load_groups
 from task_manager import task_manager
 from group_manager import group_manager
@@ -32,9 +32,9 @@ TEMPLATES = {}
 try:
     from templates import TEMPLATES as IMPORTED_TEMPLATES
     TEMPLATES = IMPORTED_TEMPLATES
-    print("Templates loaded successfully")
+    print("✅ Templates loaded successfully")
 except ImportError as import_error:
-    print(f"Error loading templates: {import_error}")
+    print(f"❌ Error loading templates: {import_error}")
     exit(1)
 
 logging.basicConfig(
@@ -52,11 +52,11 @@ def authorization_required(func):
         user_id = update.effective_user.id
         if not is_authorized(user_id):
             await update.message.reply_text(
-                "INSUFFICIENT PERMISSIONS\n\n"
+                "❌ INSUFFICIENT PERMISSIONS\n\n"
                 "Contact administrator for bot access",
                 reply_markup=get_unauthorized_keyboard()
             )
-            print(f"Unauthorized access from user_id: {user_id} to function: {func.__name__}")
+            print(f"🚫 Unauthorized access from user_id: {user_id} to function: {func.__name__}")
             return None
         return await func(update, context, *args, **kwargs)
     return wrapper
@@ -235,7 +235,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_main_keyboard() if is_authorized(user_id) else get_unauthorized_keyboard()
         )
 
-# Keep existing functions from original bot.py
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show help - available to everyone"""
     user_id = update.effective_user.id
@@ -283,7 +282,6 @@ async def my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
-    print(f"📋 Shown ID for user_id: {user_id}")
 
 async def now(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show current time"""
@@ -330,8 +328,8 @@ def keep_alive():
     ping_thread.start()
     print("✅ Keep-alive system started")
 
-async def main_async():
-    """Async main function"""
+def main():
+    """Start bot - simplified version for Render"""
     print("🚀 Starting bot...")
     
     # Initialize database
@@ -344,12 +342,8 @@ async def main_async():
     application = (
         Application.builder()
         .token(BOT_TOKEN)
-        .job_queue(JobQueue())
         .build()
     )
-
-    # Restore tasks on startup
-    await task_manager.restore_tasks(application)
 
     # Command handlers
     application.add_handler(CommandHandler("start", start))
@@ -370,18 +364,10 @@ async def main_async():
     # Handler for all text messages
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
-    # Handler for updating group information
-    application.add_handler(MessageHandler(filters.ALL, group_manager.update_group_info))
-
     print("✅ Bot started and ready!")
     
-    # Start the bot
-    await application.run_polling()
-
-def main():
-    """Main entry point"""
-    # Create and run async main function
-    asyncio.run(main_async())
+    # Start the bot with simple polling
+    application.run_polling()
 
 if __name__ == '__main__':
     main()
