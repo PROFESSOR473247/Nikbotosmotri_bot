@@ -8,7 +8,7 @@ from telegram.ext import (
     JobQueue
 )
 from config import BOT_TOKEN
-from authorized_users import is_authorized, is_admin, get_user_role, get_user_access_level
+from authorized_users import is_authorized, is_admin, get_user_role, get_user_access_level, get_user_info
 from database import init_database, get_user_accessible_groups, load_groups, load_templates
 from task_manager import task_manager
 from group_manager import group_manager
@@ -39,7 +39,7 @@ def authorization_required(func):
             await update.message.reply_text(
                 "❌ НЕДОСТАТОЧНО ПРАВ\n\n"
                 "Свяжитесь с администратором для доступа к боту",
-                reply_markup=get_unauthorized_keyboard()
+                reply_markup=get_guest_keyboard()
             )
             print(f"Unauthorized access from user_id: {user_id} to function: {func.__name__}")
             return None
@@ -51,7 +51,17 @@ def role_required(required_role):
     def decorator(func):
         async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
             user_id = update.effective_user.id
-            user_role = get_user_role(user_id)
+            user_info = get_user_info(user_id)
+            
+            if not user_info:
+                await update.message.reply_text(
+                    "❌ НЕДОСТАТОЧНО ПРАВ\n\n"
+                    "Свяжитесь с администратором для доступа к боту",
+                    reply_markup=get_guest_keyboard()
+                )
+                return None
+            
+            user_role = user_info.get('role', 'гость')
             role_levels = {
                 "admin": 4,
                 "руководитель": 3,
@@ -98,12 +108,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
             welcome_text,
-            reply_markup=get_unauthorized_keyboard(),
+            reply_markup=get_guest_keyboard(),
             parse_mode='Markdown'
         )
         return
 
-    user_role = get_user_role(user_id)
+    user_info = get_user_info(user_id)
+    user_role = user_info.get('role', 'гость') if user_info else 'гость'
+    
     welcome_text = (
         f'🤖 БОТ ДЛЯ ОТЛОЖЕННЫХ СООБЩЕНИЙ\n'
         f'Текущее время: {current_time} (Москва)\n'
@@ -121,7 +133,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_templates(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for Templates button"""
     user_id = update.effective_user.id
-    user_role = get_user_role(user_id)
+    user_info = get_user_info(user_id)
+    user_role = user_info.get('role', 'гость') if user_info else 'гость'
     
     # Check if user has permission to manage templates
     if user_role in ["гость", "водитель"]:
@@ -172,7 +185,8 @@ async def handle_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_groups(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle groups management"""
     user_id = update.effective_user.id
-    user_role = get_user_role(user_id)
+    user_info = get_user_info(user_id)
+    user_role = user_info.get('role', 'гость') if user_info else 'гость'
     
     if user_role == "гость":
         await update.message.reply_text(
@@ -195,7 +209,7 @@ async def handle_more(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "ℹ️ ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ\n\n"
         "Выберите действие:",
-        reply_markup=get_more_menu()
+        reply_markup=get_more_menu(user_id)
     )
 
 @authorization_required
@@ -263,9 +277,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "🆔 Мой ID":
         await my_id(update, context)
     else:
+        current_keyboard = get_guest_keyboard() if not is_authorized(user_id) else get_main_menu(user_id)
         await update.message.reply_text(
             "Неизвестная команда",
-            reply_markup=get_main_menu(user_id) if is_authorized(user_id) else get_unauthorized_keyboard()
+            reply_markup=current_keyboard
         )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -293,7 +308,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_authorized(user_id):
         await update.message.reply_text(help_text, reply_markup=get_main_menu(user_id))
     else:
-        await update.message.reply_text(help_text, reply_markup=get_unauthorized_keyboard())
+        await update.message.reply_text(help_text, reply_markup=get_guest_keyboard())
 
 async def my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show user_id - available to everyone"""
@@ -301,10 +316,12 @@ async def my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
 
     if is_authorized(user_id):
+        user_info = get_user_info(user_id)
+        user_role = user_info.get('role', 'гость') if user_info else 'гость'
         reply_markup = get_main_menu(user_id)
-        additional_text = "Вы авторизованы и имеете доступ ко всем функциям бота"
+        additional_text = f"Вы авторизованы как {user_role} и имеете доступ к функциям бота"
     else:
-        reply_markup = get_unauthorized_keyboard()
+        reply_markup = get_guest_keyboard()
         additional_text = "Вы не авторизованы. Свяжитесь с администратором для доступа"
 
     await update.message.reply_text(
