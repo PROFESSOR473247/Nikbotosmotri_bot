@@ -5,19 +5,19 @@ from database import add_user_to_group
 USERS_FILE = 'authorized_users.json'
 
 def load_users():
-    """Загружает список пользователей из файла"""
+    """Load user list from file"""
     try:
         if os.path.exists(USERS_FILE):
             with open(USERS_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
         else:
-            # Создаем файл с администратором по умолчанию
+            # Create file with default administrator
             default_users = {
                 "users": {
                     "812934047": {
-                        "name": "Никита",
+                        "name": "Nikita",
                         "role": "admin",
-                        "groups": []  # Админ имеет доступ ко всем группам
+                        "groups": []  # Admin has access to all groups
                     }
                 },
                 "admin_id": 812934047
@@ -25,41 +25,41 @@ def load_users():
             save_users(default_users)
             return default_users
     except Exception as e:
-        print(f"❌ Ошибка загрузки пользователей: {e}")
+        print(f"Error loading users: {e}")
         return {"users": {}, "admin_id": None}
 
 def save_users(users_data):
-    """Сохраняет список пользователей в файл"""
+    """Save user list to file"""
     try:
         with open(USERS_FILE, 'w', encoding='utf-8') as f:
             json.dump(users_data, f, ensure_ascii=False, indent=4)
-        return True, "Пользователи сохранены"
+        return True, "Users saved"
     except Exception as e:
-        print(f"❌ Ошибка сохранения пользователей: {e}")
-        return False, f"Ошибка сохранения: {e}"
+        print(f"Error saving users: {e}")
+        return False, f"Save error: {e}"
 
 def is_authorized(user_id):
-    """Проверяет, авторизован ли пользователь"""
+    """Check if user is authorized"""
     users_data = load_users()
     return str(user_id) in users_data.get('users', {})
 
 def is_admin(user_id):
-    """Проверяет, является ли пользователь администратором"""
+    """Check if user is administrator"""
     users_data = load_users()
     return user_id == users_data.get('admin_id')
 
 def get_user_role(user_id):
-    """Получает роль пользователя"""
+    """Get user role"""
     users_data = load_users()
     user_data = users_data.get('users', {}).get(str(user_id), {})
     return user_data.get('role', 'guest')
 
 def add_user(user_id, username, role='guest', groups=None):
-    """Добавляет пользователя"""
+    """Add user"""
     users_data = load_users()
     
     if str(user_id) in users_data.get('users', {}):
-        return False, "Пользователь уже существует"
+        return False, "User already exists"
     
     users_data['users'][str(user_id)] = {
         "name": username,
@@ -67,7 +67,7 @@ def add_user(user_id, username, role='guest', groups=None):
         "groups": groups or []
     }
     
-    # Добавляем пользователя в группы в системе групп
+    # Add user to groups in group system
     if groups:
         for group_id in groups:
             add_user_to_group(user_id, group_id)
@@ -75,20 +75,20 @@ def add_user(user_id, username, role='guest', groups=None):
     success, message = save_users(users_data)
     
     if success:
-        return True, f"Пользователь {username} (ID: {user_id}) добавлен как {role}"
+        return True, f"User {username} (ID: {user_id}) added as {role}"
     else:
         return False, message
 
 def remove_user(user_id):
-    """Удаляет пользователя"""
+    """Remove user"""
     users_data = load_users()
     user_id_str = str(user_id)
     
     if user_id_str not in users_data.get('users', {}):
-        return False, "Пользователь не найден"
+        return False, "User not found"
     
     if user_id == users_data.get('admin_id'):
-        return False, "Нельзя удалить администратора"
+        return False, "Cannot remove administrator"
     
     username = users_data['users'][user_id_str]['name']
     del users_data['users'][user_id_str]
@@ -96,16 +96,16 @@ def remove_user(user_id):
     success, message = save_users(users_data)
     
     if success:
-        return True, f"Пользователь {username} (ID: {user_id}) удален"
+        return True, f"User {username} (ID: {user_id}) removed"
     else:
         return False, message
 
 def get_users_list():
-    """Возвращает список всех пользователей"""
+    """Return list of all users"""
     users_data = load_users()
     return users_data.get('users', {})
 
 def get_admin_id():
-    """Возвращает ID администратора"""
+    """Return administrator ID"""
     users_data = load_users()
     return users_data.get('admin_id')
