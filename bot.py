@@ -88,22 +88,22 @@ def get_group_selection_keyboard(user_id):
     """Keyboard for group selection"""
     accessible_groups = group_manager.get_accessible_groups_for_user(user_id)
     keyboard = []
-    
+    
     for group_id, group_info in accessible_groups.items():
         keyboard.append([f"Group: {group_info.get('title', f'Group {group_id}')}"])
-    
-        keyboard.append(["Back to Main Menu"])
-         return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    keyboard.append(["Back to Main Menu"])
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
-    
+    
     # If bot is in group - update group information
     if update.effective_chat.type in ["group", "supergroup", "channel"]:
         await group_manager.update_group_info(update, context)
         return
-    
+    
     # Personal chat
     current_time = datetime.datetime.now(pytz.timezone('Europe/Moscow')).strftime("%H:%M:%S")
 
@@ -142,7 +142,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_templates(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for Templates button"""
     user_id = update.effective_user.id
-    
+    
     accessible_groups = group_manager.get_accessible_groups_for_user(user_id)
     if not accessible_groups:
         await update.message.reply_text(
@@ -151,17 +151,17 @@ async def handle_templates(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_main_keyboard()
         )
         return
-    
+    
     await update.message.reply_text(
         "Select group for working with templates:",
         reply_markup=get_group_selection_keyboard(user_id)
     )
 
-@authorization_required 
+@authorization_required 
 async def handle_testing(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for Testing button"""
     user_id = update.effective_user.id
-    
+    
     accessible_groups = group_manager.get_accessible_groups_for_user(user_id)
     if not accessible_groups:
         await update.message.reply_text(
@@ -169,7 +169,7 @@ async def handle_testing(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_main_keyboard()
         )
         return
-    
+    
     await update.message.reply_text(
         "TESTING TEMPLATES\n\n"
         "Select group for test sending:",
@@ -181,7 +181,7 @@ async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show user task status"""
     user_id = update.effective_user.id
     user_tasks = task_manager.get_user_tasks(user_id)
-    
+    
     if not user_tasks:
         status_text = "TASK STATUS\n\nNo active tasks"
     else:
@@ -190,12 +190,12 @@ async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
             groups_data = load_groups()
             group_info = groups_data["groups"].get(str(task_data["group_id"]), {})
             group_name = group_info.get('title', f'Group {task_data["group_id"]}')
-            
+            
             status_text += f"Template: {TEMPLATES.get(task_data['template_name'], {}).get('text', 'Template')[:50]}...\n"
             status_text += f"   Group: {group_name}\n"
             status_text += f"   Created: {task_data['created_at'][:16]}\n"
             status_text += f"   Type: {'Main' if task_data['task_type'] == 'main' else 'Test'}\n\n"
-    
+    
     await update.message.reply_text(
         status_text,
         reply_markup=get_main_keyboard()
@@ -205,11 +205,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle text messages"""
     text = update.message.text
     user_id = update.effective_user.id
-    
+    
     # Skip processing if it's a group
     if update.effective_chat.type in ["group", "supergroup", "channel"]:
         return
-    
+    
     if text == "Templates":
         await handle_templates(update, context)
     elif text == "Testing":
@@ -328,7 +328,7 @@ def keep_alive():
             except Exception as e:
                 print(f"Ping error: {e}")
             time.sleep(300)  # Ping every 5 minutes
-    
+    
     # Start in separate thread
     ping_thread = threading.Thread(target=ping, daemon=True)
     ping_thread.start()
@@ -337,7 +337,7 @@ def keep_alive():
 def main():
     """Start bot - simplified version for Render"""
     print("Starting bot...")
-    
+    
     # Initialize database
     init_database()
 
@@ -358,7 +358,7 @@ def main():
     except RuntimeError:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-    
+    
     loop.run_until_complete(task_manager.restore_tasks(application))
 
     # Command handlers
@@ -384,7 +384,7 @@ def main():
     application.add_handler(MessageHandler(filters.ALL, group_manager.update_group_info))
 
     print("Bot started and ready!")
-    
+    
     # Start polling - this will handle the event loop internally
     application.run_polling()
 
