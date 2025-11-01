@@ -92,7 +92,7 @@ def get_group_selection_keyboard(user_id):
     keyboard = []
     
     for group_id, group_info in accessible_groups.items():
-        keyboard.append([f"🏘️ {group_info.get('title', f'Group {group_id}')}"])
+        keyboard.append([f"🏘️ {group_info.get('title', f'Группа {group_id}')}"])
     
     keyboard.append(["🔙 Назад"])
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -104,3 +104,34 @@ def get_back_keyboard():
 def get_confirmation_keyboard():
     """Confirmation keyboard"""
     return ReplyKeyboardMarkup([["✅ Да", "❌ Нет"], ["🔙 Назад"]], resize_keyboard=True)
+
+def get_days_keyboard():
+    """Days of week keyboard"""
+    return ReplyKeyboardMarkup([
+        ["Пн", "Вт", "Ср", "Чт"],
+        ["Пт", "Сб", "Вс"],
+        ["🔙 Назад"]
+    ], resize_keyboard=True)
+
+def get_frequency_keyboard():
+    """Frequency selection keyboard"""
+    return ReplyKeyboardMarkup([
+        ["2 в неделю", "1 в неделю"],
+        ["2 в месяц", "1 в месяц"],
+        ["🔙 Назад"]
+    ], resize_keyboard=True)
+
+def get_edit_template_keyboard():
+    """Template editing options keyboard"""
+    return ReplyKeyboardMarkup([
+        ["🏘️ Группу", "📝 Текст"],
+        ["🖼️ Изображение", "🕒 Время"],
+        ["📅 Периодичность", "🔙 Назад"]
+    ], resize_keyboard=True)
+
+def get_image_options_keyboard():
+    """Image options keyboard"""
+    return ReplyKeyboardMarkup([
+        ["📎 Прикрепить изображение", "⏭️ Пропустить"],
+        ["🔙 Назад"]
+    ], resize_keyboard=True)
