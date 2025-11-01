@@ -1,10 +1,17 @@
-services:
-  - type: worker
-    name: telegram-bot
-    env: python
-    plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: python bot.py
-    envVars:
-      - key: BOT_TOKEN
-        value: YOUR_BOT_TOKEN_HERE
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Получаем токен из переменных окружения
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+
+# Если токен не найден, используем запасной вариант (для тестирования)
+if not BOT_TOKEN:
+    BOT_TOKEN = "8373568269:AAGSBjS57tRHXumLRPWBAe2lUeFq7NNzhl0"  # Замените на ваш токен
+    print("⚠️  BOT_TOKEN не найден в переменных окружения, используется значение по умолчанию")
+
+if not BOT_TOKEN or BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
+    raise ValueError("❌ BOT_TOKEN не настроен! Убедитесь, что переменная окружения установлена.")
+
+print("✅ BOT_TOKEN загружен успешно")
