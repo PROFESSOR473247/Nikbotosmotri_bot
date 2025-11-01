@@ -1,49 +1,59 @@
-from telegram import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
-from authorized_users import get_user_role, is_admin, get_user_info
-from database import get_user_accessible_groups, load_groups
+from telegram import ReplyKeyboardMarkup
+from authorized_users import is_authorized, is_admin, get_user_role
 
 def get_main_menu(user_id):
-    """Get main menu based on user role"""
-    user_info = get_user_info(user_id)
-    
-    if not user_info:  # User not authorized
+    """Главное меню в зависимости от роли"""
+    if not is_authorized(user_id):
         return get_guest_keyboard()
     
-    user_role = user_info.get('role', 'гость')
+    user_role = get_user_role(user_id)
     
     if user_role == "admin":
-        keyboard = [
-            ["📋 Задачи", "📁 Шаблоны"],
-            ["👥 Пользователи", "🏘️ Группы"],
-            ["ℹ️ Еще"]
-        ]
+        return get_admin_keyboard()
     elif user_role == "руководитель":
-        keyboard = [
-            ["📋 Задачи", "📁 Шаблоны"],
-            ["🏘️ Группы", "ℹ️ Еще"]
-        ]
+        return get_manager_keyboard()
     elif user_role == "водитель":
-        keyboard = [
-            ["📋 Задачи", "ℹ️ Еще"]
-        ]
-    else:  # гость - минимальные права
+        return get_driver_keyboard()
+    else:  # гость
         return get_guest_keyboard()
-    
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def get_guest_keyboard():
-    """Keyboard for guests - only Get ID button"""
+    """ТОЛЬКО кнопка Получить ID для гостей"""
     keyboard = [
         ["🆔 Получить ID"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
+
+def get_admin_keyboard():
+    """Меню администратора"""
+    keyboard = [
+        ["📋 Задачи", "📁 Шаблоны"],
+        ["👥 Пользователи", "🏘️ Группы"],
+        ["ℹ️ Еще"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_manager_keyboard():
+    """Меню руководителя"""
+    keyboard = [
+        ["📋 Задачи", "📁 Шаблоны"],
+        ["🏘️ Группы", "ℹ️ Еще"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_driver_keyboard():
+    """Меню водителя"""
+    keyboard = [
+        ["📋 Задачи", "ℹ️ Еще"]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def get_unauthorized_keyboard():
-    """Alias for guest keyboard"""
+    """Псевдоним для гостевой клавиатуры"""
     return get_guest_keyboard()
 
 def get_templates_menu():
-    """Get templates management menu"""
+    """Меню шаблонов"""
     keyboard = [
         ["📋 Список шаблонов", "➕ Добавить новый"],
         ["✏️ Редактировать", "🗑️ Удалить"],
@@ -52,7 +62,7 @@ def get_templates_menu():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def get_tasks_menu():
-    """Get tasks management menu"""
+    """Меню задач"""
     keyboard = [
         ["📝 Создать задачу", "❌ Отменить задачу"],
         ["🧪 Тестирование", "📊 Статус задач"],
@@ -61,7 +71,7 @@ def get_tasks_menu():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def get_users_menu():
-    """Get users management menu (admin only)"""
+    """Меню пользователей (только админ)"""
     keyboard = [
         ["➕ Добавить", "✏️ Изменить доступ"],
         ["📋 Список пользователей", "🗑️ Удалить"],
@@ -70,10 +80,8 @@ def get_users_menu():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def get_groups_menu(user_id):
-    """Get groups management menu"""
-    user_role = get_user_role(user_id)
-    
-    if user_role == "admin":
+    """Меню групп"""
+    if is_admin(user_id):
         keyboard = [
             ["📋 Список групп", "➕ Создать группу"],
             ["📁 Создать подгруппу", "✏️ Изменить доступ"],
@@ -85,74 +93,29 @@ def get_groups_menu(user_id):
             ["📁 Создать подгруппу", "🗑️ Удалить подгруппу"],
             ["🔙 Назад в главное меню"]
         ]
-    
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def get_more_menu(user_id):
-    """Get more options menu based on role"""
+    """Дополнительное меню"""
+    if not is_authorized(user_id):
+        return get_guest_keyboard()
+    
     user_role = get_user_role(user_id)
     
-    if user_role in ["admin", "руководитель"]:
+    if user_role in ["admin", "руководитель", "водитель"]:
         keyboard = [
             ["📊 Статус задач", "🕒 Текущее время"],
             ["🆔 Мой ID", "🔙 Назад в главное меню"]
         ]
-    elif user_role == "водитель":
-        keyboard = [
-            ["📊 Статус задач", "🕒 Текущее время"],
-            ["🆔 Мой ID", "🔙 Назад в главное меню"]
-        ]
-    else:  # гость
+    else:
         return get_guest_keyboard()
     
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-def get_group_selection_keyboard(user_id):
-    """Keyboard for group selection"""
-    accessible_groups = get_user_accessible_groups(user_id)
-    keyboard = []
-    
-    for group_id, group_info in accessible_groups.items():
-        keyboard.append([f"🏘️ {group_info.get('title', f'Группа {group_id}')}"])
-    
-    keyboard.append(["🔙 Назад"])
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
 def get_back_keyboard():
-    """Simple back keyboard"""
+    """Кнопка Назад"""
     return ReplyKeyboardMarkup([["🔙 Назад"]], resize_keyboard=True)
 
 def get_confirmation_keyboard():
-    """Confirmation keyboard"""
+    """Клавиатура подтверждения"""
     return ReplyKeyboardMarkup([["✅ Да", "❌ Нет"], ["🔙 Назад"]], resize_keyboard=True)
-
-def get_days_keyboard():
-    """Days of week keyboard"""
-    return ReplyKeyboardMarkup([
-        ["Пн", "Вт", "Ср", "Чт"],
-        ["Пт", "Сб", "Вс"],
-        ["🔙 Назад"]
-    ], resize_keyboard=True)
-
-def get_frequency_keyboard():
-    """Frequency selection keyboard"""
-    return ReplyKeyboardMarkup([
-        ["2 в неделю", "1 в неделю"],
-        ["2 в месяц", "1 в месяц"],
-        ["🔙 Назад"]
-    ], resize_keyboard=True)
-
-def get_edit_template_keyboard():
-    """Template editing options keyboard"""
-    return ReplyKeyboardMarkup([
-        ["🏘️ Группу", "📝 Текст"],
-        ["🖼️ Изображение", "🕒 Время"],
-        ["📅 Периодичность", "🔙 Назад"]
-    ], resize_keyboard=True)
-
-def get_image_options_keyboard():
-    """Image options keyboard"""
-    return ReplyKeyboardMarkup([
-        ["📎 Прикрепить изображение", "⏭️ Пропустить"],
-        ["🔙 Назад"]
-    ], resize_keyboard=True)
