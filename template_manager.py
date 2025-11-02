@@ -709,7 +709,7 @@ class TemplateManager:
     # =============================================================================
 
         async def handle_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработчик нажатий на кнопки шаблонов"""
+"""Обработчик нажатий на кнопки шаблонов"""
         query = update.callback_query
         await query.answer()
         
