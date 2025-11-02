@@ -1,0 +1,16 @@
+{
+  "telegram_groups": {
+    "-100123456789": {
+      "title": "Hongqi 476 Group",
+      "type": "supergroup",
+      "username": "hongqi_group",
+      "updated_at": "2024-01-15T10:00:00"
+    },
+    "-100987654321": {
+      "title": "Matiz 476 Group", 
+      "type": "supergroup",
+      "username": "matiz_group",
+      "updated_at": "2024-01-15T10:00:00"
+    }
+  }
+}
