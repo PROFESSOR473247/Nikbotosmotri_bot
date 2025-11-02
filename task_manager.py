@@ -4,7 +4,7 @@ import json
 import os
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, filters, CallbackQueryHandler
+from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, filters, CallbackQueryHandler, CommandHandler
 import pytz
 
 from database import (
@@ -16,10 +16,12 @@ from menu_manager import (
     get_tasks_keyboard, get_groups_keyboard, get_subgroups_keyboard,
     get_templates_keyboard, get_confirmation_keyboard, get_back_button
 )
-from conversation_states import (
-    TASK_GROUP, TASK_SUBGROUP, TASK_TEMPLATE, TASK_CHANNEL, TASK_CONFIRM, TASK_EDIT,
-    CANCEL_TASK_GROUP, CANCEL_TASK_SUBGROUP, CANCEL_TASK_SELECT, CANCEL_TASK_CONFIRM
-)
+
+# Состояния для создания задачи
+TASK_GROUP, TASK_SUBGROUP, TASK_TEMPLATE, TASK_CHANNEL, TASK_CONFIRM, TASK_EDIT = range(6)
+
+# Состояния для отмены задачи
+CANCEL_TASK_GROUP, CANCEL_TASK_SUBGROUP, CANCEL_TASK_SELECT, CANCEL_TASK_CONFIRM = range(4)
 
 class TaskManager:
     def __init__(self):
