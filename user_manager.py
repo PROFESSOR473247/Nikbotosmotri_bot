@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, filters, CallbackQueryHandler
+from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, filters, CallbackQueryHandler, CommandHandler
 
 from database import (
     is_authorized, is_admin, get_user_role, get_authorized_users_list,
@@ -13,12 +13,18 @@ from menu_manager import (
     get_confirmation_keyboard, get_back_button
 )
 from user_roles import get_role_name, get_all_roles
-from conversation_states import (
-    ADD_USER_ID, ADD_USER_NAME, ADD_USER_ROLE, ADD_USER_GROUPS, ADD_USER_CONFIRM,
-    EDIT_USER_SELECT, EDIT_USER_FIELD, EDIT_USER_ROLE, EDIT_USER_GROUPS, EDIT_USER_CONFIRM,
-    DELETE_USER_SELECT, DELETE_USER_CONFIRM,
-    TEST_ROLE_SELECT
-)
+
+# Состояния для добавления пользователя
+ADD_USER_ID, ADD_USER_NAME, ADD_USER_ROLE, ADD_USER_GROUPS, ADD_USER_CONFIRM = range(5)
+
+# Состояния для редактирования пользователя
+EDIT_USER_SELECT, EDIT_USER_FIELD, EDIT_USER_ROLE, EDIT_USER_GROUPS, EDIT_USER_CONFIRM = range(5)
+
+# Состояния для удаления пользователя
+DELETE_USER_SELECT, DELETE_USER_CONFIRM = range(2)
+
+# Состояния для тестирования прав
+TEST_ROLE_SELECT = range(1)
 
 class UserManager:
     def __init__(self):
