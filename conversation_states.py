@@ -1,0 +1,46 @@
+# -*- coding: utf-8 -*-
+"""
+Состояния для ConversationHandler
+"""
+
+# Состояния для создания шаблона
+TEMPLATE_GROUP, TEMPLATE_SUBGROUP, TEMPLATE_NAME, TEMPLATE_TEXT, TEMPLATE_IMAGE, TEMPLATE_TIME, TEMPLATE_DAY, TEMPLATE_FREQUENCY, TEMPLATE_SECOND_DAY, TEMPLATE_CONFIRM = range(10)
+
+# Состояния для редактирования шаблона
+EDIT_TEMPLATE_SELECT, EDIT_TEMPLATE_FIELD, EDIT_TEMPLATE_GROUP, EDIT_TEMPLATE_SUBGROUP, EDIT_TEMPLATE_TEXT, EDIT_TEMPLATE_IMAGE, EDIT_TEMPLATE_TIME, EDIT_TEMPLATE_FREQUENCY, EDIT_TEMPLATE_CONFIRM = range(9)
+
+# Состояния для удаления шаблона
+DELETE_TEMPLATE_GROUP, DELETE_TEMPLATE_SUBGROUP, DELETE_TEMPLATE_SELECT, DELETE_TEMPLATE_CONFIRM = range(4)
+
+# Состояния для создания задачи
+TASK_GROUP, TASK_SUBGROUP, TASK_TEMPLATE, TASK_CHANNEL, TASK_CONFIRM, TASK_EDIT = range(6)
+
+# Состояния для отмены задачи
+CANCEL_TASK_GROUP, CANCEL_TASK_SUBGROUP, CANCEL_TASK_SELECT, CANCEL_TASK_CONFIRM = range(4)
+
+# Состояния для добавления пользователя
+ADD_USER_ID, ADD_USER_NAME, ADD_USER_ROLE, ADD_USER_GROUPS, ADD_USER_CONFIRM = range(5)
+
+# Состояния для редактирования пользователя
+EDIT_USER_SELECT, EDIT_USER_FIELD, EDIT_USER_ROLE, EDIT_USER_GROUPS, EDIT_USER_CONFIRM = range(5)
+
+# Состояния для удаления пользователя
+DELETE_USER_SELECT, DELETE_USER_CONFIRM = range(2)
+
+# Состояния для создания группы
+CREATE_GROUP_NAME, CREATE_GROUP_USERS, CREATE_GROUP_CONFIRM = range(3)
+
+# Состояния для создания подгруппы
+CREATE_SUBGROUP_GROUP, CREATE_SUBGROUP_NAME, CREATE_SUBGROUP_CONFIRM = range(3)
+
+# Состояния для изменения доступа к группе
+EDIT_GROUP_ACCESS_SELECT, EDIT_GROUP_ACCESS_ACTION, EDIT_GROUP_ACCESS_ADD, EDIT_GROUP_ACCESS_REMOVE = range(4)
+
+# Состояния для удаления группы
+DELETE_GROUP_SELECT, DELETE_GROUP_CONFIRM = range(2)
+
+# Состояния для удаления подгруппы
+DELETE_SUBGROUP_GROUP, DELETE_SUBGROUP_SELECT, DELETE_SUBGROUP_CONFIRM = range(3)
+
+# Состояния для тестирования прав
+TEST_ROLE_SELECT = range(1)
