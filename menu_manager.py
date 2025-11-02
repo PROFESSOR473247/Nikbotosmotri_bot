@@ -1,4 +1,4 @@
-from telegram import ReplyKeyboardMarkup
+from telegram import ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
 from authorized_users import is_authorized, is_admin, get_user_role
 
 def get_main_menu(user_id):
@@ -20,7 +20,7 @@ def get_main_menu(user_id):
 def get_guest_keyboard():
     """ТОЛЬКО кнопка Получить ID для гостей"""
     keyboard = [
-        ["🆔 Получить ID"]
+        ["🆔 Получить ID", "❓ Помощь"]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
@@ -47,10 +47,6 @@ def get_driver_keyboard():
         ["📋 Задачи", "ℹ️ Еще"]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
-def get_unauthorized_keyboard():
-    """Псевдоним для гостевой клавиатуры"""
-    return get_guest_keyboard()
 
 def get_templates_menu():
     """Меню шаблонов"""
@@ -112,10 +108,18 @@ def get_more_menu(user_id):
     
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-def get_back_keyboard():
-    """Кнопка Назад"""
-    return ReplyKeyboardMarkup([["🔙 Назад"]], resize_keyboard=True)
+def get_task_status_keyboard():
+    """Клавиатура для статуса задач"""
+    keyboard = [
+        [InlineKeyboardButton("🔄 Обновить", callback_data="task_status_refresh")],
+        [InlineKeyboardButton("🔙 Назад", callback_data="back_to_tasks")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
 
-def get_confirmation_keyboard():
-    """Клавиатура подтверждения"""
-    return ReplyKeyboardMarkup([["✅ Да", "❌ Нет"], ["🔙 Назад"]], resize_keyboard=True)
+def get_template_list_keyboard():
+    """Клавиатура для списка шаблонов"""
+    keyboard = [
+        [InlineKeyboardButton("📋 Показать шаблоны", callback_data="template_list")],
+        [InlineKeyboardButton("🔙 Назад", callback_data="back_to_templates")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
