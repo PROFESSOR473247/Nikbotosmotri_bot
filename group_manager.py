@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, filters, CallbackQueryHandler
+from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, filters, CallbackQueryHandler, CommandHandler
 
 from database import (
     is_authorized, is_admin, get_user_role, get_all_groups, get_user_accessible_groups,
@@ -12,13 +12,21 @@ from menu_manager import (
     get_groups_keyboard, get_confirmation_keyboard, get_back_button
 )
 from user_roles import get_role_name
-from conversation_states import (
-    CREATE_GROUP_NAME, CREATE_GROUP_USERS, CREATE_GROUP_CONFIRM,
-    CREATE_SUBGROUP_GROUP, CREATE_SUBGROUP_NAME, CREATE_SUBGROUP_CONFIRM,
-    EDIT_GROUP_ACCESS_SELECT, EDIT_GROUP_ACCESS_ACTION, EDIT_GROUP_ACCESS_ADD, EDIT_GROUP_ACCESS_REMOVE,
-    DELETE_GROUP_SELECT, DELETE_GROUP_CONFIRM,
-    DELETE_SUBGROUP_GROUP, DELETE_SUBGROUP_SELECT, DELETE_SUBGROUP_CONFIRM
-)
+
+# Состояния для создания группы
+CREATE_GROUP_NAME, CREATE_GROUP_USERS, CREATE_GROUP_CONFIRM = range(3)
+
+# Состояния для создания подгруппы
+CREATE_SUBGROUP_GROUP, CREATE_SUBGROUP_NAME, CREATE_SUBGROUP_CONFIRM = range(3)
+
+# Состояния для изменения доступа к группе
+EDIT_GROUP_ACCESS_SELECT, EDIT_GROUP_ACCESS_ACTION, EDIT_GROUP_ACCESS_ADD, EDIT_GROUP_ACCESS_REMOVE = range(4)
+
+# Состояния для удаления группы
+DELETE_GROUP_SELECT, DELETE_GROUP_CONFIRM = range(2)
+
+# Состояния для удаления подгруппы
+DELETE_SUBGROUP_GROUP, DELETE_SUBGROUP_SELECT, DELETE_SUBGROUP_CONFIRM = range(3)
 
 class GroupManager:
     def __init__(self):
