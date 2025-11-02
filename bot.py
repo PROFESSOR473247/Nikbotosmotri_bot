@@ -234,27 +234,60 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("❌ Недостаточно прав")
         return
     
-    # Обработка кнопок задач
-    if data.startswith('task_'):
-        await task_manager.handle_button(update, context)
-    # Обработка кнопок шаблонов
-    elif data.startswith('template_'):
-        await template_manager.handle_button(update, context)
-    # Обработка кнопок пользователей
-    elif data.startswith('user_'):
-        await user_manager.handle_button(update, context)
-    # Обработка кнопок групп
-    elif data.startswith('group_'):
-        await group_manager.handle_button(update, context)
-    # Обработка тестирования ролей
-    elif data.startswith('test_role_'):
-        await handle_test_role(update, context)
-    # Обработка кнопки "назад"
-    elif data == "back":
-        from menu_manager import get_main_menu
+    try:
+        # Обработка кнопок задач
+        if data.startswith('task_'):
+            await task_manager.handle_button(update, context)
+        # Обработка кнопок шаблонов
+        elif data.startswith('template_'):
+            await template_manager.handle_button(update, context)
+        # Обработка кнопок пользователей
+        elif data.startswith('user_'):
+            await user_manager.handle_button(update, context)
+        # Обработка кнопок групп
+        elif data.startswith('group_'):
+            await group_manager.handle_button(update, context)
+        # Обработка тестирования ролей
+        elif data.startswith('test_role_'):
+            await handle_test_role(update, context)
+        # Обработка кнопки "назад"
+        elif data == "back":
+            from menu_manager import get_main_menu
+            # Используем reply_text вместо edit_message_text для смены типа клавиатуры
+            await query.message.reply_text(
+                "📋 Главное меню",
+                reply_markup=get_main_menu(user_id)
+            )
+            # Удаляем старое сообщение с inline-кнопками
+            await query.message.delete()
+        # Обработка других кнопок
+        elif data.startswith('select_') or data.startswith('edit_') or data.startswith('confirm_') or data.startswith('cancel_'):
+            # Передаем обработку соответствующим менеджерам
+            if any(keyword in data for keyword in ['template', 'group', 'user', 'task']):
+                if 'template' in data:
+                    await template_manager.handle_button(update, context)
+                elif 'group' in data:
+                    await group_manager.handle_button(update, context)
+                elif 'user' in data:
+                    await user_manager.handle_button(update, context)
+                elif 'task' in data:
+                    await task_manager.handle_button(update, context)
+            else:
+                await query.edit_message_text(
+                    "🛠️ Функция в разработке",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back")]])
+                )
+        else:
+            await query.edit_message_text(
+                "❓ Неизвестная команда",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back")]])
+            )
+            
+    except Exception as e:
+        logging.error(f"❌ Ошибка в обработчике кнопок: {e}")
         await query.edit_message_text(
-            "📋 Главное меню",
-            reply_markup=get_main_menu(user_id)
+            "❌ Произошла ошибка при обработке запроса",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back")]])
         )
 
 async def handle_test_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
