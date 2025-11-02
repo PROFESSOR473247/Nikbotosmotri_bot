@@ -2,6 +2,7 @@
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, filters, CallbackQueryHandler, CommandHandler
+from datetime import datetime
 
 from database import (
     is_authorized, is_admin, get_user_role, get_all_groups, get_user_accessible_groups,
@@ -253,7 +254,7 @@ class GroupManager:
                 'id': group_id,
                 'name': group_data['group_name'],
                 'subgroups': {},
-                'created_at': ContextTypes.DEFAULT_TYPE.now().isoformat()
+                'created_at': datetime.now().isoformat()
             }
             
             success = add_group(group_id, group_info)
@@ -441,6 +442,7 @@ class GroupManager:
             await update.message.reply_text("📭 В системе нет групп для удаления")
             return ConversationHandler.END
         
+        # Инициализируем group_deletion
         context.user_data['group_deletion'] = {
             'user_id': user_id
         }
@@ -461,14 +463,9 @@ class GroupManager:
         
         data = query.data
         
-        if data == "back":
-            from menu_manager import get_groups_menu
-            keyboard = get_groups_menu(query.from_user.id)
-            await query.edit_message_text(
-                "🏘️ УПРАВЛЕНИЕ ГРУППАМИ",
-                reply_markup=keyboard
-            )
-            return ConversationHandler.END
+        # Проверяем, инициализирован ли group_deletion в user_data
+        if 'group_deletion' not in context.user_data:
+            context.user_data['group_deletion'] = {}
         
         if data.startswith("select_group_"):
             group_id = data.replace("select_group_", "")
@@ -507,6 +504,11 @@ class GroupManager:
         await query.answer()
         
         data = query.data
+        
+        # Проверяем, инициализирован ли group_deletion в user_data
+        if 'group_deletion' not in context.user_data:
+            await query.edit_message_text("❌ Ошибка: данные удаления не найдены")
+            return ConversationHandler.END
         
         if data == "confirm_delete_group":
             group_data = context.user_data['group_deletion']
@@ -664,6 +666,18 @@ class GroupManager:
                 parse_mode='Markdown'
             )
 
+    async def handle_unexpected_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработка неожиданных callback-ов"""
+        query = update.callback_query
+        await query.answer()
+        
+        await query.edit_message_text(
+            "❌ Произошла ошибка. Сессия была сброшена.\n\n"
+            "Пожалуйста, начните операцию заново.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back")]])
+        )
+        return ConversationHandler.END
+
     def get_conversation_handler(self):
         """Получить ConversationHandler для групп"""
         return ConversationHandler(
@@ -678,16 +692,31 @@ class GroupManager:
                 # States for creating group
                 CREATE_GROUP_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.create_group_name_input)],
                 CREATE_GROUP_USERS: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.create_group_users_input)],
-                CREATE_GROUP_CONFIRM: [CallbackQueryHandler(self.create_group_confirmation_handler, pattern="^(confirm_create_group|edit_create_group)")],
+                CREATE_GROUP_CONFIRM: [
+                    CallbackQueryHandler(self.create_group_confirmation_handler, pattern="^(confirm_create_group|edit_create_group)"),
+                    CallbackQueryHandler(self.handle_unexpected_callback)
+                ],
                 
                 # States for creating subgroup
-                CREATE_SUBGROUP_GROUP: [CallbackQueryHandler(self.create_subgroup_group_selected, pattern="^(select_group_|back)")],
+                CREATE_SUBGROUP_GROUP: [
+                    CallbackQueryHandler(self.create_subgroup_group_selected, pattern="^(select_group_|back)"),
+                    CallbackQueryHandler(self.handle_unexpected_callback)
+                ],
                 CREATE_SUBGROUP_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.create_subgroup_name_input)],
-                CREATE_SUBGROUP_CONFIRM: [CallbackQueryHandler(self.create_subgroup_confirmation_handler, pattern="^(confirm_create_subgroup|edit_create_subgroup)")],
+                CREATE_SUBGROUP_CONFIRM: [
+                    CallbackQueryHandler(self.create_subgroup_confirmation_handler, pattern="^(confirm_create_subgroup|edit_create_subgroup)"),
+                    CallbackQueryHandler(self.handle_unexpected_callback)
+                ],
                 
                 # States for deleting group
-                DELETE_GROUP_SELECT: [CallbackQueryHandler(self.delete_group_selected, pattern="^(select_group_|back)")],
-                DELETE_GROUP_CONFIRM: [CallbackQueryHandler(self.delete_group_confirmation_handler, pattern="^(confirm_delete_group|cancel_delete_group)")],
+                DELETE_GROUP_SELECT: [
+                    CallbackQueryHandler(self.delete_group_selected, pattern="^(select_group_|back)"),
+                    CallbackQueryHandler(self.handle_unexpected_callback)
+                ],
+                DELETE_GROUP_CONFIRM: [
+                    CallbackQueryHandler(self.delete_group_confirmation_handler, pattern="^(confirm_delete_group|cancel_delete_group)"),
+                    CallbackQueryHandler(self.handle_unexpected_callback)
+                ],
             },
             fallbacks=[CommandHandler("cancel", self.cancel_group_operation)],
             name="group_conversation"
