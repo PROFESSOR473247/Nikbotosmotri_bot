@@ -249,6 +249,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Обработка тестирования ролей
     elif data.startswith('test_role_'):
         await handle_test_role(update, context)
+    # Обработка кнопки "назад"
+    elif data == "back":
+        from menu_manager import get_main_menu
+        await query.edit_message_text(
+            "📋 Главное меню",
+            reply_markup=get_main_menu(user_id)
+        )
 
 async def handle_test_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка тестирования ролей"""
@@ -284,10 +291,6 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def setup_handlers(application):
     """Настройка обработчиков"""
-    from conversation_states import *
-    from template_manager import template_manager
-    from user_manager import user_manager
-    from group_manager import group_manager
     
     # Обработчики команд
     application.add_handler(CommandHandler("start", start))
