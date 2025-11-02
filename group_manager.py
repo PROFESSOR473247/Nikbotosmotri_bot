@@ -589,6 +589,11 @@ class GroupManager:
         
         data = query.data
         
+        # Проверяем наличие subgroup_deletion в context.user_data
+        if 'subgroup_deletion' not in context.user_data:
+            await query.edit_message_text("❌ Ошибка сессии. Пожалуйста, начните заново.")
+            return ConversationHandler.END
+            
         if data == "back":
             from menu_manager import get_groups_menu
             keyboard = get_groups_menu(query.from_user.id)
@@ -649,6 +654,11 @@ class GroupManager:
         
         data = query.data
         
+        # Проверяем наличие subgroup_deletion в context.user_data
+        if 'subgroup_deletion' not in context.user_data:
+            await query.edit_message_text("❌ Ошибка сессии. Пожалуйста, начните заново.")
+            return ConversationHandler.END
+            
         if data == "back_to_groups":
             # Возвращаемся к выбору группы
             user_id = query.from_user.id
