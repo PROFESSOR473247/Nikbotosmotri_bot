@@ -75,9 +75,58 @@ def init_database():
                 with open(file, 'w', encoding='utf-8') as f:
                     json.dump(default_data, f, ensure_ascii=False, indent=2)
                 print(f"🔄 Recreated corrupted file: {file}")
+    
+    # Fix any corrupted authorized_users structure
+    fix_authorized_users_structure()
+
+def fix_authorized_users_structure():
+    """Fix corrupted authorized_users.json structure"""
+    try:
+        with open(AUTHORIZED_USERS_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # Check if structure is corrupted (users as string instead of dict)
+        if isinstance(data.get('users'), str):
+            print("🔄 Fixing corrupted authorized_users structure...")
+            data['users'] = {}
+            data['admin_id'] = 812934047
+            with open(AUTHORIZED_USERS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+            print("✅ Fixed authorized_users structure")
+        
+        # Ensure admin user exists
+        users = data.get('users', {})
+        if '812934047' not in users:
+            users['812934047'] = {
+                "name": "Никита",
+                "role": "admin",
+                "groups": ["hongqi_476", "matiz_476"]
+            }
+            data['users'] = users
+            data['admin_id'] = 812934047
+            with open(AUTHORIZED_USERS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+            print("✅ Added default admin user")
+            
+    except Exception as e:
+        logging.error(f"❌ Error fixing authorized_users structure: {e}")
+        # Recreate file with default structure
+        default_data = {
+            "users": {
+                "812934047": {
+                    "name": "Никита",
+                    "role": "admin",
+                    "groups": ["hongqi_476", "matiz_476"]
+                }
+            },
+            "admin_id": 812934047
+        }
+        with open(AUTHORIZED_USERS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(default_data, f, ensure_ascii=False, indent=4)
+        print("✅ Recreated authorized_users.json with default structure")
 
 # =============================================================================
-# AUTHORIZED USERS MANAGEMENT (заменяет authorized_users.py)
+# AUTHORIZED USERS MANAGEMENT
 # =============================================================================
 
 def load_authorized_users():
@@ -106,7 +155,14 @@ def save_authorized_users(users_data):
 def is_authorized(user_id):
     """Check if user is authorized"""
     users_data = load_authorized_users()
-    return str(user_id) in users_data.get('users', {})
+    users = users_data.get('users', {})
+    
+    # Ensure users is a dictionary
+    if not isinstance(users, dict):
+        logging.error(f"❌ Users data is not a dictionary: {type(users)}")
+        return False
+    
+    return str(user_id) in users
 
 def is_admin(user_id):
     """Check if user is administrator"""
@@ -114,14 +170,35 @@ def is_admin(user_id):
     return user_id == users_data.get('admin_id')
 
 def get_user_role(user_id):
-    """Get user role"""
-    users_data = load_authorized_users()
-    user_data = users_data.get('users', {}).get(str(user_id), {})
-    return user_data.get('role', 'гость')
+    """Get user role with error handling"""
+    try:
+        users_data = load_authorized_users()
+        users = users_data.get('users', {})
+        
+        # Ensure users is a dictionary
+        if not isinstance(users, dict):
+            logging.error(f"❌ Users data is not a dictionary in get_user_role: {type(users)}")
+            return 'гость'
+        
+        user_data = users.get(str(user_id), {})
+        
+        # Ensure user_data is a dictionary
+        if not isinstance(user_data, dict):
+            logging.error(f"❌ User data is not a dictionary for user {user_id}: {type(user_data)}")
+            return 'гость'
+        
+        return user_data.get('role', 'гость')
+    except Exception as e:
+        logging.error(f"❌ Error in get_user_role for user {user_id}: {e}")
+        return 'гость'
 
 def add_authorized_user(user_id, username, role='гость', groups=None):
     """Add authorized user"""
     users_data = load_authorized_users()
+    
+    # Ensure users is a dictionary
+    if not isinstance(users_data.get('users'), dict):
+        users_data['users'] = {}
     
     if str(user_id) in users_data.get('users', {}):
         return False, "User already exists"
