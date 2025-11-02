@@ -1,5 +1,5 @@
 from telegram import ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
-from authorized_users import is_authorized, is_admin, get_user_role
+from database import is_authorized, is_admin, get_user_role
 
 def get_main_menu(user_id):
     """Главное меню в зависимости от роли"""
