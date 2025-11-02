@@ -4,7 +4,7 @@ import os
 import json
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, filters, CallbackQueryHandler
+from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, filters, CallbackQueryHandler, CommandHandler
 import pytz
 
 from database import (
@@ -17,13 +17,15 @@ from menu_manager import (
     get_days_keyboard, get_frequency_keyboard, get_edit_template_keyboard,
     get_confirmation_keyboard, get_back_button
 )
-from conversation_states import (
-    TEMPLATE_GROUP, TEMPLATE_SUBGROUP, TEMPLATE_NAME, TEMPLATE_TEXT, TEMPLATE_IMAGE,
-    TEMPLATE_TIME, TEMPLATE_DAY, TEMPLATE_FREQUENCY, TEMPLATE_SECOND_DAY, TEMPLATE_CONFIRM,
-    EDIT_TEMPLATE_SELECT, EDIT_TEMPLATE_FIELD, EDIT_TEMPLATE_GROUP, EDIT_TEMPLATE_SUBGROUP,
-    EDIT_TEMPLATE_TEXT, EDIT_TEMPLATE_IMAGE, EDIT_TEMPLATE_TIME, EDIT_TEMPLATE_FREQUENCY, EDIT_TEMPLATE_CONFIRM,
-    DELETE_TEMPLATE_GROUP, DELETE_TEMPLATE_SUBGROUP, DELETE_TEMPLATE_SELECT, DELETE_TEMPLATE_CONFIRM
-)
+
+# Состояния для создания шаблона
+TEMPLATE_GROUP, TEMPLATE_SUBGROUP, TEMPLATE_NAME, TEMPLATE_TEXT, TEMPLATE_IMAGE, TEMPLATE_TIME, TEMPLATE_DAY, TEMPLATE_FREQUENCY, TEMPLATE_SECOND_DAY, TEMPLATE_CONFIRM = range(10)
+
+# Состояния для редактирования шаблона
+EDIT_TEMPLATE_SELECT, EDIT_TEMPLATE_FIELD, EDIT_TEMPLATE_GROUP, EDIT_TEMPLATE_SUBGROUP, EDIT_TEMPLATE_TEXT, EDIT_TEMPLATE_IMAGE, EDIT_TEMPLATE_TIME, EDIT_TEMPLATE_FREQUENCY, EDIT_TEMPLATE_CONFIRM = range(9)
+
+# Состояния для удаления шаблона
+DELETE_TEMPLATE_GROUP, DELETE_TEMPLATE_SUBGROUP, DELETE_TEMPLATE_SELECT, DELETE_TEMPLATE_CONFIRM = range(4)
 
 class TemplateManager:
     def __init__(self):
