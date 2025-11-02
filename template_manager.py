@@ -627,7 +627,7 @@ class TemplateManager:
         elif data == "edit_template":
             keyboard = get_edit_template_keyboard()
             await query.edit_message_text(
-                "✏️ *КАКОЙ ПУНКТ ВЫ ХОТИТЕ ИЗМЕНИТЬ?*",
+                "✏️ *КАКОЙ ПУНКТ ВЫ ХОТИТЕ ИЗМЕНИТЕ?*",
                 reply_markup=keyboard,
                 parse_mode='Markdown'
             )
@@ -703,127 +703,6 @@ class TemplateManager:
         )
         
         return DELETE_TEMPLATE_GROUP
-
-    # =============================================================================
-    # ОБРАБОТЧИКИ КНОПОК
-    # =============================================================================
-
-        async def handle_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-"""Обработчик нажатий на кнопки шаблонов"""
-        query = update.callback_query
-        await query.answer()
-        
-        data = query.data
-        user_id = query.from_user.id
-        
-        if not is_authorized(user_id):
-            await query.edit_message_text("❌ Недостаточно прав")
-            return
-        
-        try:
-            if data == "back":
-                from menu_manager import get_templates_menu
-                keyboard = get_templates_menu(user_id)
-                await query.message.reply_text(
-                    "📁 УПРАВЛЕНИЕ ШАБЛОНАМИ",
-                    reply_markup=keyboard
-                )
-                await query.message.delete()
-            
-            elif data.startswith("select_group_"):
-                await self.handle_template_group_select(update, context)
-            elif data.startswith("select_subgroup_"):
-                await self.handle_template_subgroup_select(update, context)
-            elif data.startswith("select_template_"):
-                await self.handle_template_select(update, context)
-            elif data.startswith("groups_page_"):
-                page = int(data.replace("groups_page_", ""))
-                accessible_groups = get_user_accessible_groups(user_id)
-                from menu_manager import get_groups_keyboard
-                keyboard = get_groups_keyboard(accessible_groups, page)
-                await query.edit_message_reply_markup(reply_markup=keyboard)
-            elif data.startswith("subgroups_page_"):
-                parts = data.replace("subgroups_page_", "").split("_")
-                group_id = parts[0]
-                page = int(parts[1])
-                
-                groups_data = load_groups()
-                group_info = groups_data.get("groups", {}).get(group_id, {})
-                subgroups = group_info.get("subgroups", {})
-                
-                from menu_manager import get_subgroups_keyboard
-                keyboard = get_subgroups_keyboard(subgroups, group_id, page)
-                await query.edit_message_reply_markup(reply_markup=keyboard)
-            elif data.startswith("templates_page_"):
-                page = int(data.replace("templates_page_", ""))
-                templates = context.user_data.get('current_templates', {})
-                from menu_manager import get_templates_keyboard
-                keyboard = get_templates_keyboard(templates, page)
-                await query.edit_message_reply_markup(reply_markup=keyboard)
-            else:
-                await query.edit_message_text(
-                    "🛠️ Функция шаблонов в разработке",
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back")]])
-                )
-                
-        except Exception as e:
-            logging.error(f"❌ Ошибка в обработчике шаблонов: {e}")
-            await query.edit_message_text(
-                "❌ Ошибка при обработке шаблона",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back")]])
-            )
-
-    def get_conversation_handler(self):
-        """Получить ConversationHandler для шаблонов"""
-        return ConversationHandler(
-            entry_points=[
-                MessageHandler(filters.Regex("^📋 Список шаблонов$"), self.show_template_list),
-                MessageHandler(filters.Regex("^➕ Добавить новый$"), self.start_create_template),
-                MessageHandler(filters.Regex("^✏️ Редактировать$"), self.start_edit_template),
-                MessageHandler(filters.Regex("^🗑️ Удалить$"), self.start_delete_template),
-            ],
-            states={
-                # States for template creation
-                TEMPLATE_GROUP: [CallbackQueryHandler(self.template_group_selected, pattern="^(select_group_|back)")],
-                TEMPLATE_SUBGROUP: [CallbackQueryHandler(self.template_subgroup_selected, pattern="^(select_subgroup_|back)")],
-                TEMPLATE_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.template_name_input)],
-                TEMPLATE_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.template_text_input)],
-                TEMPLATE_IMAGE: [
-                    CallbackQueryHandler(self.template_image_choice, pattern="^(add_image|skip_image|back)"),
-                    MessageHandler(filters.PHOTO | filters.Document.IMAGE, self.template_image_receive)
-                ],
-                TEMPLATE_TIME: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.template_time_input)],
-                TEMPLATE_DAY: [CallbackQueryHandler(self.template_day_selected, pattern="^(select_day_|back)")],
-                TEMPLATE_FREQUENCY: [CallbackQueryHandler(self.template_frequency_selected, pattern="^(frequency_|back)")],
-                TEMPLATE_SECOND_DAY: [CallbackQueryHandler(self.template_second_day_selected, pattern="^(select_day_|back)")],
-                TEMPLATE_CONFIRM: [CallbackQueryHandler(self.template_confirmation_handler, pattern="^(confirm_template|edit_template)")],
-                
-                # States for template editing
-                EDIT_TEMPLATE_SELECT: [CallbackQueryHandler(self.template_group_selected, pattern="^(select_group_|back)")],
-                EDIT_TEMPLATE_FIELD: [CallbackQueryHandler(self.handle_edit_field, pattern="^edit_field_")],
-                
-                # States for template deletion
-                DELETE_TEMPLATE_GROUP: [CallbackQueryHandler(self.handle_delete_group, pattern="^(select_group_|back)")],
-                DELETE_TEMPLATE_SUBGROUP: [CallbackQueryHandler(self.handle_delete_subgroup, pattern="^(select_subgroup_|back)")],
-                DELETE_TEMPLATE_SELECT: [CallbackQueryHandler(self.handle_delete_template_select, pattern="^(select_template_|back)")],
-                DELETE_TEMPLATE_CONFIRM: [CallbackQueryHandler(self.handle_delete_confirm, pattern="^(confirm|cancel)")],
-            },
-            fallbacks=[CommandHandler("cancel", self.cancel_template)],
-            name="template_conversation"
-        )
-
-    async def handle_edit_field(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработка выбора поля для редактирования"""
-        query = update.callback_query
-        await query.answer()
-        
-        data = query.data
-        field = data.replace("edit_field_", "")
-        
-        # Здесь будет логика для каждого поля
-        await query.edit_message_text(f"✏️ Редактирование поля: {field}\n\nЭта функция в разработке...")
-        
-        return ConversationHandler.END
 
     async def handle_delete_group(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка выбора группы для удаления"""
@@ -952,6 +831,123 @@ class TemplateManager:
         
         # Очищаем временные данные
         context.user_data.pop('template_delete', None)
+        return ConversationHandler.END
+
+    async def handle_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик нажатий на кнопки шаблонов"""
+        query = update.callback_query
+        await query.answer()
+        
+        data = query.data
+        user_id = query.from_user.id
+        
+        if not is_authorized(user_id):
+            await query.edit_message_text("❌ Недостаточно прав")
+            return
+        
+        try:
+            if data == "back":
+                from menu_manager import get_templates_menu
+                keyboard = get_templates_menu(user_id)
+                await query.message.reply_text(
+                    "📁 УПРАВЛЕНИЕ ШАБЛОНАМИ",
+                    reply_markup=keyboard
+                )
+                await query.message.delete()
+            
+            elif data.startswith("select_group_"):
+                await self.handle_template_group_select(update, context)
+            elif data.startswith("select_subgroup_"):
+                await self.handle_template_subgroup_select(update, context)
+            elif data.startswith("select_template_"):
+                await self.handle_template_select(update, context)
+            elif data.startswith("groups_page_"):
+                page = int(data.replace("groups_page_", ""))
+                accessible_groups = get_user_accessible_groups(user_id)
+                from menu_manager import get_groups_keyboard
+                keyboard = get_groups_keyboard(accessible_groups, page)
+                await query.edit_message_reply_markup(reply_markup=keyboard)
+            elif data.startswith("subgroups_page_"):
+                parts = data.replace("subgroups_page_", "").split("_")
+                group_id = parts[0]
+                page = int(parts[1])
+                
+                groups_data = load_groups()
+                group_info = groups_data.get("groups", {}).get(group_id, {})
+                subgroups = group_info.get("subgroups", {})
+                
+                from menu_manager import get_subgroups_keyboard
+                keyboard = get_subgroups_keyboard(subgroups, group_id, page)
+                await query.edit_message_reply_markup(reply_markup=keyboard)
+            elif data.startswith("templates_page_"):
+                page = int(data.replace("templates_page_", ""))
+                templates = context.user_data.get('current_templates', {})
+                from menu_manager import get_templates_keyboard
+                keyboard = get_templates_keyboard(templates, page)
+                await query.edit_message_reply_markup(reply_markup=keyboard)
+            else:
+                await query.edit_message_text(
+                    "🛠️ Функция шаблонов в разработке",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back")]])
+                )
+                
+        except Exception as e:
+            logging.error(f"❌ Ошибка в обработчике шаблонов: {e}")
+            await query.edit_message_text(
+                "❌ Ошибка при обработке шаблона",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back")]])
+            )
+
+    def get_conversation_handler(self):
+        """Получить ConversationHandler для шаблонов"""
+        return ConversationHandler(
+            entry_points=[
+                MessageHandler(filters.Regex("^📋 Список шаблонов$"), self.show_template_list),
+                MessageHandler(filters.Regex("^➕ Добавить новый$"), self.start_create_template),
+                MessageHandler(filters.Regex("^✏️ Редактировать$"), self.start_edit_template),
+                MessageHandler(filters.Regex("^🗑️ Удалить$"), self.start_delete_template),
+            ],
+            states={
+                # States for template creation
+                TEMPLATE_GROUP: [CallbackQueryHandler(self.template_group_selected, pattern="^(select_group_|back)")],
+                TEMPLATE_SUBGROUP: [CallbackQueryHandler(self.template_subgroup_selected, pattern="^(select_subgroup_|back)")],
+                TEMPLATE_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.template_name_input)],
+                TEMPLATE_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.template_text_input)],
+                TEMPLATE_IMAGE: [
+                    CallbackQueryHandler(self.template_image_choice, pattern="^(add_image|skip_image|back)"),
+                    MessageHandler(filters.PHOTO | filters.Document.IMAGE, self.template_image_receive)
+                ],
+                TEMPLATE_TIME: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.template_time_input)],
+                TEMPLATE_DAY: [CallbackQueryHandler(self.template_day_selected, pattern="^(select_day_|back)")],
+                TEMPLATE_FREQUENCY: [CallbackQueryHandler(self.template_frequency_selected, pattern="^(frequency_|back)")],
+                TEMPLATE_SECOND_DAY: [CallbackQueryHandler(self.template_second_day_selected, pattern="^(select_day_|back)")],
+                TEMPLATE_CONFIRM: [CallbackQueryHandler(self.template_confirmation_handler, pattern="^(confirm_template|edit_template)")],
+                
+                # States for template editing
+                EDIT_TEMPLATE_SELECT: [CallbackQueryHandler(self.template_group_selected, pattern="^(select_group_|back)")],
+                EDIT_TEMPLATE_FIELD: [CallbackQueryHandler(self.handle_edit_field, pattern="^edit_field_")],
+                
+                # States for template deletion
+                DELETE_TEMPLATE_GROUP: [CallbackQueryHandler(self.handle_delete_group, pattern="^(select_group_|back)")],
+                DELETE_TEMPLATE_SUBGROUP: [CallbackQueryHandler(self.handle_delete_subgroup, pattern="^(select_subgroup_|back)")],
+                DELETE_TEMPLATE_SELECT: [CallbackQueryHandler(self.handle_delete_template_select, pattern="^(select_template_|back)")],
+                DELETE_TEMPLATE_CONFIRM: [CallbackQueryHandler(self.handle_delete_confirm, pattern="^(confirm|cancel)")],
+            },
+            fallbacks=[CommandHandler("cancel", self.cancel_template)],
+            name="template_conversation"
+        )
+
+    async def handle_edit_field(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработка выбора поля для редактирования"""
+        query = update.callback_query
+        await query.answer()
+        
+        data = query.data
+        field = data.replace("edit_field_", "")
+        
+        # Здесь будет логика для каждого поля
+        await query.edit_message_text(f"✏️ Редактирование поля: {field}\n\nЭта функция в разработке...")
+        
         return ConversationHandler.END
 
     async def cancel_template(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
