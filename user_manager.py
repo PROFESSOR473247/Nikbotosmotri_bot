@@ -324,7 +324,7 @@ class UserManager:
     # ОБРАБОТЧИКИ КНОПОК
     # =============================================================================
 
-        async def handle_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+            async def handle_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик нажатий на кнопки пользователей"""
         query = update.callback_query
         await query.answer()
