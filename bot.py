@@ -10,7 +10,7 @@ from telegram.ext import (
 )
 from telegram.error import BadRequest
 from config import BOT_TOKEN
-from database import is_authorized, is_admin, get_user_role
+from database import is_authorized, is_admin, get_user_role, get_user_accessible_groups
 from task_manager import task_manager
 from menu_manager import get_main_menu, get_guest_keyboard
 import datetime
