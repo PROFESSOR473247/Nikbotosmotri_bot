@@ -708,8 +708,8 @@ class TemplateManager:
     # ОБРАБОТЧИКИ КНОПОК
     # =============================================================================
 
-    async def handle_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработчик нажатий на кнопки"""
+        async def handle_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик нажатий на кнопки шаблонов"""
         query = update.callback_query
         await query.answer()
         
@@ -720,39 +720,58 @@ class TemplateManager:
             await query.edit_message_text("❌ Недостаточно прав")
             return
         
-        # Обработка кнопок шаблонов
-        if data == "back":
-            from menu_manager import get_templates_menu
-            keyboard = get_templates_menu(user_id)
+        try:
+            if data == "back":
+                from menu_manager import get_templates_menu
+                keyboard = get_templates_menu(user_id)
+                await query.message.reply_text(
+                    "📁 УПРАВЛЕНИЕ ШАБЛОНАМИ",
+                    reply_markup=keyboard
+                )
+                await query.message.delete()
+            
+            elif data.startswith("select_group_"):
+                await self.handle_template_group_select(update, context)
+            elif data.startswith("select_subgroup_"):
+                await self.handle_template_subgroup_select(update, context)
+            elif data.startswith("select_template_"):
+                await self.handle_template_select(update, context)
+            elif data.startswith("groups_page_"):
+                page = int(data.replace("groups_page_", ""))
+                accessible_groups = get_user_accessible_groups(user_id)
+                from menu_manager import get_groups_keyboard
+                keyboard = get_groups_keyboard(accessible_groups, page)
+                await query.edit_message_reply_markup(reply_markup=keyboard)
+            elif data.startswith("subgroups_page_"):
+                parts = data.replace("subgroups_page_", "").split("_")
+                group_id = parts[0]
+                page = int(parts[1])
+                
+                groups_data = load_groups()
+                group_info = groups_data.get("groups", {}).get(group_id, {})
+                subgroups = group_info.get("subgroups", {})
+                
+                from menu_manager import get_subgroups_keyboard
+                keyboard = get_subgroups_keyboard(subgroups, group_id, page)
+                await query.edit_message_reply_markup(reply_markup=keyboard)
+            elif data.startswith("templates_page_"):
+                page = int(data.replace("templates_page_", ""))
+                templates = context.user_data.get('current_templates', {})
+                from menu_manager import get_templates_keyboard
+                keyboard = get_templates_keyboard(templates, page)
+                await query.edit_message_reply_markup(reply_markup=keyboard)
+            else:
+                await query.edit_message_text(
+                    "🛠️ Функция шаблонов в разработке",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back")]])
+                )
+                
+        except Exception as e:
+            logging.error(f"❌ Ошибка в обработчике шаблонов: {e}")
             await query.edit_message_text(
-                "📁 УПРАВЛЕНИЕ ШАБЛОНАМИ",
-                reply_markup=keyboard
+                "❌ Ошибка при обработке шаблона",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back")]])
             )
-        
-        elif data.startswith("groups_page_"):
-            page = int(data.replace("groups_page_", ""))
-            accessible_groups = get_user_accessible_groups(user_id)
-            keyboard = get_groups_keyboard(accessible_groups, page)
-            await query.edit_message_reply_markup(reply_markup=keyboard)
-        
-        elif data.startswith("subgroups_page_"):
-            parts = data.replace("subgroups_page_", "").split("_")
-            group_id = parts[0]
-            page = int(parts[1])
-            
-            groups_data = load_groups()
-            group_info = groups_data.get("groups", {}).get(group_id, {})
-            subgroups = group_info.get("subgroups", {})
-            
-            keyboard = get_subgroups_keyboard(subgroups, group_id, page)
-            await query.edit_message_reply_markup(reply_markup=keyboard)
-        
-        elif data.startswith("templates_page_"):
-            page = int(data.replace("templates_page_", ""))
-            # Здесь нужно получить текущие шаблоны из context
-            templates = context.user_data.get('current_templates', {})
-            keyboard = get_templates_keyboard(templates, page)
-            await query.edit_message_reply_markup(reply_markup=keyboard)
 
     def get_conversation_handler(self):
         """Получить ConversationHandler для шаблонов"""
