@@ -324,8 +324,8 @@ class UserManager:
     # ОБРАБОТЧИКИ КНОПОК
     # =============================================================================
 
-    async def handle_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработчик нажатий на кнопки"""
+        async def handle_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик нажатий на кнопки пользователей"""
         query = update.callback_query
         await query.answer()
         
@@ -340,12 +340,31 @@ class UserManager:
             await query.edit_message_text("❌ Только для администратора")
             return
         
-        if data == "back":
-            from menu_manager import get_users_menu
-            keyboard = get_users_menu(user_id)
+        try:
+            if data == "back":
+                from menu_manager import get_users_menu
+                keyboard = get_users_menu(user_id)
+                await query.message.reply_text(
+                    "👥 УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ",
+                    reply_markup=keyboard
+                )
+                await query.message.delete()
+            
+            elif data.startswith("select_role_"):
+                await self.add_user_role_selected(update, context)
+            elif data.startswith("test_role_"):
+                await self.test_role_selected(update, context)
+            else:
+                await query.edit_message_text(
+                    "🛠️ Функция пользователей в разработке",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back")]])
+                )
+                
+        except Exception as e:
+            logging.error(f"❌ Ошибка в обработчике пользователей: {e}")
             await query.edit_message_text(
-                "👥 УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ",
-                reply_markup=keyboard
+                "❌ Ошибка при обработке пользователя",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back")]])
             )
 
     def get_conversation_handler(self):
