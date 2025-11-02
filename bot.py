@@ -10,15 +10,13 @@ from telegram.ext import (
 )
 from telegram.error import BadRequest
 from config import BOT_TOKEN
-from authorized_users import is_authorized, is_admin, get_user_role
-from database import init_database, load_tasks, save_tasks, get_user_accessible_groups
-from task_manager import TaskManager
+from database import is_authorized, is_admin, get_user_role
+from task_manager import task_manager
 from menu_manager import get_main_menu, get_guest_keyboard
 import datetime
 import pytz
 
 print("🔄 Инициализация системы...")
-init_database()
 
 # Настройка логирования
 logging.basicConfig(
@@ -26,9 +24,6 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
-
-# Глобальный менеджер задач
-task_manager = TaskManager()
 
 def authorization_required(func):
     """Декоратор для проверки авторизации"""
@@ -245,31 +240,46 @@ def setup_handlers(application):
     # Обработчик всех текстовых сообщений
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
-async def main():
-    """Основная асинхронная функция запуска"""
+async def post_init(application):
+    """Функция инициализации после запуска бота"""
+    print("🔄 Восстановление активных задач...")
+    await task_manager.restore_tasks(application)
+
+def main():
+    """Основная функция запуска бота"""
     print("🚀 Запуск бота...")
     
     # Создаем приложение
     application = (
         Application.builder()
         .token(BOT_TOKEN)
+        .post_init(post_init)
         .build()
     )
 
     # Настраиваем обработчики
     setup_handlers(application)
 
-    # Восстанавливаем активные задачи
-    await task_manager.restore_tasks(application)
-
     print("✅ Бот запущен и готов к работе!")
     print("🤖 Бот работает в режиме polling...")
     
-    # Запускаем polling
-    await application.run_polling(
-        drop_pending_updates=True,
-        allowed_updates=Update.ALL_TYPES
-    )
+    # Запускаем polling с обработкой ошибок для Render
+    try:
+        application.run_polling(
+            drop_pending_updates=True,
+            allowed_updates=Update.ALL_TYPES,
+            close_loop=False  # Важно для Render
+        )
+    except KeyboardInterrupt:
+        print("⏹️ Бот остановлен пользователем")
+    except Exception as e:
+        print(f"❌ Критическая ошибка: {e}")
+        print("🔄 Перезапуск через 10 секунд...")
+        import time
+        time.sleep(10)
+        # Рекурсивный перезапуск
+        main()
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    # Запускаем бота
+    main()
