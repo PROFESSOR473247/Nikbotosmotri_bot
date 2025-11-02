@@ -802,5 +802,41 @@ def get_telegram_group_by_id(group_id):
     telegram_groups_data = load_telegram_groups()
     return telegram_groups_data.get("telegram_groups", {}).get(str(group_id))
 
-# Initialize database when module is imported
+def ensure_admin_user():
+    """Гарантировать, что пользователь 812934047 является администратором"""
+    try:
+        users_data = load_authorized_users()
+        admin_id = 812934047
+        admin_id_str = str(admin_id)
+        
+        # Если администратор не установлен, устанавливаем
+        if users_data.get('admin_id') != admin_id:
+            print(f"🔄 Устанавливаем администратора: {admin_id}")
+            users_data['admin_id'] = admin_id
+            save_authorized_users(users_data)
+        
+        # Если пользователь администратора не существует, создаем
+        if admin_id_str not in users_data.get('users', {}):
+            print(f"🔄 Создаем пользователя администратора: {admin_id}")
+            users_data['users'][admin_id_str] = {
+                "name": "Никита",
+                "role": "admin",
+                "groups": ["hongqi_476", "matiz_476"]
+            }
+            save_authorized_users(users_data)
+        
+        # Если пользователь существует, но не администратор - исправляем
+        elif users_data['users'][admin_id_str].get('role') != 'admin':
+            print(f"🔄 Исправляем роль пользователя {admin_id} на администратора")
+            users_data['users'][admin_id_str]['role'] = 'admin'
+            save_authorized_users(users_data)
+            
+        print(f"✅ Администратор {admin_id} настроен корректно")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Ошибка при настройке администратора: {e}")
+        return False
+        # Initialize database when module is imported
 init_database()
+ensure_admin_user()  # Добавьте эту строку
