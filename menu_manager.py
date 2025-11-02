@@ -245,6 +245,29 @@ def get_templates_keyboard(templates, page=0, templates_per_page=8):
     
     return InlineKeyboardMarkup(keyboard)
 
+def get_tasks_keyboard(tasks, page=0, tasks_per_page=8):
+    """Клавиатура для выбора задач"""
+    start_idx = page * tasks_per_page
+    end_idx = start_idx + tasks_per_page
+    tasks_page = list(tasks.items())[start_idx:end_idx]
+    
+    keyboard = []
+    for task_id, task_info in tasks_page:
+        keyboard.append([InlineKeyboardButton(
+            f"📋 {task_info.get('template_name', 'Без названия')}", 
+            callback_data=f"select_task_{task_id}"
+        )])
+    
+    # Добавляем пагинацию
+    total_pages = (len(tasks) + tasks_per_page - 1) // tasks_per_page
+    pagination_buttons = get_pagination_buttons(page, total_pages, "tasks")
+    if pagination_buttons:
+        keyboard.append(pagination_buttons)
+    
+    keyboard.append(get_back_button())
+    
+    return InlineKeyboardMarkup(keyboard)
+
 def get_roles_keyboard():
     """Клавиатура для выбора ролей"""
     from user_roles import USER_ROLES
@@ -329,6 +352,47 @@ def get_frequency_keyboard():
         [InlineKeyboardButton("1 раз в неделю", callback_data="frequency_1_week")],
         [InlineKeyboardButton("2 раза в месяц", callback_data="frequency_2_month")],
         [InlineKeyboardButton("1 раз в месяц", callback_data="frequency_1_month")],
+        get_back_button()[0]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_users_list_keyboard(users, page=0, users_per_page=8):
+    """Клавиатура для выбора пользователей"""
+    start_idx = page * users_per_page
+    end_idx = start_idx + users_per_page
+    users_page = list(users.items())[start_idx:end_idx]
+    
+    keyboard = []
+    for user_id, user_info in users_page:
+        keyboard.append([InlineKeyboardButton(
+            f"👤 {user_info.get('name', f'User_{user_id}')}", 
+            callback_data=f"select_user_{user_id}"
+        )])
+    
+    # Добавляем пагинацию
+    total_pages = (len(users) + users_per_page - 1) // users_per_page
+    pagination_buttons = get_pagination_buttons(page, total_pages, "users")
+    if pagination_buttons:
+        keyboard.append(pagination_buttons)
+    
+    keyboard.append(get_back_button())
+    
+    return InlineKeyboardMarkup(keyboard)
+
+def get_edit_user_keyboard():
+    """Клавиатура для редактирования пользователя"""
+    keyboard = [
+        [InlineKeyboardButton("🎭 Изменить должность", callback_data="edit_user_role")],
+        [InlineKeyboardButton("🏘️ Изменить группы доступа", callback_data="edit_user_groups")],
+        get_back_button()[0]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_group_access_keyboard():
+    """Клавиатура для управления доступом к группе"""
+    keyboard = [
+        [InlineKeyboardButton("➕ Добавить пользователя", callback_data="group_access_add")],
+        [InlineKeyboardButton("➖ Удалить пользователя", callback_data="group_access_remove")],
         get_back_button()[0]
     ]
     return InlineKeyboardMarkup(keyboard)
