@@ -1,12 +1,25 @@
+# -*- coding: utf-8 -*-
 from telegram import ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
 from database import is_authorized, is_admin, get_user_role
+from user_roles import can_manage_users, can_manage_groups, can_create_templates
 
 def get_main_menu(user_id):
     """Главное меню в зависимости от роли"""
     if not is_authorized(user_id):
         return get_guest_keyboard()
     
+    # Проверяем, тестирует ли администратор другую роль
+    from telegram.ext import ContextTypes
+    import asyncio
+    
     user_role = get_user_role(user_id)
+    
+    # Если администратор тестирует другую роль
+    if is_admin(user_id):
+        # Здесь мы не имеем доступа к context, поэтому используем глобальный флаг
+        # В реальной реализации это должно быть через context.user_data
+        # Пока оставляем стандартное меню администратора
+        return get_admin_keyboard()
     
     if user_role == "admin":
         return get_admin_keyboard()
@@ -18,7 +31,7 @@ def get_main_menu(user_id):
         return get_guest_keyboard()
 
 def get_guest_keyboard():
-    """ТОЛЬКО кнопка Получить ID для гостей"""
+    """Меню для гостей"""
     keyboard = [
         ["🆔 Получить ID", "❓ Помощь"]
     ]
@@ -48,13 +61,42 @@ def get_driver_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-def get_templates_menu():
+def get_testing_role_keyboard(original_role):
+    """Меню при тестировании роли с кнопкой возврата"""
+    if original_role == "admin":
+        keyboard = [
+            ["📋 Задачи", "📁 Шаблоны"],
+            ["🏘️ Группы", "ℹ️ Еще"],
+            ["👑 Назад к админ"]
+        ]
+    elif original_role == "руководитель":
+        keyboard = [
+            ["📋 Задачи", "📁 Шаблоны"],
+            ["🏘️ Группы", "ℹ️ Еще"],
+            ["👑 Назад к админ"]
+        ]
+    else:
+        keyboard = [
+            ["📋 Задачи", "ℹ️ Еще"],
+            ["👑 Назад к админ"]
+        ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_templates_menu(user_id):
     """Меню шаблонов"""
-    keyboard = [
-        ["📋 Список шаблонов", "➕ Добавить новый"],
-        ["✏️ Редактировать", "🗑️ Удалить"],
-        ["🔙 Назад в главное меню"]
-    ]
+    user_role = get_user_role(user_id)
+    
+    if not can_create_templates(user_role):
+        keyboard = [
+            ["📋 Список шаблонов"],
+            ["🔙 Назад в главное меню"]
+        ]
+    else:
+        keyboard = [
+            ["📋 Список шаблонов", "➕ Добавить новый"],
+            ["✏️ Редактировать", "🗑️ Удалить"],
+            ["🔙 Назад в главное меню"]
+        ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def get_tasks_menu():
@@ -66,8 +108,11 @@ def get_tasks_menu():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-def get_users_menu():
+def get_users_menu(user_id):
     """Меню пользователей (только админ)"""
+    if not is_admin(user_id):
+        return get_main_menu(user_id)
+        
     keyboard = [
         ["➕ Добавить", "✏️ Изменить доступ"],
         ["📋 Список пользователей", "🗑️ Удалить"],
@@ -77,6 +122,8 @@ def get_users_menu():
 
 def get_groups_menu(user_id):
     """Меню групп"""
+    user_role = get_user_role(user_id)
+    
     if is_admin(user_id):
         keyboard = [
             ["📋 Список групп", "➕ Создать группу"],
@@ -84,9 +131,13 @@ def get_groups_menu(user_id):
             ["🗑️ Удалить группу", "🗑️ Удалить подгруппу"],
             ["🔙 Назад в главное меню"]
         ]
-    else:  # руководитель
+    elif user_role == "руководитель":
         keyboard = [
             ["📁 Создать подгруппу", "🗑️ Удалить подгруппу"],
+            ["🔙 Назад в главное меню"]
+        ]
+    else:
+        keyboard = [
             ["🔙 Назад в главное меню"]
         ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -108,18 +159,176 @@ def get_more_menu(user_id):
     
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-def get_task_status_keyboard():
-    """Клавиатура для статуса задач"""
+def get_back_button():
+    """Кнопка возврата"""
+    return [InlineKeyboardButton("🔙 Назад", callback_data="back")]
+
+def get_pagination_buttons(page, total_pages, prefix):
+    """Кнопки пагинации"""
+    buttons = []
+    if total_pages > 1:
+        if page > 0:
+            buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"{prefix}_page_{page-1}"))
+        if page < total_pages - 1:
+            buttons.append(InlineKeyboardButton("Вперед ➡️", callback_data=f"{prefix}_page_{page+1}"))
+    return buttons
+
+def get_groups_keyboard(groups, page=0, groups_per_page=8):
+    """Клавиатура для выбора групп"""
+    start_idx = page * groups_per_page
+    end_idx = start_idx + groups_per_page
+    groups_page = list(groups.items())[start_idx:end_idx]
+    
+    keyboard = []
+    for group_id, group_info in groups_page:
+        keyboard.append([InlineKeyboardButton(
+            f"🏘️ {group_info.get('name', group_id)}", 
+            callback_data=f"select_group_{group_id}"
+        )])
+    
+    # Добавляем пагинацию
+    total_pages = (len(groups) + groups_per_page - 1) // groups_per_page
+    pagination_buttons = get_pagination_buttons(page, total_pages, "groups")
+    if pagination_buttons:
+        keyboard.append(pagination_buttons)
+    
+    keyboard.append(get_back_button())
+    
+    return InlineKeyboardMarkup(keyboard)
+
+def get_subgroups_keyboard(subgroups, group_id, page=0, subgroups_per_page=8):
+    """Клавиатура для выбора подгрупп"""
+    if not subgroups:
+        return InlineKeyboardMarkup([get_back_button()])
+    
+    start_idx = page * subgroups_per_page
+    end_idx = start_idx + subgroups_per_page
+    subgroups_page = list(subgroups.items())[start_idx:end_idx]
+    
+    keyboard = []
+    for subgroup_id, subgroup_name in subgroups_page:
+        keyboard.append([InlineKeyboardButton(
+            f"📁 {subgroup_name}", 
+            callback_data=f"select_subgroup_{group_id}_{subgroup_id}"
+        )])
+    
+    # Добавляем пагинацию
+    total_pages = (len(subgroups) + subgroups_per_page - 1) // subgroups_per_page
+    pagination_buttons = get_pagination_buttons(page, total_pages, f"subgroups_{group_id}")
+    if pagination_buttons:
+        keyboard.append(pagination_buttons)
+    
+    keyboard.append(get_back_button())
+    
+    return InlineKeyboardMarkup(keyboard)
+
+def get_templates_keyboard(templates, page=0, templates_per_page=8):
+    """Клавиатура для выбора шаблонов"""
+    start_idx = page * templates_per_page
+    end_idx = start_idx + templates_per_page
+    templates_page = list(templates.items())[start_idx:end_idx]
+    
+    keyboard = []
+    for template_id, template_info in templates_page:
+        keyboard.append([InlineKeyboardButton(
+            f"📝 {template_info.get('name', 'Без названия')}", 
+            callback_data=f"select_template_{template_id}"
+        )])
+    
+    # Добавляем пагинацию
+    total_pages = (len(templates) + templates_per_page - 1) // templates_per_page
+    pagination_buttons = get_pagination_buttons(page, total_pages, "templates")
+    if pagination_buttons:
+        keyboard.append(pagination_buttons)
+    
+    keyboard.append(get_back_button())
+    
+    return InlineKeyboardMarkup(keyboard)
+
+def get_roles_keyboard():
+    """Клавиатура для выбора ролей"""
+    from user_roles import USER_ROLES
+    
+    keyboard = []
+    for role_key, role_data in USER_ROLES.items():
+        if role_key != "admin":  # Админа нельзя выбрать при создании
+            keyboard.append([InlineKeyboardButton(
+                role_data["name"],
+                callback_data=f"select_role_{role_key}"
+            )])
+    
+    keyboard.append(get_back_button())
+    return InlineKeyboardMarkup(keyboard)
+
+def get_test_roles_keyboard():
+    """Клавиатура для тестирования ролей"""
+    from user_roles import USER_ROLES
+    
+    keyboard = []
+    for role_key, role_data in USER_ROLES.items():
+        keyboard.append([InlineKeyboardButton(
+            role_data["name"],
+            callback_data=f"test_role_{role_key}"
+        )])
+    
+    keyboard.append(get_back_button())
+    return InlineKeyboardMarkup(keyboard)
+
+def get_confirmation_keyboard(confirm_data, cancel_data):
+    """Клавиатура подтверждения"""
     keyboard = [
-        [InlineKeyboardButton("🔄 Обновить", callback_data="task_status_refresh")],
-        [InlineKeyboardButton("🔙 Назад", callback_data="back_to_tasks")]
+        [
+            InlineKeyboardButton("✅ Да", callback_data=confirm_data),
+            InlineKeyboardButton("❌ Нет", callback_data=cancel_data)
+        ]
     ]
     return InlineKeyboardMarkup(keyboard)
 
-def get_template_list_keyboard():
-    """Клавиатура для списка шаблонов"""
+def get_edit_template_keyboard():
+    """Клавиатура для редактирования шаблона"""
     keyboard = [
-        [InlineKeyboardButton("📋 Показать шаблоны", callback_data="template_list")],
-        [InlineKeyboardButton("🔙 Назад", callback_data="back_to_templates")]
+        [InlineKeyboardButton("🏘️ Группу", callback_data="edit_field_group")],
+        [InlineKeyboardButton("📁 Подгруппу", callback_data="edit_field_subgroup")],
+        [InlineKeyboardButton("📝 Текст", callback_data="edit_field_text")],
+        [InlineKeyboardButton("🖼️ Изображение", callback_data="edit_field_image")],
+        [InlineKeyboardButton("⏰ Время", callback_data="edit_field_time")],
+        [InlineKeyboardButton("🔄 Периодичность", callback_data="edit_field_frequency")],
+        get_back_button()[0]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_days_keyboard():
+    """Клавиатура для выбора дней недели"""
+    days = {
+        "monday": "Понедельник",
+        "tuesday": "Вторник", 
+        "wednesday": "Среда",
+        "thursday": "Четверг",
+        "friday": "Пятница",
+        "saturday": "Суббота",
+        "sunday": "Воскресенье"
+    }
+    
+    keyboard = []
+    row = []
+    for day_key, day_name in days.items():
+        row.append(InlineKeyboardButton(day_name, callback_data=f"select_day_{day_key}"))
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+    
+    keyboard.append(get_back_button())
+    return InlineKeyboardMarkup(keyboard)
+
+def get_frequency_keyboard():
+    """Клавиатура для выбора периодичности"""
+    keyboard = [
+        [InlineKeyboardButton("2 раза в неделю", callback_data="frequency_2_week")],
+        [InlineKeyboardButton("1 раз в неделю", callback_data="frequency_1_week")],
+        [InlineKeyboardButton("2 раза в месяц", callback_data="frequency_2_month")],
+        [InlineKeyboardButton("1 раз в месяц", callback_data="frequency_1_month")],
+        get_back_button()[0]
     ]
     return InlineKeyboardMarkup(keyboard)
