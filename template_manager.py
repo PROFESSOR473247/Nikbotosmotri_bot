@@ -691,6 +691,7 @@ class TemplateManager:
             await update.message.reply_text("❌ У вас нет доступа к каким-либо группам")
             return ConversationHandler.END
         
+        # Инициализируем template_delete
         context.user_data['template_delete'] = {
             'user_id': user_id
         }
@@ -710,6 +711,11 @@ class TemplateManager:
         await query.answer()
         
         data = query.data
+        
+        # Проверяем, инициализирован ли template_delete в user_data
+        if 'template_delete' not in context.user_data:
+            context.user_data['template_delete'] = {}
+        
         if data.startswith("select_group_"):
             group_id = data.replace("select_group_", "")
             context.user_data['template_delete']['group_id'] = group_id
@@ -747,6 +753,11 @@ class TemplateManager:
         await query.answer()
         
         data = query.data
+        
+        # Проверяем, инициализирован ли template_delete в user_data
+        if 'template_delete' not in context.user_data:
+            context.user_data['template_delete'] = {}
+        
         if data.startswith("select_subgroup_"):
             parts = data.replace("select_subgroup_", "").split("_")
             group_id = parts[0]
@@ -778,6 +789,11 @@ class TemplateManager:
         await query.answer()
         
         data = query.data
+        
+        # Проверяем, инициализирован ли template_delete в user_data
+        if 'template_delete' not in context.user_data:
+            context.user_data['template_delete'] = {}
+        
         if data.startswith("select_template_"):
             template_id = data.replace("select_template_", "")
             template = get_template_by_id(template_id)
@@ -808,6 +824,11 @@ class TemplateManager:
         await query.answer()
         
         data = query.data
+        
+        # Проверяем, инициализирован ли template_delete в user_data
+        if 'template_delete' not in context.user_data:
+            await query.edit_message_text("❌ Ошибка: данные удаления не найдены")
+            return ConversationHandler.END
         
         if data == "confirm_delete":
             template_id = context.user_data['template_delete']['template_id']
@@ -898,44 +919,17 @@ class TemplateManager:
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back")]])
             )
 
-    def get_conversation_handler(self):
-        """Получить ConversationHandler для шаблонов"""
-        return ConversationHandler(
-            entry_points=[
-                MessageHandler(filters.Regex("^📋 Список шаблонов$"), self.show_template_list),
-                MessageHandler(filters.Regex("^➕ Добавить новый$"), self.start_create_template),
-                MessageHandler(filters.Regex("^✏️ Редактировать$"), self.start_edit_template),
-                MessageHandler(filters.Regex("^🗑️ Удалить$"), self.start_delete_template),
-            ],
-            states={
-                # States for template creation
-                TEMPLATE_GROUP: [CallbackQueryHandler(self.template_group_selected, pattern="^(select_group_|back)")],
-                TEMPLATE_SUBGROUP: [CallbackQueryHandler(self.template_subgroup_selected, pattern="^(select_subgroup_|back)")],
-                TEMPLATE_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.template_name_input)],
-                TEMPLATE_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.template_text_input)],
-                TEMPLATE_IMAGE: [
-                    CallbackQueryHandler(self.template_image_choice, pattern="^(add_image|skip_image|back)"),
-                    MessageHandler(filters.PHOTO | filters.Document.IMAGE, self.template_image_receive)
-                ],
-                TEMPLATE_TIME: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.template_time_input)],
-                TEMPLATE_DAY: [CallbackQueryHandler(self.template_day_selected, pattern="^(select_day_|back)")],
-                TEMPLATE_FREQUENCY: [CallbackQueryHandler(self.template_frequency_selected, pattern="^(frequency_|back)")],
-                TEMPLATE_SECOND_DAY: [CallbackQueryHandler(self.template_second_day_selected, pattern="^(select_day_|back)")],
-                TEMPLATE_CONFIRM: [CallbackQueryHandler(self.template_confirmation_handler, pattern="^(confirm_template|edit_template)")],
-                
-                # States for template editing
-                EDIT_TEMPLATE_SELECT: [CallbackQueryHandler(self.template_group_selected, pattern="^(select_group_|back)")],
-                EDIT_TEMPLATE_FIELD: [CallbackQueryHandler(self.handle_edit_field, pattern="^edit_field_")],
-                
-                # States for template deletion
-                DELETE_TEMPLATE_GROUP: [CallbackQueryHandler(self.handle_delete_group, pattern="^(select_group_|back)")],
-                DELETE_TEMPLATE_SUBGROUP: [CallbackQueryHandler(self.handle_delete_subgroup, pattern="^(select_subgroup_|back)")],
-                DELETE_TEMPLATE_SELECT: [CallbackQueryHandler(self.handle_delete_template_select, pattern="^(select_template_|back)")],
-                DELETE_TEMPLATE_CONFIRM: [CallbackQueryHandler(self.handle_delete_confirm, pattern="^(confirm|cancel)")],
-            },
-            fallbacks=[CommandHandler("cancel", self.cancel_template)],
-            name="template_conversation"
+    async def handle_unexpected_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработка неожиданных callback-ов"""
+        query = update.callback_query
+        await query.answer()
+        
+        await query.edit_message_text(
+            "❌ Произошла ошибка. Сессия была сброшена.\n\n"
+            "Пожалуйста, начните операцию заново.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back")]])
         )
+        return ConversationHandler.END
 
     async def handle_edit_field(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка выбора поля для редактирования"""
@@ -965,6 +959,82 @@ class TemplateManager:
             reply_markup=get_main_menu(user_id)
         )
         return ConversationHandler.END
+
+    def get_conversation_handler(self):
+        """Получить ConversationHandler для шаблонов"""
+        return ConversationHandler(
+            entry_points=[
+                MessageHandler(filters.Regex("^📋 Список шаблонов$"), self.show_template_list),
+                MessageHandler(filters.Regex("^➕ Добавить новый$"), self.start_create_template),
+                MessageHandler(filters.Regex("^✏️ Редактировать$"), self.start_edit_template),
+                MessageHandler(filters.Regex("^🗑️ Удалить$"), self.start_delete_template),
+            ],
+            states={
+                # States for template creation
+                TEMPLATE_GROUP: [
+                    CallbackQueryHandler(self.template_group_selected, pattern="^(select_group_|back)"),
+                    CallbackQueryHandler(self.handle_unexpected_callback)
+                ],
+                TEMPLATE_SUBGROUP: [
+                    CallbackQueryHandler(self.template_subgroup_selected, pattern="^(select_subgroup_|back)"),
+                    CallbackQueryHandler(self.handle_unexpected_callback)
+                ],
+                TEMPLATE_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.template_name_input)],
+                TEMPLATE_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.template_text_input)],
+                TEMPLATE_IMAGE: [
+                    CallbackQueryHandler(self.template_image_choice, pattern="^(add_image|skip_image|back)"),
+                    MessageHandler(filters.PHOTO | filters.Document.IMAGE, self.template_image_receive),
+                    CallbackQueryHandler(self.handle_unexpected_callback)
+                ],
+                TEMPLATE_TIME: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.template_time_input)],
+                TEMPLATE_DAY: [
+                    CallbackQueryHandler(self.template_day_selected, pattern="^(select_day_|back)"),
+                    CallbackQueryHandler(self.handle_unexpected_callback)
+                ],
+                TEMPLATE_FREQUENCY: [
+                    CallbackQueryHandler(self.template_frequency_selected, pattern="^(frequency_|back)"),
+                    CallbackQueryHandler(self.handle_unexpected_callback)
+                ],
+                TEMPLATE_SECOND_DAY: [
+                    CallbackQueryHandler(self.template_second_day_selected, pattern="^(select_day_|back)"),
+                    CallbackQueryHandler(self.handle_unexpected_callback)
+                ],
+                TEMPLATE_CONFIRM: [
+                    CallbackQueryHandler(self.template_confirmation_handler, pattern="^(confirm_template|edit_template)"),
+                    CallbackQueryHandler(self.handle_unexpected_callback)
+                ],
+                
+                # States for template editing
+                EDIT_TEMPLATE_SELECT: [
+                    CallbackQueryHandler(self.template_group_selected, pattern="^(select_group_|back)"),
+                    CallbackQueryHandler(self.handle_unexpected_callback)
+                ],
+                EDIT_TEMPLATE_FIELD: [
+                    CallbackQueryHandler(self.handle_edit_field, pattern="^edit_field_"),
+                    CallbackQueryHandler(self.handle_unexpected_callback)
+                ],
+                
+                # States for template deletion
+                DELETE_TEMPLATE_GROUP: [
+                    CallbackQueryHandler(self.handle_delete_group, pattern="^(select_group_|back)"),
+                    CallbackQueryHandler(self.handle_unexpected_callback)
+                ],
+                DELETE_TEMPLATE_SUBGROUP: [
+                    CallbackQueryHandler(self.handle_delete_subgroup, pattern="^(select_subgroup_|back)"),
+                    CallbackQueryHandler(self.handle_unexpected_callback)
+                ],
+                DELETE_TEMPLATE_SELECT: [
+                    CallbackQueryHandler(self.handle_delete_template_select, pattern="^(select_template_|back)"),
+                    CallbackQueryHandler(self.handle_unexpected_callback)
+                ],
+                DELETE_TEMPLATE_CONFIRM: [
+                    CallbackQueryHandler(self.handle_delete_confirm, pattern="^(confirm|cancel)"),
+                    CallbackQueryHandler(self.handle_unexpected_callback)
+                ],
+            },
+            fallbacks=[CommandHandler("cancel", self.cancel_template)],
+            name="template_conversation"
+        )
 
 # Глобальный экземпляр менеджера шаблонов
 template_manager = TemplateManager()
