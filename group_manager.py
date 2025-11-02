@@ -580,8 +580,8 @@ class GroupManager:
     # ОБРАБОТЧИКИ КНОПОК
     # =============================================================================
 
-    async def handle_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработчик нажатий на кнопки"""
+       async def handle_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик нажатий на кнопки групп"""
         query = update.callback_query
         await query.answer()
         
@@ -592,12 +592,76 @@ class GroupManager:
             await query.edit_message_text("❌ Недостаточно прав")
             return
         
-        if data == "back":
-            from menu_manager import get_groups_menu
-            keyboard = get_groups_menu(user_id)
+        try:
+            if data == "back":
+                from menu_manager import get_groups_menu
+                keyboard = get_groups_menu(user_id)
+                await query.message.reply_text(
+                    "🏘️ УПРАВЛЕНИЕ ГРУППАМИ",
+                    reply_markup=keyboard
+                )
+                await query.message.delete()
+            
+            elif data.startswith("select_group_"):
+                # Обработка выбора группы
+                await self.show_group_info(update, context)
+            elif data.startswith("groups_page_"):
+                page = int(data.replace("groups_page_", ""))
+                accessible_groups = get_user_accessible_groups(user_id)
+                from menu_manager import get_groups_keyboard
+                keyboard = get_groups_keyboard(accessible_groups, page)
+                await query.edit_message_reply_markup(reply_markup=keyboard)
+            else:
+                await query.edit_message_text(
+                    "🛠️ Функция групп в разработке",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back")]])
+                )
+                
+        except Exception as e:
+            logging.error(f"❌ Ошибка в обработчике групп: {e}")
             await query.edit_message_text(
-                "🏘️ УПРАВЛЕНИЕ ГРУППАМИ",
-                reply_markup=keyboard
+                "❌ Ошибка при обработке группы",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back")]])
+            )
+
+    async def show_group_info(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Показать информацию о выбранной группе"""
+        query = update.callback_query
+        data = query.data
+        
+        if data.startswith("select_group_"):
+            group_id = data.replace("select_group_", "")
+            
+            groups_data = get_all_groups()
+            group_info = groups_data.get(group_id, {})
+            group_name = group_info.get('name', group_id)
+            subgroups = group_info.get('subgroups', {})
+            
+            response = f"🏘️ *Информация о группе: {group_name}*\n\n"
+            
+            if subgroups:
+                response += "📁 *Подгруппы:*\n"
+                for subgroup_id, subgroup_name in subgroups.items():
+                    response += f"  • {subgroup_name}\n"
+            else:
+                response += "📭 *Подгруппы:* Нет\n"
+            
+            # Показываем участников
+            users_in_group = self._get_users_in_group(group_id)
+            if users_in_group:
+                response += "👥 *Участники:*\n"
+                for user_name in users_in_group:
+                    response += f"  • {user_name}\n"
+            else:
+                response += "👥 *Участники:* Нет\n"
+            
+            from menu_manager import get_back_button
+            keyboard = InlineKeyboardMarkup([get_back_button()])
+            
+            await query.edit_message_text(
+                response,
+                reply_markup=keyboard,
+                parse_mode='Markdown'
             )
 
     def get_conversation_handler(self):
