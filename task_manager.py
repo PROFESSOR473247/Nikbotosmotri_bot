@@ -13,7 +13,7 @@ from database import (
     add_task, remove_task, deactivate_task
 )
 from menu_manager import (
-    get_tasks_keyboard, get_groups_keyboard, get_subgroups_keyboard,
+    get_groups_keyboard, get_subgroups_keyboard,
     get_templates_keyboard, get_confirmation_keyboard, get_back_button
 )
 
