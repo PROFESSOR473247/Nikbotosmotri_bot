@@ -557,8 +557,11 @@ class GroupManager:
         
         # Фильтруем группы, которые имеют подгруппы
         groups_with_subgroups = {}
-        for group_id, group_info in accessible_groups.items():
-            if group_info.get('subgroups'):
+        all_groups = get_all_groups()
+        for group_id in accessible_groups:
+            group_info = all_groups.get(group_id, {})
+            subgroups = group_info.get('subgroups', {})
+            if subgroups:
                 groups_with_subgroups[group_id] = group_info
         
         if not groups_with_subgroups:
@@ -566,7 +569,8 @@ class GroupManager:
             return ConversationHandler.END
         
         context.user_data['subgroup_deletion'] = {
-            'user_id': user_id
+            'user_id': user_id,
+            'step': 'select_group'
         }
         
         keyboard = get_groups_keyboard(groups_with_subgroups)
@@ -577,6 +581,168 @@ class GroupManager:
         )
         
         return DELETE_SUBGROUP_GROUP
+
+    async def delete_subgroup_group_selected(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработка выбора группы для удаления подгруппы"""
+        query = update.callback_query
+        await query.answer()
+        
+        data = query.data
+        
+        if data == "back":
+            from menu_manager import get_groups_menu
+            keyboard = get_groups_menu(query.from_user.id)
+            await query.edit_message_text(
+                "🏘️ УПРАВЛЕНИЕ ГРУППАМИ",
+                reply_markup=keyboard
+            )
+            return ConversationHandler.END
+        
+        if data.startswith("select_group_"):
+            group_id = data.replace("select_group_", "")
+            context.user_data['subgroup_deletion']['group_id'] = group_id
+            context.user_data['subgroup_deletion']['step'] = 'select_subgroup'
+            
+            groups_data = get_all_groups()
+            group_info = groups_data.get(group_id, {})
+            group_name = group_info.get('name', group_id)
+            subgroups = group_info.get('subgroups', {})
+            
+            if not subgroups:
+                await query.edit_message_text(
+                    f"❌ В группе '{group_name}' нет подгрупп для удаления",
+                    reply_markup=InlineKeyboardMarkup([get_back_button()])
+                )
+                return ConversationHandler.END
+            
+            # Создаем клавиатуру с подгруппами
+            keyboard = self._get_subgroups_keyboard(subgroups, group_id)
+            
+            await query.edit_message_text(
+                f"📁 *ВЫБЕРИТЕ ПОДГРУППУ ДЛЯ УДАЛЕНИЯ ИЗ ГРУППЫ '{group_name}'*",
+                reply_markup=keyboard,
+                parse_mode='Markdown'
+            )
+            
+            return DELETE_SUBGROUP_SELECT
+
+    def _get_subgroups_keyboard(self, subgroups, group_id):
+        """Создать клавиатуру с подгруппами"""
+        buttons = []
+        for subgroup_id, subgroup_name in subgroups.items():
+            buttons.append([
+                InlineKeyboardButton(
+                    f"📁 {subgroup_name}",
+                    callback_data=f"select_subgroup_{group_id}_{subgroup_id}"
+                )
+            ])
+        
+        # Добавляем кнопку "Назад"
+        buttons.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_groups")])
+        
+        return InlineKeyboardMarkup(buttons)
+
+    async def delete_subgroup_selected(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработка выбора подгруппы для удаления"""
+        query = update.callback_query
+        await query.answer()
+        
+        data = query.data
+        
+        if data == "back_to_groups":
+            # Возвращаемся к выбору группы
+            user_id = query.from_user.id
+            accessible_groups = get_user_accessible_groups(user_id)
+            
+            # Фильтруем группы, которые имеют подгруппы
+            groups_with_subgroups = {}
+            all_groups = get_all_groups()
+            for group_id in accessible_groups:
+                group_info = all_groups.get(group_id, {})
+                subgroups = group_info.get('subgroups', {})
+                if subgroups:
+                    groups_with_subgroups[group_id] = group_info
+            
+            keyboard = get_groups_keyboard(groups_with_subgroups)
+            await query.edit_message_text(
+                "🏘️ *ВЫБЕРИТЕ ГРУППУ ДЛЯ УДАЛЕНИЯ ПОДГРУППЫ*",
+                reply_markup=keyboard,
+                parse_mode='Markdown'
+            )
+            return DELETE_SUBGROUP_GROUP
+        
+        if data.startswith("select_subgroup_"):
+            # Формат: select_subgroup_{group_id}_{subgroup_id}
+            parts = data.replace("select_subgroup_", "").split("_")
+            if len(parts) >= 2:
+                group_id = parts[0]
+                subgroup_id = "_".join(parts[1:])  # На случай, если в ID есть подчеркивания
+                
+                context.user_data['subgroup_deletion']['subgroup_id'] = subgroup_id
+                context.user_data['subgroup_deletion']['step'] = 'confirm'
+                
+                groups_data = get_all_groups()
+                group_info = groups_data.get(group_id, {})
+                group_name = group_info.get('name', group_id)
+                subgroup_name = group_info.get('subgroups', {}).get(subgroup_id, subgroup_id)
+                
+                warning_text = (
+                    f"⚠️ *ВЫ УВЕРЕНЫ, ЧТО ХОТИТЕ УДАЛИТЬ ПОДГРУППУ?*\n\n"
+                    f"🏘️ *Группа:* {group_name}\n"
+                    f"📁 *Подгруппа:* {subgroup_name}\n\n"
+                    f"🚫 *Это действие нельзя отменить!*"
+                )
+                
+                keyboard = get_confirmation_keyboard("confirm_delete_subgroup", "cancel_delete_subgroup")
+                
+                await query.edit_message_text(
+                    warning_text,
+                    reply_markup=keyboard,
+                    parse_mode='Markdown'
+                )
+                
+                return DELETE_SUBGROUP_CONFIRM
+
+    async def delete_subgroup_confirmation_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработка подтверждения удаления подгруппы"""
+        query = update.callback_query
+        await query.answer()
+        
+        data = query.data
+        
+        if 'subgroup_deletion' not in context.user_data:
+            await query.edit_message_text("❌ Ошибка: данные удаления не найдены")
+            return ConversationHandler.END
+        
+        if data == "confirm_delete_subgroup":
+            subgroup_data = context.user_data['subgroup_deletion']
+            group_id = subgroup_data['group_id']
+            subgroup_id = subgroup_data['subgroup_id']
+            
+            groups_data = get_all_groups()
+            group_info = groups_data.get(group_id, {})
+            group_name = group_info.get('name', group_id)
+            subgroup_name = group_info.get('subgroups', {}).get(subgroup_id, subgroup_id)
+            
+            # Удаляем подгруппу
+            success = remove_subgroup(group_id, subgroup_id)
+            
+            if success:
+                await query.edit_message_text(
+                    f"✅ Подгруппа '{subgroup_name}' успешно удалена из группы '{group_name}'!",
+                    parse_mode='Markdown'
+                )
+            else:
+                await query.edit_message_text(
+                    f"❌ Ошибка при удалении подгруппы '{subgroup_name}'",
+                    parse_mode='Markdown'
+                )
+        else:
+            await query.edit_message_text("❌ Удаление подгруппы отменено")
+        
+        # Очищаем временные данные
+        context.user_data.pop('subgroup_deletion', None)
+        return ConversationHandler.END
 
     # =============================================================================
     # ОБРАБОТЧИКИ КНОПОК
@@ -715,6 +881,20 @@ class GroupManager:
                 ],
                 DELETE_GROUP_CONFIRM: [
                     CallbackQueryHandler(self.delete_group_confirmation_handler, pattern="^(confirm_delete_group|cancel_delete_group)"),
+                    CallbackQueryHandler(self.handle_unexpected_callback)
+                ],
+                
+                # States for deleting subgroup
+                DELETE_SUBGROUP_GROUP: [
+                    CallbackQueryHandler(self.delete_subgroup_group_selected, pattern="^(select_group_|back)"),
+                    CallbackQueryHandler(self.handle_unexpected_callback)
+                ],
+                DELETE_SUBGROUP_SELECT: [
+                    CallbackQueryHandler(self.delete_subgroup_selected, pattern="^(select_subgroup_|back_to_groups)"),
+                    CallbackQueryHandler(self.handle_unexpected_callback)
+                ],
+                DELETE_SUBGROUP_CONFIRM: [
+                    CallbackQueryHandler(self.delete_subgroup_confirmation_handler, pattern="^(confirm_delete_subgroup|cancel_delete_subgroup)"),
                     CallbackQueryHandler(self.handle_unexpected_callback)
                 ],
             },
