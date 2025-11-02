@@ -1,84 +1,24 @@
 # -*- coding: utf-8 -*-
 import logging
 import asyncio
+import os
+import json
 from telegram import Update
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, filters,
-    ContextTypes, ConversationHandler, JobQueue
+    ContextTypes, ConversationHandler, CallbackQueryHandler
 )
+from telegram.error import BadRequest
 from config import BOT_TOKEN
 from authorized_users import is_authorized, is_admin, get_user_role
-from database import init_database
-from task_manager import task_manager
-from group_manager import group_manager
-from menu_manager import *
+from database import init_database, load_tasks, save_tasks, get_user_accessible_groups
+from task_manager import TaskManager
+from menu_manager import get_main_menu, get_guest_keyboard
 import datetime
 import pytz
-import os
-import requests
-import threading
-import time
-import json
 
-# Принудительный сброс и создание администратора (только если файлов нет)
-def reset_admin():
-    """Сброс и создание администратора только при первом запуске"""
-    if os.path.exists('authorized_users.json'):
-        print("✅ Файлы уже существуют, пропускаем сброс")
-        return
-        
-    print("🚀 Первоначальная настройка системы...")
-    
-    # Создаем администратора
-    admin_id = 812934047
-    admin_data = {
-        "users": {
-            str(admin_id): {
-                "name": "Никита",
-                "role": "admin",
-                "groups": ["all"]
-            }
-        },
-        "admin_id": admin_id
-    }
-    
-    # Сохраняем в authorized_users.json
-    with open('authorized_users.json', 'w', encoding='utf-8') as f:
-        json.dump(admin_data, f, ensure_ascii=False, indent=4)
-    print("✅ Администратор создан")
-    
-    # Сохраняем в user_roles.json
-    user_roles_data = {"user_roles": {str(admin_id): "admin"}}
-    with open('user_roles.json', 'w', encoding='utf-8') as f:
-        json.dump(user_roles_data, f, ensure_ascii=False, indent=2)
-    print("✅ Роль администратора установлена")
-    
-    print(f"🎉 Настройка завершена! Администратор: ID {admin_id}")
-
-# Keep alive для Render
-def start_keep_alive():
-    """Функция для поддержания активности приложения на Render"""
-    def ping():
-        while True:
-            try:
-                render_url = os.environ.get('RENDER_EXTERNAL_URL')
-                if render_url:
-                    response = requests.get(render_url, timeout=10)
-                    print(f"✅ Ping sent: {response.status_code}")
-                else:
-                    print("🔄 Keep-alive: bot active")
-            except Exception as e:
-                print(f"⚠️ Ping error: {e}")
-            time.sleep(300)  # Ping every 5 minutes
-    
-    ping_thread = threading.Thread(target=ping, daemon=True)
-    ping_thread.start()
-    print("🚀 Keep-alive system started")
-
-# Инициализация базы данных
 print("🔄 Инициализация системы...")
 init_database()
-reset_admin()
 
 # Настройка логирования
 logging.basicConfig(
@@ -87,17 +27,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Глобальный менеджер задач
+task_manager = TaskManager()
+
 def authorization_required(func):
     """Декоратор для проверки авторизации"""
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
         user_id = update.effective_user.id
         
         if not is_authorized(user_id):
-            await update.message.reply_text(
-                "❌ НЕДОСТАТОЧНО ПРАВ\n\n"
-                "Для доступа к боту свяжитесь с администратором @ProfeSSor471",
-                reply_markup=get_guest_keyboard()
-            )
+            if update.callback_query:
+                await update.callback_query.answer("❌ Недостаточно прав для этого действия", show_alert=True)
+            else:
+                await update.message.reply_text(
+                    "❌ НЕДОСТАТОЧНО ПРАВ\n\nДля доступа к боту свяжитесь с администратором @ProfeSSor471",
+                    reply_markup=get_guest_keyboard()
+                )
             return None
         return await func(update, context, *args, **kwargs)
     return wrapper
@@ -108,11 +53,10 @@ def admin_required(func):
         user_id = update.effective_user.id
         
         if not is_admin(user_id):
-            await update.message.reply_text(
-                "❌ ТОЛЬКО ДЛЯ АДМИНИСТРАТОРА\n\n"
-                "Эта функция доступна только администратору",
-                reply_markup=get_main_menu(user_id)
-            )
+            if update.callback_query:
+                await update.callback_query.answer("❌ Только для администратора", show_alert=True)
+            else:
+                await update.message.reply_text("❌ Только для администратора")
             return None
         return await func(update, context, *args, **kwargs)
     return wrapper
@@ -121,9 +65,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
     user_id = update.effective_user.id
     
-    # Если бот в группе - обновляем информацию
-    if update.effective_chat.type in ["group", "supergroup", "channel"]:
-        await group_manager.update_group_info(update, context)
+    # Если бот в группе - просто игнорируем
+    if update.effective_chat.type in ["group", "supergroup"]:
         return
     
     # Личный чат
@@ -159,91 +102,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=get_main_menu(user_id)
     )
 
-@authorization_required
-async def handle_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик кнопки Задачи"""
-    user_id = update.effective_user.id
-    await update.message.reply_text(
-        "📋 УПРАВЛЕНИЕ ЗАДАЧАМИ",
-        reply_markup=get_tasks_menu()
-    )
-
-@authorization_required
-async def handle_templates(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик кнопки Шаблоны"""
-    user_id = update.effective_user.id
-    user_role = get_user_role(user_id)
-    
-    if user_role in ["гость", "водитель"]:
-        await update.message.reply_text(
-            "❌ НЕДОСТАТОЧНО ПРАВ\n\n"
-            "Управление шаблонами доступно только администраторам и руководителям",
-            reply_markup=get_main_menu(user_id)
-        )
-        return
-    
-    await update.message.reply_text(
-        "📁 УПРАВЛЕНИЕ ШАБЛОНАМИ",
-        reply_markup=get_templates_menu()
-    )
-
-@authorization_required
-@admin_required
-async def handle_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик кнопки Пользователи (только админ)"""
-    await update.message.reply_text(
-        "👥 УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ",
-        reply_markup=get_users_menu()
-    )
-
-@authorization_required
-async def handle_groups(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик кнопки Группы"""
-    user_id = update.effective_user.id
-    user_role = get_user_role(user_id)
-    
-    if user_role == "гость":
-        await update.message.reply_text(
-            "❌ НЕДОСТАТОЧНО ПРАВ\n\n"
-            "Управление группами доступно только администраторам и руководителям",
-            reply_markup=get_main_menu(user_id)
-        )
-        return
-    
-    await update.message.reply_text(
-        "🏘️ УПРАВЛЕНИЕ ГРУППАМИ",
-        reply_markup=get_groups_menu(user_id)
-    )
-
-@authorization_required
-async def handle_more(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик кнопки Еще"""
-    user_id = update.effective_user.id
-    await update.message.reply_text(
-        "ℹ️ ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ",
-        reply_markup=get_more_menu(user_id)
-    )
-
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик текстовых сообщений"""
     text = update.message.text
     user_id = update.effective_user.id
     
     # Пропускаем обработку в группах
-    if update.effective_chat.type in ["group", "supergroup", "channel"]:
+    if update.effective_chat.type in ["group", "supergroup"]:
         return
     
     # Обработка кнопок главного меню
     if text == "📋 Задачи":
-        await handle_tasks(update, context)
+        await task_manager.show_tasks_menu(update, context)
     elif text == "📁 Шаблоны":
-        await handle_templates(update, context)
+        await task_manager.show_templates_menu(update, context)
     elif text == "👥 Пользователи":
-        await handle_users(update, context)
+        await show_users_menu(update, context)
     elif text == "🏘️ Группы":
-        await handle_groups(update, context)
+        await show_groups_menu(update, context)
     elif text == "ℹ️ Еще":
-        await handle_more(update, context)
+        await show_more_menu(update, context)
     elif text == "🔙 Назад в главное меню":
         await update.message.reply_text("Главное меню", reply_markup=get_main_menu(user_id))
     elif text == "🆔 Получить ID":
@@ -255,6 +133,31 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Неизвестная команда",
             reply_markup=get_main_menu(user_id) if is_authorized(user_id) else get_guest_keyboard()
         )
+
+@authorization_required
+async def show_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать меню пользователей"""
+    user_id = update.effective_user.id
+    if not is_admin(user_id):
+        await update.message.reply_text("❌ Только для администратора")
+        return
+    
+    from menu_manager import get_users_menu
+    await update.message.reply_text("👥 УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ", reply_markup=get_users_menu())
+
+@authorization_required
+async def show_groups_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать меню групп"""
+    user_id = update.effective_user.id
+    from menu_manager import get_groups_menu
+    await update.message.reply_text("🏘️ УПРАВЛЕНИЕ ГРУППАМИ", reply_markup=get_groups_menu(user_id))
+
+@authorization_required
+async def show_more_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать меню Еще"""
+    user_id = update.effective_user.id
+    from menu_manager import get_more_menu
+    await update.message.reply_text("ℹ️ ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ", reply_markup=get_more_menu(user_id))
 
 async def my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать ID пользователя"""
@@ -297,6 +200,28 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=get_main_menu(user_id) if is_authorized(user_id) else get_guest_keyboard()
     )
 
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик нажатий на inline-кнопки"""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    user_id = query.from_user.id
+    
+    if not is_authorized(user_id):
+        await query.edit_message_text("❌ Недостаточно прав")
+        return
+    
+    # Обработка кнопок задач
+    if data.startswith('task_'):
+        await task_manager.handle_button(update, context)
+    # Обработка кнопок шаблонов
+    elif data.startswith('template_'):
+        await task_manager.handle_button(update, context)
+    # Обработка кнопок групп
+    elif data.startswith('group_'):
+        await task_manager.handle_button(update, context)
+
 def setup_handlers(application):
     """Настройка обработчиков"""
     # Обработчики команд
@@ -314,31 +239,27 @@ def setup_handlers(application):
     application.add_handler(MessageHandler(filters.Regex("^🆔 Получить ID$"), handle_text))
     application.add_handler(MessageHandler(filters.Regex("^❓ Помощь$"), handle_text))
 
+    # Обработчик inline-кнопок
+    application.add_handler(CallbackQueryHandler(button_handler))
+
     # Обработчик всех текстовых сообщений
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-
-    # Обработчик обновления информации о группах
-    application.add_handler(MessageHandler(filters.ALL, group_manager.update_group_info))
 
 async def main():
     """Основная асинхронная функция запуска"""
     print("🚀 Запуск бота...")
     
-    # Запускаем keep-alive систему
-    start_keep_alive()
-
     # Создаем приложение
     application = (
         Application.builder()
         .token(BOT_TOKEN)
-        .job_queue(JobQueue())
         .build()
     )
 
     # Настраиваем обработчики
     setup_handlers(application)
 
-    # Восстанавливаем задачи
+    # Восстанавливаем активные задачи
     await task_manager.restore_tasks(application)
 
     print("✅ Бот запущен и готов к работе!")
@@ -351,14 +272,4 @@ async def main():
     )
 
 if __name__ == '__main__':
-    # Простой асинхронный запуск
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("⏹️ Бот остановлен пользователем")
-    except Exception as e:
-        print(f"❌ Критическая ошибка: {e}")
-        print("🔄 Перезапуск через 10 секунд...")
-        time.sleep(10)
-        # Завершаем процесс, чтобы Render перезапустил его
-        os._exit(1)
+    asyncio.run(main()
