@@ -423,7 +423,7 @@ class TaskManager:
     # =============================================================================
 
     async def handle_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработчик нажатий на кнопки"""
+        """Обработчик нажатий на кнопки задач"""
         query = update.callback_query
         await query.answer()
         
@@ -434,12 +434,35 @@ class TaskManager:
             await query.edit_message_text("❌ Недостаточно прав")
             return
         
-        if data == "back":
-            from menu_manager import get_tasks_menu
-            keyboard = get_tasks_menu()
+        try:
+            if data == "back":
+                from menu_manager import get_tasks_menu
+                keyboard = get_tasks_menu()
+                await query.message.reply_text(
+                    "📋 УПРАВЛЕНИЕ ЗАДАЧАМИ",
+                    reply_markup=keyboard
+                )
+                await query.message.delete()
+            
+            elif data == "task_status":
+                await self.show_task_status(update, context)
+            elif data.startswith("select_group_"):
+                await self.task_group_selected(update, context)
+            elif data.startswith("select_subgroup_"):
+                await self.task_subgroup_selected(update, context)
+            elif data.startswith("select_template_"):
+                await self.task_template_selected(update, context)
+            else:
+                await query.edit_message_text(
+                    "🛠️ Функция задач в разработке",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back")]])
+                )
+                
+        except Exception as e:
+            logging.error(f"❌ Ошибка в обработчике задач: {e}")
             await query.edit_message_text(
-                "📋 УПРАВЛЕНИЕ ЗАДАЧАМИ",
-                reply_markup=keyboard
+                "❌ Ошибка при обработке задачи",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back")]])
             )
 
     def get_conversation_handler(self):
