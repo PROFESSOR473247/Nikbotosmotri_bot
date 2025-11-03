@@ -42,6 +42,23 @@ def authorization_required(func):
                     reply_markup=get_guest_keyboard()
                 )
             return None
+        
+        # Проверяем, тестирует ли администратор другую роль
+        if is_admin(user_id) and context.user_data.get('testing_role'):
+            testing_role = context.user_data['testing_role']
+            original_role = context.user_data.get('original_role', 'admin')
+            
+            # Временно подменяем роль для проверки прав
+            original_user_role = get_user_role(user_id)
+            context.user_data['_temp_original_role'] = original_user_role
+            
+            # Эмулируем роль для проверки
+            from user_roles import get_role_level
+            testing_level = get_role_level(testing_role)
+            
+            # Если тестируемая роль имеет меньшие права, чем требуется для функции
+            # Здесь можно добавить дополнительные проверки при необходимости
+            
         return await func(update, context, *args, **kwargs)
     return wrapper
 
@@ -50,12 +67,17 @@ def admin_required(func):
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
         user_id = update.effective_user.id
         
-        if not is_admin(user_id):
+        # Если администратор тестирует другую роль, проверяем исходную роль
+        if context.user_data.get('testing_role') and is_admin(user_id):
+            # Администратор в режиме тестирования - разрешаем доступ
+            pass
+        elif not is_admin(user_id):
             if update.callback_query:
                 await update.callback_query.answer("❌ Только для администратора", show_alert=True)
             else:
                 await update.message.reply_text("❌ Только для администратора")
             return None
+        
         return await func(update, context, *args, **kwargs)
     return wrapper
 
@@ -89,6 +111,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     user_role = get_user_role(user_id)
+    
+    # Проверяем, тестирует ли администратор другую роль
+    if is_admin(user_id) and context.user_data.get('testing_role'):
+        testing_role = context.user_data['testing_role']
+        from user_roles import get_role_name
+        testing_role_name = get_role_name(testing_role)
+        user_role = f"{user_role} (тестирует: {testing_role_name})"
+
     welcome_text = (
         f'🤖 БОТ ДЛЯ ОТЛОЖЕННЫХ СООБЩЕНИЙ\n\n'
         f'🕒 Текущее время: {current_time} (Москва)\n'
@@ -113,9 +143,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # Если пользователь тестирует другую роль
-    if context.user_data.get('testing_role'):
+    if context.user_data.get('testing_role') and is_admin(user_id):
         if text == "👑 Назад к админ":
             context.user_data.pop('testing_role', None)
+            context.user_data.pop('original_role', None)
             await update.message.reply_text(
                 "✅ Возврат к роли администратора",
                 reply_markup=get_main_menu(user_id)
@@ -168,6 +199,13 @@ async def handle_testing_role_text(update: Update, context: ContextTypes.DEFAULT
         await my_id(update, context)
     elif text == "❓ Помощь":
         await help_command(update, context)
+    elif text == "👑 Назад к админ":
+        context.user_data.pop('testing_role', None)
+        context.user_data.pop('original_role', None)
+        await update.message.reply_text(
+            "✅ Возврат к роли администратора",
+            reply_markup=get_main_menu(user_id)
+        )
     else:
         await update.message.reply_text(
             "❓ Неизвестная команда",
@@ -188,6 +226,14 @@ async def my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if is_authorized(user_id):
         user_role = get_user_role(user_id)
+        
+        # Если администратор тестирует другую роль
+        if is_admin(user_id) and context.user_data.get('testing_role'):
+            testing_role = context.user_data['testing_role']
+            from user_roles import get_role_name
+            testing_role_name = get_role_name(testing_role)
+            user_role = f"{user_role} (тестирует: {testing_role_name})"
+        
         reply_markup = get_main_menu(user_id)
         additional_text = f"👤 Ваша роль: {user_role}"
     else:
@@ -250,6 +296,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Обработка тестирования ролей
         elif data.startswith('test_role_'):
             await handle_test_role(update, context)
+        # Обработка выбора роли
+        elif data.startswith('select_role_'):
+            await user_manager.handle_button(update, context)
         # Обработка кнопки "назад"
         elif data == "back":
             from menu_manager import get_main_menu
@@ -263,15 +312,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Обработка других кнопок
         elif data.startswith('select_') or data.startswith('edit_') or data.startswith('confirm_') or data.startswith('cancel_'):
             # Передаем обработку соответствующим менеджерам
-            if any(keyword in data for keyword in ['template', 'group', 'user', 'task']):
-                if 'template' in data:
-                    await template_manager.handle_button(update, context)
-                elif 'group' in data:
-                    await group_manager.handle_button(update, context)
-                elif 'user' in data:
-                    await user_manager.handle_button(update, context)
-                elif 'task' in data:
-                    await task_manager.handle_button(update, context)
+            if 'template' in data:
+                await template_manager.handle_button(update, context)
+            elif 'group' in data:
+                await group_manager.handle_button(update, context)
+            elif 'user' in data:
+                await user_manager.handle_button(update, context)
+            elif 'task' in data:
+                await task_manager.handle_button(update, context)
             else:
                 await query.edit_message_text(
                     "🛠️ Функция в разработке",
@@ -306,16 +354,28 @@ async def handle_test_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['testing_role'] = role_key
     context.user_data['original_role'] = get_user_role(user_id)
     
+    from user_roles import get_role_name
+    role_name = get_role_name(role_key)
+    
+    from menu_manager import get_testing_role_keyboard
+    keyboard = get_testing_role_keyboard("admin")
+    
     await query.edit_message_text(
-        f"🎭 Теперь вы тестируете роль: {role_key}\n\n"
+        f"🎭 Теперь вы тестируете роль: {role_name}\n\n"
         f"📋 Доступны только функции этой роли.\n"
         f"👑 Для возврата к роли администратора используйте кнопку в главном меню.",
-        reply_markup=get_main_menu(user_id)
+        reply_markup=keyboard
     )
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Отмена любого диалога"""
     user_id = update.effective_user.id
+    
+    # Очищаем временные данные всех менеджеров
+    for key in list(context.user_data.keys()):
+        if any(x in key for x in ['template_', 'task_', 'user_', 'group_']):
+            context.user_data.pop(key, None)
+    
     await update.message.reply_text(
         "❌ Операция отменена",
         reply_markup=get_main_menu(user_id)
@@ -361,6 +421,8 @@ async def post_init(application):
     
     # Гарантируем наличие администратора
     ensure_admin_user()
+    
+    print("✅ Инициализация завершена!")
 
 def main():
     """Основная функция запуска бота"""
