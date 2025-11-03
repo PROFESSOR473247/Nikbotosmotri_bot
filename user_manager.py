@@ -10,9 +10,9 @@ from database import (
 )
 from menu_manager import (
     get_roles_keyboard, get_test_roles_keyboard, get_groups_keyboard,
-    get_confirmation_keyboard, get_back_button
+    get_confirmation_keyboard, get_back_button, get_users_list_keyboard
 )
-from user_roles import get_role_name, get_all_roles
+from user_roles import get_role_name, get_all_roles, get_available_roles_for_assignment
 
 # Состояния для добавления пользователя
 ADD_USER_ID, ADD_USER_NAME, ADD_USER_ROLE, ADD_USER_GROUPS, ADD_USER_CONFIRM = range(5)
@@ -28,7 +28,7 @@ TEST_ROLE_SELECT = range(1)
 
 class UserManager:
     def __init__(self):
-        self.temp_data = {}
+        self.logger = logging.getLogger(__name__)
 
     async def show_users_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать меню пользователей"""
@@ -84,6 +84,11 @@ class UserManager:
         existing_users = get_authorized_users_list()
         if str(user_id) in existing_users:
             await update.message.reply_text("❌ Пользователь с таким ID уже существует. Введите другой ID:")
+            return ADD_USER_ID
+        
+        # Проверяем, не пытаемся ли добавить самого себя
+        if user_id == update.effective_user.id:
+            await update.message.reply_text("❌ Нельзя добавить самого себя. Введите другой ID:")
             return ADD_USER_ID
         
         context.user_data['user_creation']['new_user_id'] = user_id
@@ -142,12 +147,16 @@ class UserManager:
             
             # Формируем список групп для выбора
             groups_list = "📋 *СПИСОК ГРУПП:*\n\n"
-            for i, (group_id, group_info) in enumerate(all_groups.items(), 1):
-                groups_list += f"{i}. {group_info.get('name', group_id)}\n"
+            group_ids = list(all_groups.keys())
+            
+            for i, group_id in enumerate(group_ids, 1):
+                group_name = all_groups[group_id].get('name', group_id)
+                groups_list += f"{i}. {group_name}\n"
             
             groups_list += "\n🔢 *УКАЖИТЕ НОМЕРА ГРУПП ЧЕРЕЗ ЗАПЯТУЮ* (например: 1,3,5)"
             
             context.user_data['user_creation']['all_groups'] = all_groups
+            context.user_data['user_creation']['group_ids'] = group_ids
             
             await query.edit_message_text(
                 f"🏘️ *ШАГ 4/4: ВЫБЕРИТЕ ГРУППЫ ДОСТУПА*\n\n{groups_list}",
@@ -168,23 +177,23 @@ class UserManager:
             return ADD_USER_GROUPS
         
         all_groups = context.user_data['user_creation']['all_groups']
-        group_ids = list(all_groups.keys())
+        group_ids = context.user_data['user_creation']['group_ids']
         
         # Проверяем валидность номеров
-        valid_groups = []
+        selected_groups = []
         for num in group_numbers:
             if 1 <= num <= len(group_ids):
                 group_id = group_ids[num - 1]
-                valid_groups.append(group_id)
+                selected_groups.append(group_id)
             else:
                 await update.message.reply_text(f"❌ Неверный номер группы: {num}. Введите номера от 1 до {len(group_ids)}:")
                 return ADD_USER_GROUPS
         
-        if not valid_groups:
+        if not selected_groups:
             await update.message.reply_text("❌ Не выбрано ни одной группы. Введите номера групп:")
             return ADD_USER_GROUPS
         
-        context.user_data['user_creation']['user_groups'] = valid_groups
+        context.user_data['user_creation']['user_groups'] = selected_groups
         
         # Показываем подтверждение
         return await self.show_add_user_confirmation(update, context)
@@ -195,7 +204,7 @@ class UserManager:
         
         confirmation_text = self._format_user_confirmation(user_data)
         
-        keyboard = get_confirmation_keyboard("confirm_add_user", "edit_add_user")
+        keyboard = get_confirmation_keyboard("confirm_add_user", "cancel_add_user")
         
         await update.message.reply_text(
             confirmation_text,
@@ -245,22 +254,56 @@ class UserManager:
             
             if success:
                 await query.edit_message_text(
-                    f"✅ {message}",
+                    f"✅ *{message}*",
                     parse_mode='Markdown'
                 )
             else:
                 await query.edit_message_text(
-                    f"❌ {message}",
+                    f"❌ *{message}*",
                     parse_mode='Markdown'
                 )
         
-        elif data == "edit_add_user":
-            # Здесь будет логика редактирования
-            await query.edit_message_text("✏️ Редактирование добавления пользователя\n\nЭта функция в разработке...")
+        else:
+            await query.edit_message_text("❌ Добавление пользователя отменено")
         
         # Очищаем временные данные
         context.user_data.pop('user_creation', None)
         return ConversationHandler.END
+
+    # =============================================================================
+    # СПИСОК ПОЛЬЗОВАТЕЛЕЙ
+    # =============================================================================
+
+    async def show_users_list(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Показать список пользователей"""
+        user_id = update.effective_user.id
+        
+        if not is_admin(user_id):
+            await update.message.reply_text("❌ Только для администратора")
+            return
+        
+        users = get_authorized_users_list()
+        if not users:
+            await update.message.reply_text("📭 *В системе нет пользователей*", parse_mode='Markdown')
+            return
+        
+        users_text = "👥 *СПИСОК ПОЛЬЗОВАТЕЛЕЙ:*\n\n"
+        
+        for user_id_str, user_data in users.items():
+            users_text += f"👤 *{user_data.get('name', 'Без имени')}*\n"
+            users_text += f"   🆔 ID: `{user_id_str}`\n"
+            users_text += f"   🎭 Роль: {get_role_name(user_data.get('role', 'гость'))}\n"
+            
+            groups = user_data.get('groups', [])
+            if groups:
+                groups_text = ", ".join(groups)
+                users_text += f"   🏘️ Группы: {groups_text}\n"
+            else:
+                users_text += f"   🏘️ Группы: Нет\n"
+            
+            users_text += "───────\n"
+        
+        await update.message.reply_text(users_text, parse_mode='Markdown')
 
     # =============================================================================
     # ТЕСТИРОВАНИЕ ПРАВ
@@ -308,7 +351,7 @@ class UserManager:
             context.user_data['original_role'] = get_user_role(query.from_user.id)
             
             from menu_manager import get_testing_role_keyboard
-            keyboard = get_testing_role_keyboard("admin")  # Всегда админ тестирует
+            keyboard = get_testing_role_keyboard("admin")
             
             await query.edit_message_text(
                 f"🎭 *Теперь вы тестируете роль: {get_role_name(role_key)}*\n\n"
@@ -354,17 +397,25 @@ class UserManager:
                 await self.add_user_role_selected(update, context)
             elif data.startswith("test_role_"):
                 await self.test_role_selected(update, context)
+            elif data == "confirm_add_user":
+                await self.add_user_confirmation_handler(update, context)
+            elif data == "cancel_add_user":
+                await query.edit_message_text("❌ Добавление пользователя отменено")
+                context.user_data.pop('user_creation', None)
+                return ConversationHandler.END
             else:
                 await query.edit_message_text(
-                    "🛠️ Функция пользователей в разработке",
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back")]])
+                    "🛠️ *Функция в разработке*",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back")]]),
+                    parse_mode='Markdown'
                 )
                 
         except Exception as e:
-            logging.error(f"❌ Ошибка в обработчике пользователей: {e}")
+            self.logger.error(f"❌ Ошибка в обработчике пользователей: {e}")
             await query.edit_message_text(
-                "❌ Ошибка при обработке пользователя",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back")]])
+                "❌ *Ошибка при обработке пользователя*",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back")]]),
+                parse_mode='Markdown'
             )
 
     def get_conversation_handler(self):
@@ -372,8 +423,8 @@ class UserManager:
         return ConversationHandler(
             entry_points=[
                 MessageHandler(filters.Regex("^➕ Добавить$"), self.start_add_user),
+                MessageHandler(filters.Regex("^📋 Список пользователей$"), self.show_users_list),
                 MessageHandler(filters.Regex("^🧪 Тест прав$"), self.start_test_roles),
-                # Добавьте другие entry points для редактирования и удаления
             ],
             states={
                 # States for adding user
@@ -381,7 +432,7 @@ class UserManager:
                 ADD_USER_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.add_user_name_input)],
                 ADD_USER_ROLE: [CallbackQueryHandler(self.add_user_role_selected, pattern="^(select_role_|back)")],
                 ADD_USER_GROUPS: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.add_user_groups_input)],
-                ADD_USER_CONFIRM: [CallbackQueryHandler(self.add_user_confirmation_handler, pattern="^(confirm_add_user|edit_add_user)")],
+                ADD_USER_CONFIRM: [CallbackQueryHandler(self.add_user_confirmation_handler, pattern="^(confirm_add_user|cancel_add_user)")],
                 
                 # States for testing roles
                 TEST_ROLE_SELECT: [CallbackQueryHandler(self.test_role_selected, pattern="^(test_role_|back)")],
