@@ -8,18 +8,13 @@ def get_main_menu(user_id):
     if not is_authorized(user_id):
         return get_guest_keyboard()
     
-    # Проверяем, тестирует ли администратор другую роль
-    from telegram.ext import ContextTypes
-    import asyncio
-    
     user_role = get_user_role(user_id)
     
     # Если администратор тестирует другую роль
-    if is_admin(user_id):
-        # Здесь мы не имеем доступа к context, поэтому используем глобальный флаг
-        # В реальной реализации это должно быть через context.user_data
-        # Пока оставляем стандартное меню администратора
-        return get_admin_keyboard()
+    if is_admin(user_id) and hasattr(get_main_menu, 'testing_role'):
+        testing_role = get_main_menu.testing_role
+        if testing_role and testing_role != "admin":
+            return get_testing_role_keyboard("admin")
     
     if user_role == "admin":
         return get_admin_keyboard()
@@ -99,13 +94,21 @@ def get_templates_menu(user_id):
         ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-def get_tasks_menu():
+def get_tasks_menu(user_id):
     """Меню задач"""
-    keyboard = [
-        ["📝 Создать задачу", "❌ Отменить задачу"],
-        ["🧪 Тестирование", "📊 Статус задач"],
-        ["🔙 Назад в главное меню"]
-    ]
+    user_role = get_user_role(user_id)
+    
+    if user_role in ["admin", "руководитель"]:
+        keyboard = [
+            ["📝 Создать задачу", "❌ Отменить задачу"],
+            ["🧪 Тестирование", "📊 Статус задач"],
+            ["🔙 Назад в главное меню"]
+        ]
+    else:
+        keyboard = [
+            ["📊 Статус задач"],
+            ["🔙 Назад в главное меню"]
+        ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def get_users_menu(user_id):
@@ -133,11 +136,12 @@ def get_groups_menu(user_id):
         ]
     elif user_role == "руководитель":
         keyboard = [
-            ["📁 Создать подгруппу", "🗑️ Удалить подгруппу"],
-            ["🔙 Назад в главное меню"]
+            ["📋 Список групп", "📁 Создать подгруппу"],
+            ["🗑️ Удалить подгруппу", "🔙 Назад в главное меню"]
         ]
     else:
         keyboard = [
+            ["📋 Список групп"],
             ["🔙 Назад в главное меню"]
         ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -169,25 +173,31 @@ def get_pagination_buttons(page, total_pages, prefix):
     if total_pages > 1:
         if page > 0:
             buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"{prefix}_page_{page-1}"))
+        buttons.append(InlineKeyboardButton(f"{page+1}/{total_pages}", callback_data="current_page"))
         if page < total_pages - 1:
             buttons.append(InlineKeyboardButton("Вперед ➡️", callback_data=f"{prefix}_page_{page+1}"))
     return buttons
 
 def get_groups_keyboard(groups, page=0, groups_per_page=8):
     """Клавиатура для выбора групп"""
+    if not groups:
+        return InlineKeyboardMarkup([get_back_button()])
+    
+    group_items = list(groups.items())
     start_idx = page * groups_per_page
     end_idx = start_idx + groups_per_page
-    groups_page = list(groups.items())[start_idx:end_idx]
+    groups_page = group_items[start_idx:end_idx]
     
     keyboard = []
     for group_id, group_info in groups_page:
+        group_name = group_info.get('name', group_id)
         keyboard.append([InlineKeyboardButton(
-            f"🏘️ {group_info.get('name', group_id)}", 
+            f"🏘️ {group_name}", 
             callback_data=f"select_group_{group_id}"
         )])
     
     # Добавляем пагинацию
-    total_pages = (len(groups) + groups_per_page - 1) // groups_per_page
+    total_pages = (len(group_items) + groups_per_page - 1) // groups_per_page
     pagination_buttons = get_pagination_buttons(page, total_pages, "groups")
     if pagination_buttons:
         keyboard.append(pagination_buttons)
@@ -199,11 +209,16 @@ def get_groups_keyboard(groups, page=0, groups_per_page=8):
 def get_subgroups_keyboard(subgroups, group_id, page=0, subgroups_per_page=8):
     """Клавиатура для выбора подгрупп"""
     if not subgroups:
-        return InlineKeyboardMarkup([get_back_button()])
+        keyboard = [
+            [InlineKeyboardButton("⏭️ Без подгруппы", callback_data=f"select_subgroup_{group_id}_none")],
+            get_back_button()
+        ]
+        return InlineKeyboardMarkup(keyboard)
     
+    subgroup_items = list(subgroups.items())
     start_idx = page * subgroups_per_page
     end_idx = start_idx + subgroups_per_page
-    subgroups_page = list(subgroups.items())[start_idx:end_idx]
+    subgroups_page = subgroup_items[start_idx:end_idx]
     
     keyboard = []
     for subgroup_id, subgroup_name in subgroups_page:
@@ -213,7 +228,7 @@ def get_subgroups_keyboard(subgroups, group_id, page=0, subgroups_per_page=8):
         )])
     
     # Добавляем пагинацию
-    total_pages = (len(subgroups) + subgroups_per_page - 1) // subgroups_per_page
+    total_pages = (len(subgroup_items) + subgroups_per_page - 1) // subgroups_per_page
     pagination_buttons = get_pagination_buttons(page, total_pages, f"subgroups_{group_id}")
     if pagination_buttons:
         keyboard.append(pagination_buttons)
@@ -224,19 +239,27 @@ def get_subgroups_keyboard(subgroups, group_id, page=0, subgroups_per_page=8):
 
 def get_templates_keyboard(templates, page=0, templates_per_page=8):
     """Клавиатура для выбора шаблонов"""
+    if not templates:
+        return InlineKeyboardMarkup([get_back_button()])
+    
+    template_items = list(templates.items())
     start_idx = page * templates_per_page
     end_idx = start_idx + templates_per_page
-    templates_page = list(templates.items())[start_idx:end_idx]
+    templates_page = template_items[start_idx:end_idx]
     
     keyboard = []
     for template_id, template_info in templates_page:
+        template_name = template_info.get('name', 'Без названия')
+        # Обрезаем длинные названия
+        if len(template_name) > 30:
+            template_name = template_name[:27] + "..."
         keyboard.append([InlineKeyboardButton(
-            f"📝 {template_info.get('name', 'Без названия')}", 
+            f"📝 {template_name}", 
             callback_data=f"select_template_{template_id}"
         )])
     
     # Добавляем пагинацию
-    total_pages = (len(templates) + templates_per_page - 1) // templates_per_page
+    total_pages = (len(template_items) + templates_per_page - 1) // templates_per_page
     pagination_buttons = get_pagination_buttons(page, total_pages, "templates")
     if pagination_buttons:
         keyboard.append(pagination_buttons)
@@ -247,19 +270,27 @@ def get_templates_keyboard(templates, page=0, templates_per_page=8):
 
 def get_tasks_keyboard(tasks, page=0, tasks_per_page=8):
     """Клавиатура для выбора задач"""
+    if not tasks:
+        return InlineKeyboardMarkup([get_back_button()])
+    
+    task_items = list(tasks.items())
     start_idx = page * tasks_per_page
     end_idx = start_idx + tasks_per_page
-    tasks_page = list(tasks.items())[start_idx:end_idx]
+    tasks_page = task_items[start_idx:end_idx]
     
     keyboard = []
     for task_id, task_info in tasks_page:
+        task_name = task_info.get('template_name', 'Без названия')
+        # Обрезаем длинные названия
+        if len(task_name) > 30:
+            task_name = task_name[:27] + "..."
         keyboard.append([InlineKeyboardButton(
-            f"📋 {task_info.get('template_name', 'Без названия')}", 
+            f"📋 {task_name}", 
             callback_data=f"select_task_{task_id}"
         )])
     
     # Добавляем пагинацию
-    total_pages = (len(tasks) + tasks_per_page - 1) // tasks_per_page
+    total_pages = (len(task_items) + tasks_per_page - 1) // tasks_per_page
     pagination_buttons = get_pagination_buttons(page, total_pages, "tasks")
     if pagination_buttons:
         keyboard.append(pagination_buttons)
@@ -289,10 +320,11 @@ def get_test_roles_keyboard():
     
     keyboard = []
     for role_key, role_data in USER_ROLES.items():
-        keyboard.append([InlineKeyboardButton(
-            role_data["name"],
-            callback_data=f"test_role_{role_key}"
-        )])
+        if role_key != "admin":  # Админа не тестируем
+            keyboard.append([InlineKeyboardButton(
+                role_data["name"],
+                callback_data=f"test_role_{role_key}"
+            )])
     
     keyboard.append(get_back_button())
     return InlineKeyboardMarkup(keyboard)
@@ -322,19 +354,19 @@ def get_edit_template_keyboard():
 
 def get_days_keyboard():
     """Клавиатура для выбора дней недели"""
-    days = {
-        "monday": "Понедельник",
-        "tuesday": "Вторник", 
-        "wednesday": "Среда",
-        "thursday": "Четверг",
-        "friday": "Пятница",
-        "saturday": "Суббота",
-        "sunday": "Воскресенье"
-    }
+    days = [
+        ("monday", "Понедельник"),
+        ("tuesday", "Вторник"), 
+        ("wednesday", "Среда"),
+        ("thursday", "Четверг"),
+        ("friday", "Пятница"),
+        ("saturday", "Суббота"),
+        ("sunday", "Воскресенье")
+    ]
     
     keyboard = []
     row = []
-    for day_key, day_name in days.items():
+    for day_key, day_name in days:
         row.append(InlineKeyboardButton(day_name, callback_data=f"select_day_{day_key}"))
         if len(row) == 2:
             keyboard.append(row)
@@ -358,19 +390,27 @@ def get_frequency_keyboard():
 
 def get_users_list_keyboard(users, page=0, users_per_page=8):
     """Клавиатура для выбора пользователей"""
+    if not users:
+        return InlineKeyboardMarkup([get_back_button()])
+    
+    user_items = list(users.items())
     start_idx = page * users_per_page
     end_idx = start_idx + users_per_page
-    users_page = list(users.items())[start_idx:end_idx]
+    users_page = user_items[start_idx:end_idx]
     
     keyboard = []
     for user_id, user_info in users_page:
+        user_name = user_info.get('name', f'User_{user_id}')
+        # Обрезаем длинные имена
+        if len(user_name) > 30:
+            user_name = user_name[:27] + "..."
         keyboard.append([InlineKeyboardButton(
-            f"👤 {user_info.get('name', f'User_{user_id}')}", 
+            f"👤 {user_name}", 
             callback_data=f"select_user_{user_id}"
         )])
     
     # Добавляем пагинацию
-    total_pages = (len(users) + users_per_page - 1) // users_per_page
+    total_pages = (len(user_items) + users_per_page - 1) // users_per_page
     pagination_buttons = get_pagination_buttons(page, total_pages, "users")
     if pagination_buttons:
         keyboard.append(pagination_buttons)
@@ -394,5 +434,15 @@ def get_group_access_keyboard():
         [InlineKeyboardButton("➕ Добавить пользователя", callback_data="group_access_add")],
         [InlineKeyboardButton("➖ Удалить пользователя", callback_data="group_access_remove")],
         get_back_button()[0]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_yes_no_keyboard(yes_data, no_data):
+    """Простая клавиатура Да/Нет"""
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Да", callback_data=yes_data),
+            InlineKeyboardButton("❌ Нет", callback_data=no_data)
+        ]
     ]
     return InlineKeyboardMarkup(keyboard)
