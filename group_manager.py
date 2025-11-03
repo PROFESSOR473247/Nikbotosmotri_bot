@@ -65,7 +65,7 @@ class GroupManager:
         user_role = get_user_role(user_id)
         accessible_groups = get_user_accessible_groups(user_id)
         
-        response = "📋 *СПИСОК ГРУПП И ПОДГРУПП*\n\n"
+        response = "📋 СПИСОК ГРУПП И ПОДГРУПП\n\n"
         
         for group_id, group_info in all_groups.items():
             group_name = group_info.get('name', group_id)
@@ -73,10 +73,10 @@ class GroupManager:
             
             # Проверяем доступ пользователя к группе
             if group_id in accessible_groups or user_role == "admin":
-                response += f"🏘️ *{group_name}* (ID: {group_id})\n"
+                response += f"🏘️ {group_name} (ID: {group_id})\n"
                 
                 if subgroups:
-                    response += "📁 *Подгруппы:*\n"
+                    response += "📁 Подгруппы:\n"
                     for subgroup_id, subgroup_name in subgroups.items():
                         response += f"  • {subgroup_name}\n"
                 else:
@@ -86,7 +86,7 @@ class GroupManager:
                 if user_role == "admin":
                     users_in_group = self._get_users_in_group(group_id)
                     if users_in_group:
-                        response += "👥 *Участники:*\n"
+                        response += "👥 Участники:\n"
                         for user_name in users_in_group:
                             response += f"  • {user_name}\n"
                     else:
@@ -94,7 +94,7 @@ class GroupManager:
                 
                 response += "───────\n"
         
-        await update.message.reply_text(response, parse_mode='Markdown')
+        await update.message.reply_text(response)
 
     def _get_users_in_group(self, group_id):
         """Получить список пользователей в группе"""
@@ -125,9 +125,8 @@ class GroupManager:
         }
         
         await update.message.reply_text(
-            "🏘️ *ШАГ 1/3: ВВЕДИТЕ НАЗВАНИЕ ГРУППЫ*\n\n"
-            "ℹ️ Используйте понятное название для идентификации",
-            parse_mode='Markdown'
+            "🏘️ ШАГ 1/3: ВВЕДИТЕ НАЗВАНИЕ ГРУППЫ\n\n"
+            "ℹ️ Используйте понятное название для идентификации"
         )
         
         return CREATE_GROUP_NAME
@@ -149,7 +148,7 @@ class GroupManager:
             return ConversationHandler.END
         
         # Формируем список пользователей для выбора
-        users_list = "👥 *СПИСОК ПОЛЬЗОВАТЕЛЕЙ:*\n\n"
+        users_list = "👥 СПИСОК ПОЛЬЗОВАТЕЛЕЙ:\n\n"
         user_ids = list(all_users.keys())
         
         for i, user_id in enumerate(user_ids, 1):
@@ -157,14 +156,13 @@ class GroupManager:
             user_name = user_data.get('name', f"User_{user_id}")
             users_list += f"{i}. {user_name} (ID: {user_id})\n"
         
-        users_list += "\n🔢 *УКАЖИТЕ НОМЕРА ПОЛЬЗОВАТЕЛЕЙ ЧЕРЕЗ ЗАПЯТУЮ* (например: 1,3,5)"
+        users_list += "\n🔢 УКАЖИТЕ НОМЕРА ПОЛЬЗОВАТЕЛЕЙ ЧЕРЕЗ ЗАПЯТУЮ (например: 1,3,5)"
         
         context.user_data['group_creation']['all_users'] = all_users
         context.user_data['group_creation']['user_ids'] = user_ids
         
         await update.message.reply_text(
-            f"👥 *ШАГ 2/3: ВЫБЕРИТЕ ПОЛЬЗОВАТЕЛЕЙ ДЛЯ ДОБАВЛЕНИЯ В ГРУППУ*\n\n{users_list}",
-            parse_mode='Markdown'
+            f"👥 ШАГ 2/3: ВЫБЕРИТЕ ПОЛЬЗОВАТЕЛЕЙ ДЛЯ ДОБАВЛЕНИЯ В ГРУППУ\n\n{users_list}"
         )
         
         return CREATE_GROUP_USERS
@@ -212,27 +210,26 @@ class GroupManager:
         
         await update.message.reply_text(
             confirmation_text,
-            reply_markup=keyboard,
-            parse_mode='Markdown'
+            reply_markup=keyboard
         )
         
         return CREATE_GROUP_CONFIRM
 
     def _format_group_confirmation(self, group_data):
         """Форматирование подтверждения группы"""
-        text = "✅ *ПОДТВЕРЖДЕНИЕ СОЗДАНИЯ ГРУППЫ*\n\n"
+        text = "✅ ПОДТВЕРЖДЕНИЕ СОЗДАНИЯ ГРУППЫ\n\n"
         
-        text += f"🏘️ *Название:* {group_data.get('group_name')}\n"
+        text += f"🏘️ Название: {group_data.get('group_name')}\n"
         
         selected_users = group_data.get('selected_users', [])
         if selected_users:
-            text += "👥 *Участники:*\n"
+            text += "👥 Участники:\n"
             for user in selected_users:
                 text += f"  • {user['name']} (ID: {user['id']})\n"
         else:
-            text += "👥 *Участники:* Нет\n"
+            text += "👥 Участники: Нет\n"
         
-        text += "\n❓ *Все верно?*"
+        text += "\n❓ Все верно?"
         
         return text
 
@@ -266,13 +263,11 @@ class GroupManager:
                 
                 await query.edit_message_text(
                     f"✅ Группа '{group_data['group_name']}' успешно создана!\n\n"
-                    f"🆔 ID группы: `{group_id}`",
-                    parse_mode='Markdown'
+                    f"🆔 ID группы: {group_id}"
                 )
             else:
                 await query.edit_message_text(
-                    f"❌ Ошибка при создании группы '{group_data['group_name']}'",
-                    parse_mode='Markdown'
+                    f"❌ Ошибка при создании группы '{group_data['group_name']}'"
                 )
         
         elif data == "edit_create_group":
@@ -307,9 +302,8 @@ class GroupManager:
         
         keyboard = get_groups_keyboard(accessible_groups)
         await update.message.reply_text(
-            "🏘️ *ВЫБЕРИТЕ ГРУППУ ДЛЯ СОЗДАНИЯ ПОДГРУППЫ*",
-            reply_markup=keyboard,
-            parse_mode='Markdown'
+            "🏘️ ВЫБЕРИТЕ ГРУППУ ДЛЯ СОЗДАНИЯ ПОДГРУППЫ",
+            reply_markup=keyboard
         )
         
         return CREATE_SUBGROUP_GROUP
@@ -338,9 +332,8 @@ class GroupManager:
             group_name = groups_data.get(group_id, {}).get('name', group_id)
             
             await query.edit_message_text(
-                f"📁 *ВВЕДИТЕ НАЗВАНИЕ ПОДГРУППЫ ДЛЯ ГРУППЫ '{group_name}'*\n\n"
-                f"ℹ️ Используйте понятное название для идентификации",
-                parse_mode='Markdown'
+                f"📁 ВВЕДИТЕ НАЗВАНИЕ ПОДГРУППЫ ДЛЯ ГРУППЫ '{group_name}'\n\n"
+                f"ℹ️ Используйте понятное название для идентификации"
             )
             
             return CREATE_SUBGROUP_NAME
@@ -367,18 +360,17 @@ class GroupManager:
         group_name = groups_data.get(group_id, {}).get('name', group_id)
         
         confirmation_text = (
-            f"✅ *ПОДТВЕРЖДЕНИЕ СОЗДАНИЯ ПОДГРУППЫ*\n\n"
-            f"🏘️ *Группа:* {group_name}\n"
-            f"📁 *Подгруппа:* {subgroup_data['subgroup_name']}\n\n"
-            f"❓ *Все верно?*"
+            f"✅ ПОДТВЕРЖДЕНИЕ СОЗДАНИЯ ПОДГРУППЫ\n\n"
+            f"🏘️ Группа: {group_name}\n"
+            f"📁 Подгруппа: {subgroup_data['subgroup_name']}\n\n"
+            f"❓ Все верно?"
         )
         
         keyboard = get_confirmation_keyboard("confirm_create_subgroup", "edit_create_subgroup")
         
         await update.message.reply_text(
             confirmation_text,
-            reply_markup=keyboard,
-            parse_mode='Markdown'
+            reply_markup=keyboard
         )
         
         return CREATE_SUBGROUP_CONFIRM
@@ -408,13 +400,11 @@ class GroupManager:
                 group_name = groups_data.get(subgroup_data['group_id'], {}).get('name', subgroup_data['group_id'])
                 
                 await query.edit_message_text(
-                    f"✅ Подгруппа '{subgroup_data['subgroup_name']}' успешно создана в группе '{group_name}'!",
-                    parse_mode='Markdown'
+                    f"✅ Подгруппа '{subgroup_data['subgroup_name']}' успешно создана в группе '{group_name}'!"
                 )
             else:
                 await query.edit_message_text(
-                    f"❌ Ошибка при создании подгруппы '{subgroup_data['subgroup_name']}'",
-                    parse_mode='Markdown'
+                    f"❌ Ошибка при создании подгруппы '{subgroup_data['subgroup_name']}'"
                 )
         
         elif data == "edit_create_subgroup":
@@ -449,9 +439,8 @@ class GroupManager:
         
         keyboard = get_groups_keyboard(all_groups)
         await update.message.reply_text(
-            "🗑️ *ВЫБЕРИТЕ ГРУППУ ДЛЯ УДАЛЕНИЯ*",
-            reply_markup=keyboard,
-            parse_mode='Markdown'
+            "🗑️ ВЫБЕРИТЕ ГРУППУ ДЛЯ УДАЛЕНИЯ",
+            reply_markup=keyboard
         )
         
         return DELETE_GROUP_SELECT
@@ -477,23 +466,22 @@ class GroupManager:
             subgroups = group_info.get('subgroups', {})
             
             warning_text = (
-                f"⚠️ *ВЫ УВЕРЕНЫ, ЧТО ХОТИТЕ УДАЛИТЬ ГРУППУ?*\n\n"
-                f"🏘️ *Группа:* {group_name}\n"
-                f"📁 *Подгруппы:* {len(subgroups)}\n"
-                f"👥 *Участники:* {len(self._get_users_in_group(group_id))}\n\n"
+                f"⚠️ ВЫ УВЕРЕНЫ, ЧТО ХОТИТЕ УДАЛИТЬ ГРУППУ?\n\n"
+                f"🏘️ Группа: {group_name}\n"
+                f"📁 Подгруппы: {len(subgroups)}\n"
+                f"👥 Участники: {len(self._get_users_in_group(group_id))}\n\n"
             )
             
             if subgroups:
-                warning_text += f"❌ *ПРИ УДАЛЕНИИ ДАННОЙ ГРУППЫ ВСЕ ПОДГРУППЫ И ШАБЛОНЫ В НИХ ТАКЖЕ УДАЛЯТСЯ!*\n\n"
+                warning_text += f"❌ ПРИ УДАЛЕНИИ ДАННОЙ ГРУППЫ ВСЕ ПОДГРУППЫ И ШАБЛОНЫ В НИХ ТАКЖЕ УДАЛЯТСЯ!\n\n"
             
-            warning_text += f"🚫 *Это действие нельзя отменить!*"
+            warning_text += f"🚫 Это действие нельзя отменить!"
             
             keyboard = get_confirmation_keyboard("confirm_delete_group", "cancel_delete_group")
             
             await query.edit_message_text(
                 warning_text,
-                reply_markup=keyboard,
-                parse_mode='Markdown'
+                reply_markup=keyboard
             )
             
             return DELETE_GROUP_CONFIRM
@@ -522,13 +510,11 @@ class GroupManager:
             
             if success:
                 await query.edit_message_text(
-                    f"✅ Группа '{group_name}' успешно удалена!",
-                    parse_mode='Markdown'
+                    f"✅ Группа '{group_name}' успешно удалена!"
                 )
             else:
                 await query.edit_message_text(
-                    f"❌ Ошибка при удалении группы '{group_name}'",
-                    parse_mode='Markdown'
+                    f"❌ Ошибка при удалении группы '{group_name}'"
                 )
         else:
             await query.edit_message_text("❌ Удаление группы отменено")
@@ -575,9 +561,8 @@ class GroupManager:
         
         keyboard = get_groups_keyboard(groups_with_subgroups)
         await update.message.reply_text(
-            "🏘️ *ВЫБЕРИТЕ ГРУППУ ДЛЯ УДАЛЕНИЯ ПОДГРУППЫ*",
-            reply_markup=keyboard,
-            parse_mode='Markdown'
+            "🏘️ ВЫБЕРИТЕ ГРУППУ ДЛЯ УДАЛЕНИЯ ПОДГРУППЫ",
+            reply_markup=keyboard
         )
         
         return DELETE_SUBGROUP_GROUP
@@ -624,9 +609,8 @@ class GroupManager:
             keyboard = self._get_subgroups_keyboard(subgroups, group_id)
             
             await query.edit_message_text(
-                f"📁 *ВЫБЕРИТЕ ПОДГРУППУ ДЛЯ УДАЛЕНИЯ ИЗ ГРУППЫ '{group_name}'*",
-                reply_markup=keyboard,
-                parse_mode='Markdown'
+                f"📁 ВЫБЕРИТЕ ПОДГРУППУ ДЛЯ УДАЛЕНИЯ ИЗ ГРУППЫ '{group_name}'",
+                reply_markup=keyboard
             )
             
             return DELETE_SUBGROUP_SELECT
@@ -675,9 +659,8 @@ class GroupManager:
             
             keyboard = get_groups_keyboard(groups_with_subgroups)
             await query.edit_message_text(
-                "🏘️ *ВЫБЕРИТЕ ГРУППУ ДЛЯ УДАЛЕНИЯ ПОДГРУППЫ*",
-                reply_markup=keyboard,
-                parse_mode='Markdown'
+                "🏘️ ВЫБЕРИТЕ ГРУППУ ДЛЯ УДАЛЕНИЯ ПОДГРУППЫ",
+                reply_markup=keyboard
             )
             return DELETE_SUBGROUP_GROUP
         
@@ -697,18 +680,17 @@ class GroupManager:
                 subgroup_name = group_info.get('subgroups', {}).get(subgroup_id, subgroup_id)
                 
                 warning_text = (
-                    f"⚠️ *ВЫ УВЕРЕНЫ, ЧТО ХОТИТЕ УДАЛИТЬ ПОДГРУППУ?*\n\n"
-                    f"🏘️ *Группа:* {group_name}\n"
-                    f"📁 *Подгруппа:* {subgroup_name}\n\n"
-                    f"🚫 *Это действие нельзя отменить!*"
+                    f"⚠️ ВЫ УВЕРЕНЫ, ЧТО ХОТИТЕ УДАЛИТЬ ПОДГРУППУ?\n\n"
+                    f"🏘️ Группа: {group_name}\n"
+                    f"📁 Подгруппа: {subgroup_name}\n\n"
+                    f"🚫 Это действие нельзя отменить!"
                 )
                 
                 keyboard = get_confirmation_keyboard("confirm_delete_subgroup", "cancel_delete_subgroup")
                 
                 await query.edit_message_text(
                     warning_text,
-                    reply_markup=keyboard,
-                    parse_mode='Markdown'
+                    reply_markup=keyboard
                 )
                 
                 return DELETE_SUBGROUP_CONFIRM
@@ -739,13 +721,11 @@ class GroupManager:
             
             if success:
                 await query.edit_message_text(
-                    f"✅ Подгруппа '{subgroup_name}' успешно удалена из группы '{group_name}'!",
-                    parse_mode='Markdown'
+                    f"✅ Подгруппа '{subgroup_name}' успешно удалена из группы '{group_name}'!"
                 )
             else:
                 await query.edit_message_text(
-                    f"❌ Ошибка при удалении подгруппы '{subgroup_name}'",
-                    parse_mode='Markdown'
+                    f"❌ Ошибка при удалении подгруппы '{subgroup_name}'"
                 )
         else:
             await query.edit_message_text("❌ Удаление подгруппы отменено")
@@ -815,31 +795,30 @@ class GroupManager:
             group_name = group_info.get('name', group_id)
             subgroups = group_info.get('subgroups', {})
             
-            response = f"🏘️ *Информация о группе: {group_name}*\n\n"
+            response = f"🏘️ Информация о группе: {group_name}\n\n"
             
             if subgroups:
-                response += "📁 *Подгруппы:*\n"
+                response += "📁 Подгруппы:\n"
                 for subgroup_id, subgroup_name in subgroups.items():
                     response += f"  • {subgroup_name}\n"
             else:
-                response += "📭 *Подгруппы:* Нет\n"
+                response += "📭 Подгруппы: Нет\n"
             
             # Показываем участников
             users_in_group = self._get_users_in_group(group_id)
             if users_in_group:
-                response += "👥 *Участники:*\n"
+                response += "👥 Участники:\n"
                 for user_name in users_in_group:
                     response += f"  • {user_name}\n"
             else:
-                response += "👥 *Участники:* Нет\n"
+                response += "👥 Участники: Нет\n"
             
             from menu_manager import get_back_button
             keyboard = InlineKeyboardMarkup([get_back_button()])
             
             await query.edit_message_text(
                 response,
-                reply_markup=keyboard,
-                parse_mode='Markdown'
+                reply_markup=keyboard
             )
 
     async def handle_unexpected_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
