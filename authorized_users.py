@@ -46,13 +46,13 @@ def is_admin(user_id):
 def add_user(user_id, username):
     """Добавляет пользователя"""
     users_data = load_users()
-    
+    
     if str(user_id) in users_data.get('users', {}):
         return False, "Пользователь уже существует"
-    
+    
     users_data['users'][str(user_id)] = username
     success, message = save_users(users_data)
-    
+    
     if success:
         return True, f"Пользователь {username} (ID: {user_id}) добавлен"
     else:
@@ -62,18 +62,18 @@ def remove_user(user_id):
     """Удаляет пользователя"""
     users_data = load_users()
     user_id_str = str(user_id)
-    
+    
     if user_id_str not in users_data.get('users', {}):
         return False, "Пользователь не найден"
-    
+    
     if user_id == users_data.get('admin_id'):
         return False, "Нельзя удалить администратора"
-    
+    
     username = users_data['users'][user_id_str]
     del users_data['users'][user_id_str]
-    
+    
     success, message = save_users(users_data)
-    
+    
     if success:
         return True, f"Пользователь {username} (ID: {user_id}) удален"
     else:
