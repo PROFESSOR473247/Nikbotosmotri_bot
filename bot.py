@@ -1,203 +1,52 @@
 import logging
 import asyncio
+import os
+import sys
+import datetime
+import pytz
+import threading
+import time
+import requests
+from datetime import timedelta
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, filters, 
     ContextTypes, ConversationHandler, CallbackQueryHandler,
     JobQueue
 )
+
+# Импорты конфигурации и пользователей
 from config import BOT_TOKEN
-from authorized_users import is_authorized, is_admin, add_user, remove_user, get_users_list, get_admin_id
-import datetime
-import pytz
-from datetime import timedelta
-import sys
-import os
-import requests
-import threading
-import time
+from authorized_users import is_authorized, is_admin, add_user, remove_user, get_users_list, get_admin_id, get_user_groups, update_user_groups
 
-# Принудительно перезагружаем модуль templates
-if 'templates' in sys.modules:
-    del sys.modules['templates']
+# Импорты системы шаблонов
+from template_manager import (
+    get_user_accessible_groups, create_template, update_template, 
+    delete_template, get_template, get_templates_by_group,
+    save_image, format_template_info, DAYS_OF_WEEK, FREQUENCY_TYPES,
+    load_groups, load_templates
+)
 
-# Импортируем шаблоны
-TEMPLATES = {}
-try:
-    from templates import TEMPLATES as IMPORTED_TEMPLATES
-    TEMPLATES = IMPORTED_TEMPLATES
-
-    print("✅ Шаблоны загружены успешно")
-
-    # Проверяем наличие обязательных шаблонов
-    required_templates = ['hongqi_template1', 'hongqi_template2', 'turbomatiz_template1', 'turbomatiz_template2',
-                          'turbomatiz_template3']
-    missing_templates = []
-
-    for template in required_templates:
-        if template not in TEMPLATES:
-            missing_templates.append(template)
-
-    if missing_templates:
-        print(f"❌ КРИТИЧЕСКАЯ ОШИБКА: Отсутствуют шаблоны: {missing_templates}")
-        print("❌ Проверьте файл templates.py")
-        exit(1)
-
-    print(f"🔧 Загруженные шаблоны: {list(TEMPLATES.keys())}")
-
-except ImportError as import_error:
-    print(f"❌ Ошибка загрузки шаблонов: {import_error}")
-    print("❌ Создайте файл templates.py с необходимыми шаблонами!")
-    exit(1)
-
+# Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 
-# Храним активные задания для каждого чата
+# Состояния для ConversationHandler
+(
+    TEMPLATES_MAIN, TEMPLATE_LIST_GROUPS, TEMPLATE_LIST_SUBGROUPS, TEMPLATE_LIST_TEMPLATES,
+    ADD_TEMPLATE_GROUP, ADD_TEMPLATE_SUBGROUP, ADD_TEMPLATE_NAME, ADD_TEMPLATE_TEXT,
+    ADD_TEMPLATE_IMAGE, ADD_TEMPLATE_TIME, ADD_TEMPLATE_DAYS, ADD_TEMPLATE_FREQUENCY,
+    ADD_TEMPLATE_SECOND_DAY, ADD_TEMPLATE_CONFIRM, EDIT_TEMPLATE_FIELD,
+    EDIT_TEMPLATE_GROUP, EDIT_TEMPLATE_TEXT, EDIT_TEMPLATE_IMAGE, EDIT_TEMPLATE_TIME,
+    EDIT_TEMPLATE_DAYS, EDIT_TEMPLATE_FREQUENCY, DELETE_TEMPLATE_CONFIRM,
+    USER_MANAGEMENT_MAIN, USER_MANAGEMENT_ADD, USER_MANAGEMENT_REMOVE, USER_MANAGEMENT_LIST
+) = range(26)
+
+# Глобальные переменные для заданий
 active_jobs = {}
 test_jobs = {}
-
-# Функция для поддержания бота онлайн (решение проблемы отключения)
-def keep_alive():
-    """Периодически пингует приложение чтобы не дать ему заснуть"""
-    def ping():
-        while True:
-            try:
-                # Получаем URL из переменной окружения Render
-                render_url = os.environ.get('RENDER_EXTERNAL_URL')
-                if render_url:
-                    response = requests.get(render_url, timeout=10)
-                    print(f"🔄 Пинг отправлен: {response.status_code}")
-                else:
-                    # Если URL нет, просто логируем
-                    print("🔄 Keep-alive: бот активен")
-            except Exception as e:
-                print(f"⚠️ Ошибка пинга: {e}")
-            time.sleep(300)  # Пинг каждые 5 минут
-    
-    # Запускаем в отдельном потоке
-    ping_thread = threading.Thread(target=ping, daemon=True)
-    ping_thread.start()
-    print("✅ Keep-alive система запущена")
-
-async def send_template_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int, template_name: str):
-    """Отправляет сообщение по шаблону с изображением"""
-    current_time = datetime.datetime.now(pytz.timezone('Europe/Moscow')).strftime("%H:%M:%S")
-    print(f"📨 [{current_time}] Отправка {template_name} в чат {chat_id}")
-
-    try:
-        # Для turbomatiz_template3 проверяем четность недели (раз в 2 недели)
-        if template_name == 'turbomatiz_template3':
-            week_number = datetime.datetime.now().isocalendar()[1]
-            if week_number % 2 != 0:  # Отправляем только по четным неделям
-                print(f"⏭️ Пропуск отправки {template_name} (нечетная неделя)")
-                return
-
-        template_data = TEMPLATES[template_name]
-
-        # Проверяем структуру данных
-        if isinstance(template_data, dict):
-            text = template_data["text"]
-            image_path = template_data.get("image")
-        else:
-            # Для обратной совместимости, если шаблон - просто строка
-            text = template_data
-            image_path = None
-
-        print(f"🔍 Текст для отправки: {text[:100]}...")
-        print(f"🔍 Путь к изображению: {image_path}")
-
-        # ДИАГНОСТИКА: добавляем информацию о путях
-        if image_path:
-            absolute_path = os.path.abspath(image_path)
-            print(f"🔍 Абсолютный путь к изображению: {absolute_path}")
-            print(f"🔍 Файл существует: {os.path.exists(absolute_path)}")
-            if os.path.exists(absolute_path):
-                print(f"🔍 Размер файла: {os.path.getsize(absolute_path)} байт")
-
-        if image_path and os.path.exists(image_path):
-            print(f"🖼️ Отправка с изображением: {image_path}")
-            try:
-                # Отправляем изображение с подписью
-                with open(image_path, 'rb') as photo:
-                    await context.bot.send_photo(
-                        chat_id=chat_id,
-                        photo=photo,
-                        caption=text
-                    )
-                print(f"✅ [{current_time}] {template_name} с изображением отправлен в чат {chat_id}")
-            except Exception as img_error:
-                print(f"❌ Ошибка отправки изображения: {img_error}")
-                # Отправляем только текст если изображение не загружается
-                await context.bot.send_message(chat_id, text=text)
-                print(f"✅ [{current_time}] {template_name} отправлен в чат {chat_id} (только текст)")
-        else:
-            if image_path:
-                print(f"⚠️ Изображение не найдено: {image_path}")
-            # Если изображения нет, отправляем только текст
-            await context.bot.send_message(chat_id, text=text)
-            print(f"✅ [{current_time}] {template_name} отправлен в чат {chat_id} (только текст)")
-
-    except Exception as send_error:
-        print(f"❌ [{current_time}] Ошибка отправки {template_name}: {send_error}")
-
-async def send_test_template_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int, template_name: str):
-    """Отправляет тестовое сообщение по шаблону с изображением"""
-    current_time = datetime.datetime.now(pytz.timezone('Europe/Moscow')).strftime("%H:%M:%S")
-    print(f"🧪 [{current_time}] Тестовая отправка {template_name} в чат {chat_id}")
-
-    try:
-        template_data = TEMPLATES[template_name]
-
-        if isinstance(template_data, dict):
-            text = template_data["text"]
-            image_path = template_data.get("image")
-        else:
-            text = template_data
-            image_path = None
-
-        print(f"🔍 Текст для тестовой отправки: {text[:100]}...")
-        print(f"🔍 Путь к изображению: {image_path}")
-
-        # ДИАГНОСТИКА: добавляем информацию о путях
-        if image_path:
-            absolute_path = os.path.abspath(image_path)
-            print(f"🔍 Абсолютный путь к изображению: {absolute_path}")
-            print(f"🔍 Файл существует: {os.path.exists(absolute_path)}")
-            if os.path.exists(absolute_path):
-                print(f"🔍 Размер файла: {os.path.getsize(absolute_path)} байт")
-
-        if image_path and os.path.exists(image_path):
-            print(f"🖼️ Тестовая отправка с изображением: {image_path}")
-            try:
-                with open(image_path, 'rb') as photo:
-                    await context.bot.send_photo(
-                        chat_id=chat_id,
-                        photo=photo,
-                        caption=text
-                    )
-                print(f"✅ [{current_time}] Тест {template_name} с изображением отправлен в чат {chat_id}")
-            except Exception as img_error:
-                print(f"❌ Ошибка отправки изображения: {img_error}")
-                await context.bot.send_message(chat_id, text=text)
-                print(f"✅ [{current_time}] Тест {template_name} отправлен в чат {chat_id} (только текст)")
-        else:
-            if image_path:
-                print(f"⚠️ Изображение для теста не найдено: {image_path}")
-            await context.bot.send_message(chat_id, text=text)
-            print(f"✅ [{current_time}] Тест {template_name} отправлен в чат {chat_id} (только текст)")
-
-        # Удаляем задание из тестовых после выполнения
-        if chat_id in test_jobs and template_name in test_jobs[chat_id]:
-            del test_jobs[chat_id][template_name]
-
-    except Exception as test_error:
-        print(f"❌ [{current_time}] Ошибка тестовой отправки {template_name}: {test_error}")
-
-# Состояния для ConversationHandler
-ADD_USER_ID, ADD_USER_NAME = range(2)
 
 # Декоратор для проверки авторизации
 def authorization_required(func):
@@ -228,6 +77,7 @@ def admin_required(func):
         return await func(update, context, *args, **kwargs)
     return wrapper
 
+# Клавиатуры
 def get_main_keyboard():
     """Создает главное меню для авторизованных пользователей"""
     keyboard = [
@@ -243,33 +93,107 @@ def get_unauthorized_keyboard():
         ["🆔 Получить ID"],
         ["📋 Справка"]
     ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True,
-                               input_field_placeholder="Для доступа обратитесь к администратору")
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, input_field_placeholder="Для доступа обратитесь к администратору")
 
-def get_templates_keyboard():
-    """Создает меню выбора бренда"""
+def get_templates_main_keyboard():
+    """Главное меню шаблонов"""
     keyboard = [
-        ["🚗 Осмотры Hongqi", "🚙 Осмотры TurboMatiz"],
+        ["📋 Список шаблонов"],
+        ["➕ Добавить новый"],
+        ["✏️ Редактировать"], 
+        ["🗑️ Удалить"],
         ["🔙 Главное меню"]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-def get_hongqi_keyboard():
-    """Создает меню Hongqi"""
+def get_groups_keyboard(user_id, action="list"):
+    """Клавиатура с группами пользователя"""
+    accessible_groups = get_user_accessible_groups(user_id)
+    keyboard = []
+    
+    for group_id, group_data in accessible_groups.items():
+        keyboard.append([f"{group_data['name']}"])
+    
+    if action == "list":
+        keyboard.append(["🔙 К шаблонам"])
+    else:
+        keyboard.append(["🔙 Назад"])
+        
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_subgroups_keyboard(group_id, action="list"):
+    """Клавиатура с подгруппами группы"""
+    groups_data = load_groups()
+    group_data = groups_data['groups'].get(group_id, {})
+    subgroups = group_data.get('subgroups', {})
+    
+    keyboard = []
+    for subgroup_id, subgroup_name in subgroups.items():
+        keyboard.append([f"{subgroup_name}"])
+    
+    keyboard.append(["📁 Без подгруппы"])
+    
+    if action == "list":
+        keyboard.append(["🔙 К группам"])
+    else:
+        keyboard.append(["🔙 Назад"])
+        
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_back_keyboard():
+    """Простая кнопка назад"""
+    return ReplyKeyboardMarkup([["🔙 Назад"]], resize_keyboard=True)
+
+def get_skip_keyboard():
+    """Клавиатура с пропуском"""
+    return ReplyKeyboardMarkup([["⏭️ Пропустить"], ["🔙 Назад"]], resize_keyboard=True)
+
+def get_days_keyboard():
+    """Клавиатура выбора дней недели"""
+    keyboard = []
+    days_list = list(DAYS_OF_WEEK.values())
+    
+    # Разбиваем на 2 строки
+    keyboard.append(days_list[:4])  # Пн-Чт
+    keyboard.append(days_list[4:])  # Пт-Вс
+    keyboard.append(["🔙 Назад"])
+    
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_frequency_keyboard():
+    """Клавиатура выбора периодичности"""
     keyboard = [
-        ["🔍 Дистанционный осмотр Н5", "⏰ Напоминание осмотра Н5"],
-        ["🛑 Остановить все шаблоны Hongqi"],
-        ["🔙 К выбору бренда", "🔙 Главное меню"]
+        ["🔄 2 в неделю"],
+        ["📅 1 в неделю"],
+        ["🗓️ 2 в месяц"],
+        ["📆 1 в месяц"],
+        ["🔙 Назад"]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-def get_turbomatiz_keyboard():
-    """Создает меню TurboMatiz"""
+def get_edit_fields_keyboard():
+    """Клавиатура выбора поля для редактирования"""
     keyboard = [
-        ["💳 Оплата", "🔍 Осмотр"],
-        ["🧼 Чистый кузов"],
-        ["🛑 Остановить все шаблоны TurboMatiz"],
-        ["🔙 К выбору бренда", "🔙 Главное меню"]
+        ["🏷️ Группу", "📂 Подгруппу"],
+        ["📝 Текст", "🖼️ Изображение"],
+        ["⏰ Время", "🔄 Периодичность"],
+        ["✅ Подтвердить", "🔙 Назад"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_confirmation_keyboard():
+    """Клавиатура подтверждения"""
+    keyboard = [
+        ["✅ Подтвердить"],
+        ["✏️ Изменить"],
+        ["🔙 Назад"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_yes_no_keyboard():
+    """Клавиатура Да/Нет"""
+    keyboard = [
+        ["✅ Да", "❌ Нет"]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -279,23 +203,6 @@ def get_testing_keyboard():
         ["🚗 Тест Hongqi", "🚙 Тест TurboMatiz"],
         ["🛑 Остановить все тестирования"],
         ["🔙 Главное меню"]
-    ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
-def get_test_hongqi_keyboard():
-    """Создает меню тестирования Hongqi"""
-    keyboard = [
-        ["🔍 Тест осмотр Н5", "⏰ Тест напоминание Н5"],
-        ["🔙 К тестированию", "🔙 Главное меню"]
-    ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
-def get_test_turbomatiz_keyboard():
-    """Создает меню тестирования TurboMatiz"""
-    keyboard = [
-        ["💳 Тест оплата", "🔍 Тест осмотр"],
-        ["🧼 Тест чистый кузов"],
-        ["🔙 К тестированию", "🔙 Главное меню"]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -317,42 +224,12 @@ def get_user_management_keyboard():
     """Создает меню управления пользователями"""
     keyboard = [
         ["➕ Добавить пользователя", "➖ Удалить пользователя"],
-        ["📋 Список пользователей"],
+        ["📋 Список пользователей", "🎯 Назначить группы"],
         ["🔙 Назад к ЕЩЕ"]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-def get_remove_user_keyboard():
-    """Создает клавиатуру для удаления пользователей"""
-    users = get_users_list()
-    admin_id = get_admin_id()
-
-    keyboard = []
-    for user_id_str, username in users.items():
-        user_id = int(user_id_str)
-        # Пропускаем администратора
-        if user_id == admin_id:
-            continue
-        keyboard.append([f"❌ {username} (ID: {user_id})"])
-
-    keyboard.append(["🔙 Назад к управлению"])
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
-def get_confirmation_keyboard(user_id):
-    """Создает клавиатуру подтверждения удаления"""
-    keyboard = [
-        [
-            InlineKeyboardButton("✅ Да, удалить", callback_data=f"confirm_remove_{user_id}"),
-            InlineKeyboardButton("❌ Нет, отмена", callback_data="cancel_remove")
-        ]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-def get_back_to_management_keyboard():
-    """Создает кнопку возврата к управлению пользователями"""
-    keyboard = [["🔙 Назад к управлению"]]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
+# Функции для работы со временем
 def moscow_to_utc(time_str):
     """Конвертирует время из московского в UTC"""
     try:
@@ -386,12 +263,12 @@ def format_time_delta(delta):
 
     return " ".join(parts) if parts else "менее секунды"
 
+# Основные команды бота
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
     current_time = datetime.datetime.now(pytz.timezone('Europe/Moscow')).strftime("%H:%M:%S")
 
-    # Проверяем авторизацию
     if not is_authorized(user_id):
         welcome_text = (
             f'🤖 БОТ С МНОГОУРОВНЕВЫМ МЕНЮ\n'
@@ -412,7 +289,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"🚫 Неавторизованный доступ от user_id: {user_id}")
         return
 
-    # Если пользователь авторизован - показываем полное меню
     welcome_text = (
         f'🤖 БОТ С МНОГОУРОВНЕВЫМ МЕНЮ\n'
         f'Текущее время: {current_time} (МСК)\n'
@@ -433,10 +309,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @authorization_required
 async def update_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Принудительно обновляет меню на новую версию"""
+    """Принудительно обновляет меню"""
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
-    print(f"🔄 Принудительное обновление на новое меню для чата {chat_id}, user_id: {user_id}")
+    print(f"🔄 Принудительное обновление на новое меню для чат {chat_id}, user_id: {user_id}")
 
     await update.message.reply_text(
         "🔄 Удаляю старое меню...",
@@ -455,7 +331,7 @@ async def update_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать справку по командам - доступно всем"""
+    """Показать справку по командам"""
     user_id = update.effective_user.id
 
     help_text = """
@@ -477,7 +353,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🔐 Для получения доступа обратитесь к администратору
 """
 
-    # Определяем какую клавиатуру показывать
     if is_authorized(user_id):
         await update.message.reply_text(help_text, reply_markup=get_main_keyboard())
     else:
@@ -492,13 +367,11 @@ async def now(update: Update, _: ContextTypes.DEFAULT_TYPE):
         reply_markup=get_main_keyboard()
     )
 
-# Эта функция должна быть БЕЗ декоратора @authorization_required
 async def my_id(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Показывает user_id пользователя - доступно всем"""
+    """Показывает user_id пользователя"""
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
 
-    # Определяем какую клавиатуру показывать в зависимости от авторизации
     if is_authorized(user_id):
         reply_markup = get_main_keyboard()
         additional_text = "✅ Вы авторизованы и имеете доступ ко всем функциям бота"
@@ -515,720 +388,586 @@ async def my_id(update: Update, _: ContextTypes.DEFAULT_TYPE):
     )
     print(f"📋 Показан ID для user_id: {user_id}")
 
+# ===== СИСТЕМА ШАБЛОНОВ =====
+
 @authorization_required
-async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    current_time = datetime.datetime.now(pytz.timezone('Europe/Moscow'))
-    status_text = "📊 СТАТУС АКТИВНЫХ ШАБЛОНОВ:\n\n"
-
-    # Основные шаблоны
-    status_text += "🔹 ОСНОВНЫЕ ШАБЛОНЫ:\n"
-    if chat_id in active_jobs:
-        template_names = {
-            'hongqi_template1': '🚗 Дистанционный осмотр Н5 (воскресенье 16:00)',
-            'hongqi_template2': '⏰ Напоминание осмотра Н5 (понедельник 07:00)',
-            'turbomatiz_template1': '💳 Оплата TurboMatiz (воскресенье 16:00)',
-            'turbomatiz_template2': '🔍 Осмотр TurboMatiz (вторник/пятница 16:00)',
-            'turbomatiz_template3': '🧼 Чистый кузов TurboMatiz (понедельник 15:00, раз в 2 недели)'
-        }
-
-        for template_name, job in active_jobs[chat_id].items():
-            next_run = job.next_run_time
-            if next_run:
-                next_run_moscow = next_run.astimezone(pytz.timezone('Europe/Moscow'))
-                time_left = next_run_moscow - current_time
-                display_name = template_names.get(template_name, template_name)
-                status_text += f"✅ {display_name}\n   📅 Следующая отправка: {next_run_moscow.strftime('%d.%m.%Y %H:%M')}\n   ⏰ Осталось: {format_time_delta(time_left)}\n\n"
-            else:
-                display_name = template_names.get(template_name, template_name)
-                status_text += f"✅ {display_name}: АКТИВЕН (время не установлено)\n\n"
-    else:
-        status_text += "❌ Нет активных основных шаблонов\n\n"
-
-    # Тестовые шаблоны
-    status_text += "🔹 ТЕСТОВЫЕ ОТПРАВКИ:\n"
-    if chat_id in test_jobs:
-        for template_name, job in test_jobs[chat_id].items():
-            next_run = job.next_run_time
-            if next_run:
-                next_run_moscow = next_run.astimezone(pytz.timezone('Europe/Moscow'))
-                time_left = next_run_moscow - current_time
-                status_text += f"🧪 Тест {template_name}: АКТИВЕН\n   📅 Время отправки: {next_run_moscow.strftime('%d.%m.%Y %H:%M:%S')}\n   ⏰ Осталось: {format_time_delta(time_left)}\n\n"
-            else:
-                status_text += f"🧪 Тест {template_name}: АКТИВЕН (время не установлено)\n\n"
-    else:
-        status_text += "❌ Нет активных тестов\n"
-
-    await update.message.reply_text(status_text, reply_markup=get_main_keyboard())
-
-# Функции управления пользователями
-@admin_required
-async def user_management(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Меню управления пользователями"""
-    print(f"🔍 DEBUG: user_management вызван пользователем {update.effective_user.id}")
+async def templates_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Главное меню шаблонов"""
     await update.message.reply_text(
-        "👥 Управление пользователями\n\n"
+        "🎯 **Управление шаблонами**\n\n"
         "Выберите действие:",
-        reply_markup=get_user_management_keyboard()
+        parse_mode='Markdown',
+        reply_markup=get_templates_main_keyboard()
     )
+    return TEMPLATES_MAIN
 
-@admin_required
-async def add_user_start(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Начало процесса добавления пользователя"""
-    print(f"🔍 DEBUG: add_user_start вызван пользователем {update.effective_user.id}")
+# === СПИСОК ШАБЛОНОВ ===
+@authorization_required
+async def template_list_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Начало просмотра списка шаблонов"""
+    user_id = update.effective_user.id
+    accessible_groups = get_user_accessible_groups(user_id)
+    
+    if not accessible_groups:
+        await update.message.reply_text(
+            "❌ У вас нет доступа ни к одной группе шаблонов\n\n"
+            "Обратитесь к администратору для получения доступа",
+            reply_markup=get_templates_main_keyboard()
+        )
+        return TEMPLATES_MAIN
+    
     await update.message.reply_text(
-        "➕ ДОБАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯ\n\n"
-        "Шаг 1 из 2:\n"
-        "Введите ID пользователя (только цифры):\n\n"
-        "❌ Для отмены введите /cancel",
-        reply_markup=ReplyKeyboardRemove()
+        "📋 **Список шаблонов**\n\n"
+        "Выберите группу:",
+        parse_mode='Markdown',
+        reply_markup=get_groups_keyboard(user_id, "list")
     )
-    return ADD_USER_ID
+    return TEMPLATE_LIST_GROUPS
 
-@admin_required
-async def add_user_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка ID пользователя"""
-    user_id_text = update.message.text.strip()
-    print(f"🔍 DEBUG: add_user_id вызван с текстом: '{user_id_text}'")
+@authorization_required
+async def template_list_choose_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка выбора группы для просмотра"""
+    group_name = update.message.text
+    user_id = update.effective_user.id
+    
+    # Находим ID группы по имени
+    accessible_groups = get_user_accessible_groups(user_id)
+    group_id = None
+    for gid, gdata in accessible_groups.items():
+        if gdata['name'] == group_name:
+            group_id = gid
+            break
+    
+    if not group_id:
+        await update.message.reply_text(
+            "❌ Группа не найдена",
+            reply_markup=get_groups_keyboard(user_id, "list")
+        )
+        return TEMPLATE_LIST_GROUPS
+    
+    context.user_data['current_group'] = group_id
+    context.user_data['current_group_name'] = group_name
+    
+    # Проверяем есть ли подгруппы
+    groups_data = load_groups()
+    group_data = groups_data['groups'].get(group_id, {})
+    subgroups = group_data.get('subgroups', {})
+    
+    if subgroups:
+        await update.message.reply_text(
+            f"📂 **{group_name}**\n\n"
+            "Выберите подгруппу:",
+            parse_mode='Markdown',
+            reply_markup=get_subgroups_keyboard(group_id, "list")
+        )
+        return TEMPLATE_LIST_SUBGROUPS
+    else:
+        # Если подгрупп нет, сразу показываем шаблоны
+        return await show_templates_list(update, context)
+
+@authorization_required
+async def template_list_choose_subgroup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка выбора подгруппы для просмотра"""
+    subgroup_text = update.message.text
+    group_id = context.user_data.get('current_group')
+    
+    if subgroup_text == "📁 Без подгруппы":
+        context.user_data['current_subgroup'] = None
+    else:
+        # Находим ID подгруппы по имени
+        groups_data = load_groups()
+        group_data = groups_data['groups'].get(group_id, {})
+        subgroups = group_data.get('subgroups', {})
+        
+        subgroup_id = None
+        for sid, sname in subgroups.items():
+            if sname == subgroup_text:
+                subgroup_id = sid
+                break
+        
+        if subgroup_id:
+            context.user_data['current_subgroup'] = subgroup_id
+        else:
+            context.user_data['current_subgroup'] = None
+    
+    return await show_templates_list(update, context)
+
+async def show_templates_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает список шаблонов в выбранной группе/подгруппе"""
+    group_id = context.user_data.get('current_group')
+    subgroup_id = context.user_data.get('current_subgroup')
+    group_name = context.user_data.get('current_group_name', '')
+    
+    templates = get_templates_by_group(group_id, subgroup_id)
+    
+    if not templates:
+        await update.message.reply_text(
+            f"📭 **{group_name}**\n\n"
+            "В этой группе пока нет шаблонов",
+            parse_mode='Markdown',
+            reply_markup=get_templates_main_keyboard()
+        )
+        return TEMPLATES_MAIN
+    
+    # Показываем первые 5 шаблонов (для простоты)
+    message_text = f"📋 **Шаблоны в {group_name}**\n\n"
+    for i, (template_id, template) in enumerate(templates[:5], 1):
+        message_text += f"{i}. **{template['name']}**\n"
+        message_text += f"   ⏰ {template.get('time', 'Не указано')}\n"
+        message_text += f"   📅 {len(template.get('days', []))} дней\n\n"
+    
+    if len(templates) > 5:
+        message_text += f"📄 ... и еще {len(templates) - 5} шаблонов\n\n"
+    
+    message_text += "Для управления шаблонами используйте соответствующие кнопки в меню"
+    
+    await update.message.reply_text(
+        message_text,
+        parse_mode='Markdown',
+        reply_markup=get_templates_main_keyboard()
+    )
+    return TEMPLATES_MAIN
+
+# === ДОБАВЛЕНИЕ ШАБЛОНА ===
+@authorization_required
+async def add_template_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Начало создания шаблона"""
+    user_id = update.effective_user.id
+    accessible_groups = get_user_accessible_groups(user_id)
+    
+    if not accessible_groups:
+        await update.message.reply_text(
+            "❌ У вас нет доступа ни к одной группе шаблонов",
+            reply_markup=get_templates_main_keyboard()
+        )
+        return TEMPLATES_MAIN
+    
+    context.user_data['new_template'] = {
+        'created_by': user_id
+    }
+    
+    await update.message.reply_text(
+        "➕ **Создание нового шаблона**\n\n"
+        "Шаг 1 из 8: Выберите группу:",
+        parse_mode='Markdown',
+        reply_markup=get_groups_keyboard(user_id, "add")
+    )
+    return ADD_TEMPLATE_GROUP
+
+@authorization_required
+async def add_template_choose_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор группы для нового шаблона"""
+    group_name = update.message.text
+    user_id = update.effective_user.id
+    
+    # Находим ID группы по имени
+    accessible_groups = get_user_accessible_groups(user_id)
+    group_id = None
+    for gid, gdata in accessible_groups.items():
+        if gdata['name'] == group_name:
+            group_id = gid
+            break
+    
+    if not group_id:
+        await update.message.reply_text(
+            "❌ Группа не найдена",
+            reply_markup=get_groups_keyboard(user_id, "add")
+        )
+        return ADD_TEMPLATE_GROUP
+    
+    context.user_data['new_template']['group'] = group_id
+    context.user_data['current_group'] = group_id
+    
+    # Проверяем есть ли подгруппы
+    groups_data = load_groups()
+    group_data = groups_data['groups'].get(group_id, {})
+    subgroups = group_data.get('subgroups', {})
+    
+    if subgroups:
+        await update.message.reply_text(
+            "Шаг 2 из 8: Выберите подгруппу:",
+            reply_markup=get_subgroups_keyboard(group_id, "add")
+        )
+        return ADD_TEMPLATE_SUBGROUP
+    else:
+        context.user_data['new_template']['subgroup'] = None
+        await update.message.reply_text(
+            "Шаг 3 из 8: Введите название шаблона:",
+            reply_markup=get_back_keyboard()
+        )
+        return ADD_TEMPLATE_NAME
+
+@authorization_required
+async def add_template_choose_subgroup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор подгруппы для нового шаблона"""
+    subgroup_text = update.message.text
+    group_id = context.user_data.get('current_group')
+    
+    if subgroup_text == "📁 Без подгруппы":
+        context.user_data['new_template']['subgroup'] = None
+    else:
+        # Находим ID подгруппы по имени
+        groups_data = load_groups()
+        group_data = groups_data['groups'].get(group_id, {})
+        subgroups = group_data.get('subgroups', {})
+        
+        subgroup_id = None
+        for sid, sname in subgroups.items():
+            if sname == subgroup_text:
+                subgroup_id = sid
+                break
+        
+        if subgroup_id:
+            context.user_data['new_template']['subgroup'] = subgroup_id
+        else:
+            context.user_data['new_template']['subgroup'] = None
+    
+    await update.message.reply_text(
+        "Шаг 3 из 8: Введите название шаблона:",
+        reply_markup=get_back_keyboard()
+    )
+    return ADD_TEMPLATE_NAME
+
+@authorization_required
+async def add_template_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ввод названия шаблона"""
+    name = update.message.text.strip()
+    
+    if not name:
+        await update.message.reply_text(
+            "❌ Название не может быть пустым. Введите название:",
+            reply_markup=get_back_keyboard()
+        )
+        return ADD_TEMPLATE_NAME
+    
+    context.user_data['new_template']['name'] = name
+    
+    await update.message.reply_text(
+        "Шаг 4 из 8: Введите текст шаблона:",
+        reply_markup=get_back_keyboard()
+    )
+    return ADD_TEMPLATE_TEXT
+
+@authorization_required
+async def add_template_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ввод текста шаблона"""
+    text = update.message.text.strip()
+    
+    if not text:
+        await update.message.reply_text(
+            "❌ Текст не может быть пустым. Введите текст:",
+            reply_markup=get_back_keyboard()
+        )
+        return ADD_TEMPLATE_TEXT
+    
+    context.user_data['new_template']['text'] = text
+    
+    await update.message.reply_text(
+        "Шаг 5 из 8: Пришлите изображение для шаблона или нажмите 'Пропустить':",
+        reply_markup=get_skip_keyboard()
+    )
+    return ADD_TEMPLATE_IMAGE
+
+@authorization_required
+async def add_template_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка изображения для шаблона"""
+    if update.message.text == "⏭️ Пропустить":
+        context.user_data['new_template']['image'] = None
+        await update.message.reply_text(
+            "Шаг 6 из 8: Введите время отправки в формате ЧЧ:ММ (МСК):",
+            reply_markup=get_back_keyboard()
+        )
+        return ADD_TEMPLATE_TIME
+    
+    if update.message.photo:
+        # Берем самое большое фото
+        photo = update.message.photo[-1]
+        photo_file = await photo.get_file()
+        photo_content = await photo_file.download_as_bytearray()
+        
+        image_path = save_image(photo_content, f"template_{context.user_data['new_template']['name']}.jpg")
+        
+        if image_path:
+            context.user_data['new_template']['image'] = image_path
+            await update.message.reply_text(
+                "✅ Изображение сохранено!\n\n"
+                "Шаг 6 из 8: Введите время отправки в формате ЧЧ:ММ (МСК):",
+                reply_markup=get_back_keyboard()
+            )
+            return ADD_TEMPLATE_TIME
+        else:
+            await update.message.reply_text(
+                "❌ Ошибка сохранения изображения. Попробуйте еще раз или пропустите:",
+                reply_markup=get_skip_keyboard()
+            )
+            return ADD_TEMPLATE_IMAGE
+    else:
+        await update.message.reply_text(
+            "❌ Пожалуйста, пришлите изображение или нажмите 'Пропустить':",
+            reply_markup=get_skip_keyboard()
+        )
+        return ADD_TEMPLATE_IMAGE
+
+@authorization_required
+async def add_template_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ввод времени отправки"""
+    time_str = update.message.text.strip()
     
     try:
-        user_id = int(user_id_text)
-        # Сохраняем user_id в контексте
-        context.user_data['add_user_id'] = user_id
+        # Проверяем формат времени
+        hours, minutes = map(int, time_str.split(':'))
+        if not (0 <= hours <= 23 and 0 <= minutes <= 59):
+            raise ValueError
+        
+        context.user_data['new_template']['time'] = time_str
         
         await update.message.reply_text(
-            "Шаг 2 из 2:\n"
-            "Введите имя пользователя (для отображения в списке):\n\n"
-            "❌ Для отмены введите /cancel"
+            "Шаг 7 из 8: Выберите дни отправки:",
+            reply_markup=get_days_keyboard()
         )
-        return ADD_USER_NAME
+        return ADD_TEMPLATE_DAYS
         
     except ValueError:
-        print(f"❌ DEBUG: Ошибка преобразования ID: {user_id_text}")
         await update.message.reply_text(
-            "❌ Ошибка: ID должен состоять только из цифр!\n"
-            "Пожалуйста, введите корректный ID:"
+            "❌ Неверный формат времени. Используйте ЧЧ:ММ (например, 14:30):",
+            reply_markup=get_back_keyboard()
         )
-        return ADD_USER_ID
+        return ADD_TEMPLATE_TIME
 
-@admin_required
-async def add_user_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка имени пользователя"""
-    username = update.message.text.strip()
-    user_id = context.user_data.get('add_user_id')
-    print(f"🔍 DEBUG: add_user_name вызван с именем: '{username}', ID: {user_id}")
-
-    if not user_id:
+@authorization_required
+async def add_template_days(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор дней отправки"""
+    day_text = update.message.text
+    
+    # Находим номер дня по тексту
+    day_number = None
+    for num, text in DAYS_OF_WEEK.items():
+        if text == day_text:
+            day_number = num
+            break
+    
+    if day_number is None:
         await update.message.reply_text(
-            "❌ Ошибка: не найден ID пользователя",
-            reply_markup=get_user_management_keyboard()
+            "❌ Неверный день. Выберите из списка:",
+            reply_markup=get_days_keyboard()
         )
-        return ConversationHandler.END
-
-    # Добавляем пользователя
-    success, message = add_user(user_id, username)
-
-    if success:
-        await update.message.reply_text(
-            f"✅ Пользователь успешно добавлен!\n👤 {username}\n🆔 {user_id}",
-            reply_markup=get_user_management_keyboard()
-        )
-    else:
-        await update.message.reply_text(
-            f"❌ Ошибка при добавлении: {message}",
-            reply_markup=get_user_management_keyboard()
-        )
-
-    # Очищаем временные данные
-    context.user_data.clear()
-    return ConversationHandler.END
-
-@admin_required
-async def remove_user_start(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Начало процесса удаления пользователя"""
-    users = get_users_list()
-    admin_id = get_admin_id()
-
-    # Проверяем, есть ли пользователи для удаления (кроме администратора)
-    removable_users = [uid for uid in users.keys() if int(uid) != admin_id]
-
-    if not removable_users:
-        await update.message.reply_text(
-            "❌ Нет пользователей для удаления",
-            reply_markup=get_user_management_keyboard()
-        )
-        return
-
+        return ADD_TEMPLATE_DAYS
+    
+    if 'days' not in context.user_data['new_template']:
+        context.user_data['new_template']['days'] = []
+    
+    # Добавляем день если его еще нет
+    if day_number not in context.user_data['new_template']['days']:
+        context.user_data['new_template']['days'].append(day_number)
+    
+    # Показываем выбранные дни
+    selected_days = [DAYS_OF_WEEK[day] for day in context.user_data['new_template']['days']]
+    
     await update.message.reply_text(
-        "➖ УДАЛЕНИЕ ПОЛЬЗОВАТЕЛЯ\n\n"
-        "Выберите пользователя для удаления:",
-        reply_markup=get_remove_user_keyboard()
+        f"✅ Выбранные дни: {', '.join(selected_days)}\n\n"
+        "Выберите еще дни или нажмите 'Далее' для продолжения:",
+        reply_markup=ReplyKeyboardMarkup([
+            ["➡️ Далее"],
+            ["🔙 Назад"]
+        ], resize_keyboard=True)
     )
+    return ADD_TEMPLATE_DAYS
 
-@admin_required
-async def remove_user_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка выбора пользователя для удаления"""
-    text = update.message.text
-    user_id = None
-
-    # Извлекаем ID из текста кнопки
-    try:
-        if "ID:" in text:
-            user_id = int(text.split("ID:")[1].split(")")[0].strip())
-    except (ValueError, IndexError):
+@authorization_required
+async def add_template_days_next(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Переход к выбору периодичности после выбора дней"""
+    if not context.user_data['new_template'].get('days'):
         await update.message.reply_text(
-            "❌ Ошибка при обработке выбора",
-            reply_markup=get_user_management_keyboard()
+            "❌ Нужно выбрать хотя бы один день",
+            reply_markup=get_days_keyboard()
         )
-        return
+        return ADD_TEMPLATE_DAYS
+    
+    await update.message.reply_text(
+        "Шаг 8 из 8: Выберите периодичность:",
+        reply_markup=get_frequency_keyboard()
+    )
+    return ADD_TEMPLATE_FREQUENCY
 
-    if user_id:
-        users = get_users_list()
-        username = users.get(str(user_id), "Неизвестный пользователь")
-
-        # Сохраняем данные для подтверждения
-        context.user_data['remove_user_id'] = user_id
-        context.user_data['remove_username'] = username
-
+@authorization_required
+async def add_template_frequency(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор периодичности"""
+    frequency_text = update.message.text
+    
+    frequency_map = {
+        "🔄 2 в неделю": "2_per_week",
+        "📅 1 в неделю": "weekly", 
+        "🗓️ 2 в месяц": "2_per_month",
+        "📆 1 в месяц": "monthly"
+    }
+    
+    if frequency_text not in frequency_map:
         await update.message.reply_text(
-            f"⚠️ ПОДТВЕРЖДЕНИЕ УДАЛЕНИЯ\n\n"
-            f"Вы действительно хотите удалить пользователя:\n"
-            f"👤 {username}\n"
-            f"🆔 {user_id}\n\n"
-            f"Это действие нельзя отменить!",
-            reply_markup=get_confirmation_keyboard(user_id)
+            "❌ Неверный выбор. Выберите из списка:",
+            reply_markup=get_frequency_keyboard()
         )
+        return ADD_TEMPLATE_FREQUENCY
+    
+    context.user_data['new_template']['frequency'] = frequency_map[frequency_text]
+    
+    # Если выбрано "2 в неделю", запрашиваем второй день
+    if frequency_map[frequency_text] == "2_per_week":
+        await update.message.reply_text(
+            "🔄 Выберите второй день отправки:",
+            reply_markup=get_days_keyboard()
+        )
+        return ADD_TEMPLATE_SECOND_DAY
+    
+    # Переходим к подтверждению
+    return await show_template_confirmation(update, context)
 
-async def remove_user_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка подтверждения удаления"""
-    query = update.callback_query
-    await query.answer()
+@authorization_required
+async def add_template_second_day(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор второго дня для периодичности 2 в неделю"""
+    day_text = update.message.text
+    
+    # Находим номер дня по тексту
+    day_number = None
+    for num, text in DAYS_OF_WEEK.items():
+        if text == day_text:
+            day_number = num
+            break
+    
+    if day_number is None:
+        await update.message.reply_text(
+            "❌ Неверный день. Выберите из списка:",
+            reply_markup=get_days_keyboard()
+        )
+        return ADD_TEMPLATE_SECOND_DAY
+    
+    # Добавляем второй день
+    if day_number not in context.user_data['new_template']['days']:
+        context.user_data['new_template']['days'].append(day_number)
+    
+    return await show_template_confirmation(update, context)
 
-    if query.data.startswith("confirm_remove_"):
-        user_id = int(query.data.split("_")[2])
+async def show_template_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает подтверждение создания шаблона"""
+    template_data = context.user_data['new_template']
+    
+    # Форматируем информацию для показа
+    info = format_template_info(template_data)
+    
+    await update.message.reply_text(
+        f"✅ **ПОДТВЕРЖДЕНИЕ СОЗДАНИЯ ШАБЛОНА**\n\n{info}\n"
+        "Всё верно?",
+        parse_mode='Markdown',
+        reply_markup=get_confirmation_keyboard()
+    )
+    return ADD_TEMPLATE_CONFIRM
 
-        # Удаляем пользователя
-        success, message = remove_user(user_id)
-
+@authorization_required
+async def add_template_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Подтверждение создания шаблона"""
+    if update.message.text == "✅ Подтвердить":
+        template_data = context.user_data['new_template']
+        
+        success, template_id = create_template(template_data)
+        
         if success:
-            await query.edit_message_text(
-                f"✅ {message}",
-                reply_markup=None
-            )
-            # Отправляем новое сообщение с клавиатурой
-            await context.bot.send_message(
-                chat_id=query.message.chat_id,
-                text="Выберите действие:",
-                reply_markup=get_user_management_keyboard()
+            await update.message.reply_text(
+                f"✅ Шаблон успешно создан!\n\n"
+                f"ID: {template_id}",
+                reply_markup=get_templates_main_keyboard()
             )
         else:
-            await query.edit_message_text(
-                f"❌ {message}",
-                reply_markup=None
+            await update.message.reply_text(
+                "❌ Ошибка при создании шаблона",
+                reply_markup=get_templates_main_keyboard()
             )
-            await context.bot.send_message(
-                chat_id=query.message.chat_id,
-                text="Выберите действие:",
-                reply_markup=get_user_management_keyboard()
-            )
-
-    elif query.data == "cancel_remove":
-        await query.edit_message_text(
-            "❌ Удаление отменено",
-            reply_markup=None
+        
+        # Очищаем временные данные
+        context.user_data.pop('new_template', None)
+        context.user_data.pop('current_group', None)
+        context.user_data.pop('current_subgroup', None)
+        
+        return TEMPLATES_MAIN
+    
+    elif update.message.text == "✏️ Изменить":
+        await update.message.reply_text(
+            "🔧 Какой пункт вы хотите изменить?",
+            reply_markup=get_edit_fields_keyboard()
         )
-        await context.bot.send_message(
-            chat_id=query.message.chat_id,
-            text="Выберите действие:",
-            reply_markup=get_user_management_keyboard()
-        )
-
-@admin_required
-async def list_users(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Показывает список пользователей"""
-    users = get_users_list()
-    admin_id = get_admin_id()
-
-    if not users:
-        users_list_text = "❌ Нет добавленных пользователей"
+        return EDIT_TEMPLATE_FIELD
+    
     else:
-        users_list_text = "📋 СПИСОК ПОЛЬЗОВАТЕЛЕЙ:\n\n"
-        for user_id_str, username in users.items():
-            user_id = int(user_id_str)
-            role = "👑 АДМИНИСТРАТОР" if user_id == admin_id else "👤 ПОЛЬЗОВАТЕЛЬ"
-            users_list_text += f"{role}\n👤 {username}\n🆔 {user_id}\n\n"
+        await update.message.reply_text(
+            "❌ Неверный выбор",
+            reply_markup=get_confirmation_keyboard()
+        )
+        return ADD_TEMPLATE_CONFIRM
 
-    await update.message.reply_text(
-        users_list_text,
-        reply_markup=get_back_to_management_keyboard()
-    )
-
-async def cancel(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Отмена любого действия"""
+# === РЕДАКТИРОВАНИЕ ШАБЛОНА ===
+@authorization_required
+async def edit_template_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Начало редактирования шаблона"""
     user_id = update.effective_user.id
-    await update.message.reply_text(
-        "❌ Действие отменено",
-        reply_markup=get_user_management_keyboard() if is_admin(user_id) else get_main_keyboard()
-    )
-    return ConversationHandler.END
-
-# Альтернативная команда для добавления пользователя (если ConversationHandler не работает)
-@admin_required
-async def quick_add_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Быстрое добавление пользователя через команду"""
-    print(f"🔍 DEBUG: quick_add_user вызван с аргументами: {context.args}")
+    accessible_groups = get_user_accessible_groups(user_id)
     
-    if len(context.args) < 2:
+    if not accessible_groups:
         await update.message.reply_text(
-            "❌ Использование: /adduser <ID> <Имя>\n"
-            "Пример: /adduser 123456789 Иван Иванов"
+            "❌ У вас нет доступа ни к одной группе шаблонов",
+            reply_markup=get_templates_main_keyboard()
         )
-        return
+        return TEMPLATES_MAIN
     
-    try:
-        user_id = int(context.args[0])
-        username = ' '.join(context.args[1:])
-        
-        success, message = add_user(user_id, username)
+    await update.message.reply_text(
+        "✏️ **Редактирование шаблона**\n\n"
+        "Выберите группу:",
+        parse_mode='Markdown',
+        reply_markup=get_groups_keyboard(user_id, "edit")
+    )
+    # Для простоты пропускаем полную реализацию редактирования
+    await update.message.reply_text(
+        "⚠️ Функция редактирования в разработке\n\n"
+        "Используйте удаление и создание нового шаблона",
+        reply_markup=get_templates_main_keyboard()
+    )
+    return TEMPLATES_MAIN
+
+# === УДАЛЕНИЕ ШАБЛОНА ===
+@authorization_required
+async def delete_template_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Начало удаления шаблона"""
+    user_id = update.effective_user.id
+    accessible_groups = get_user_accessible_groups(user_id)
+    
+    if not accessible_groups:
         await update.message.reply_text(
-            f"✅ {message}" if success else f"❌ {message}",
-            reply_markup=get_user_management_keyboard()
+            "❌ У вас нет доступа ни к одной группе шаблонов",
+            reply_markup=get_templates_main_keyboard()
         )
-        
-    except ValueError:
-        await update.message.reply_text(
-            "❌ Ошибка: ID должен быть числом",
-            reply_markup=get_user_management_keyboard()
-        )
-
-# Hongqi шаблоны
-@authorization_required
-async def start_hongqi_template1(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Запускает Hongqi шаблон 1: каждое воскресенье в 16:00 МСК"""
-    chat_id = update.effective_chat.id
-    print(f"🚀 Запуск Hongqi шаблона 1 для чата {chat_id}")
-
-    # Останавливаем предыдущее задание если есть
-    if chat_id in active_jobs and 'hongqi_template1' in active_jobs[chat_id]:
-        active_jobs[chat_id]['hongqi_template1'].schedule_removal()
-
-    # Конвертируем время: воскресенье 16:00 МСК -> UTC
-    utc_time = moscow_to_utc("16:00")
-
-    # Создаем задание (воскресенье = 6)
-    job = context.job_queue.run_daily(
-        lambda ctx: send_template_message(ctx, chat_id, "hongqi_template1"),
-        time=utc_time,
-        days=(6,),  # Воскресенье (0=понедельник, 6=воскресенье)
-        chat_id=chat_id,
-        name=f"hongqi_template1_{chat_id}"
-    )
-
-    # Сохраняем задание
-    if chat_id not in active_jobs:
-        active_jobs[chat_id] = {}
-    active_jobs[chat_id]['hongqi_template1'] = job
-
-    print(f"✅ Hongqi шаблон 1 активирован для чата {chat_id}")
+        return TEMPLATES_MAIN
+    
     await update.message.reply_text(
-        f'✅ Дистанционный осмотр Н5 активирован!\n'
-        f'📅 Расписание: каждое воскресенье\n'
-        f'⏰ Время: 16:00 (МСК)\n'
-        f'✉️ Текст: проверка автомобиля Hongqi',
-        reply_markup=get_hongqi_keyboard()
+        "🗑️ **Удаление шаблона**\n\n"
+        "Выберите группу:",
+        parse_mode='Markdown',
+        reply_markup=get_groups_keyboard(user_id, "delete")
     )
-
-@authorization_required
-async def start_hongqi_template2(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Запускает Hongqi шаблон 2: каждый понедельник в 07:00 МСК"""
-    chat_id = update.effective_chat.id
-    print(f"🚀 Запуск Hongqi шаблона 2 для чата {chat_id}")
-
-    # Останавливаем предыдущее задание если есть
-    if chat_id in active_jobs and 'hongqi_template2' in active_jobs[chat_id]:
-        active_jobs[chat_id]['hongqi_template2'].schedule_removal()
-
-    # Конвертируем время: понедельник 07:00 МСК -> UTC
-    utc_time = moscow_to_utc("07:00")
-
-    # Создаем задание (понедельник = 0)
-    job = context.job_queue.run_daily(
-        lambda ctx: send_template_message(ctx, chat_id, "hongqi_template2"),
-        time=utc_time,
-        days=(0,),  # Понедельник
-        chat_id=chat_id,
-        name=f"hongqi_template2_{chat_id}"
-    )
-
-    # Сохраняем задание
-    if chat_id not in active_jobs:
-        active_jobs[chat_id] = {}
-    active_jobs[chat_id]['hongqi_template2'] = job
-
-    print(f"✅ Hongqi шаблон 2 активирован для чата {chat_id}")
+    # Для простоты пропускаем полную реализацию удаления
     await update.message.reply_text(
-        f'✅ Напоминание осмотра Н5 активировано!\n'
-        f'📅 Расписание: каждый понедельник\n'
-        f'⏰ Время: 07:00 (МСК)\n'
-        f'✉️ Текст: напоминание об осмотре',
-        reply_markup=get_hongqi_keyboard()
+        "⚠️ Функция удаления в разработке\n\n"
+        "Для управления используйте список шаблонов",
+        reply_markup=get_templates_main_keyboard()
     )
+    return TEMPLATES_MAIN
 
+# === ОБРАБОТЧИК НАВИГАЦИИ ===
 @authorization_required
-async def stop_hongqi_templates(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Останавливает все Hongqi шаблоны"""
-    chat_id = update.effective_chat.id
-    print(f"🛑 Остановка всех Hongqi шаблонов для чата {chat_id}")
-
-    stopped_count = 0
-
-    # Останавливаем Hongqi шаблоны
-    if chat_id in active_jobs:
-        for template_name in ['hongqi_template1', 'hongqi_template2']:
-            if template_name in active_jobs[chat_id]:
-                active_jobs[chat_id][template_name].schedule_removal()
-                stopped_count += 1
-                del active_jobs[chat_id][template_name]
-
-    await update.message.reply_text(
-        f'❌ Остановлено Hongqi шаблонов: {stopped_count}',
-        reply_markup=get_hongqi_keyboard()
-    )
-
-# TurboMatiz шаблоны
-@authorization_required
-async def start_turbomatiz_template1(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Запускает TurboMatiz шаблон 1: каждое воскресенье в 16:00 МСК"""
-    chat_id = update.effective_chat.id
-    print(f"🚀 Запуск TurboMatiz шаблона 1 для чата {chat_id}")
-
-    # Останавливаем предыдущее задание если есть
-    if chat_id in active_jobs and 'turbomatiz_template1' in active_jobs[chat_id]:
-        active_jobs[chat_id]['turbomatiz_template1'].schedule_removal()
-
-    # Конвертируем время: воскресенье 16:00 МСК -> UTC
-    utc_time = moscow_to_utc("16:00")
-
-    # Создаем задание (воскресенье = 6)
-    job = context.job_queue.run_daily(
-        lambda ctx: send_template_message(ctx, chat_id, "turbomatiz_template1"),
-        time=utc_time,
-        days=(6,),  # Воскресенье
-        chat_id=chat_id,
-        name=f"turbomatiz_template1_{chat_id}"
-    )
-
-    # Сохраняем задание
-    if chat_id not in active_jobs:
-        active_jobs[chat_id] = {}
-    active_jobs[chat_id]['turbomatiz_template1'] = job
-
-    print(f"✅ TurboMatiz шаблон 1 активирован для чата {chat_id}")
-    await update.message.reply_text(
-        f'✅ Оплата TurboMatiz активирована!\n'
-        f'📅 Расписание: каждое воскресенье\n'
-        f'⏰ Время: 16:00 (МСК)\n'
-        f'✉️ Текст: напоминание об оплате',
-        reply_markup=get_turbomatiz_keyboard()
-    )
-
-@authorization_required
-async def start_turbomatiz_template2(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Запускает TurboMatiz шаблон 2: каждый вторник и пятницу в 16:00 МСК"""
-    chat_id = update.effective_chat.id
-    print(f"🚀 Запуск TurboMatiz шаблона 2 для чата {chat_id}")
-
-    # Останавливаем предыдущее задание если есть
-    if chat_id in active_jobs and 'turbomatiz_template2' in active_jobs[chat_id]:
-        active_jobs[chat_id]['turbomatiz_template2'].schedule_removal()
-
-    # Конвертируем время: 16:00 МСК -> UTC
-    utc_time = moscow_to_utc("16:00")
-
-    # Создаем задание (вторник=1, пятница=4)
-    job = context.job_queue.run_daily(
-        lambda ctx: send_template_message(ctx, chat_id, "turbomatiz_template2"),
-        time=utc_time,
-        days=(1, 4),  # Вторник и пятница
-        chat_id=chat_id,
-        name=f"turbomatiz_template2_{chat_id}"
-    )
-
-    # Сохраняем задание
-    if chat_id not in active_jobs:
-        active_jobs[chat_id] = {}
-    active_jobs[chat_id]['turbomatiz_template2'] = job
-
-    print(f"✅ TurboMatiz шаблон 2 активирован для чата {chat_id}")
-    await update.message.reply_text(
-        f'✅ Осмотр TurboMatiz активирован!\n'
-        f'📅 Расписание: каждый вторник и пятницу\n'
-        f'⏰ Время: 16:00 (МСК)\n'
-        f'✉️ Текст: напоминание об осмотре',
-        reply_markup=get_turbomatiz_keyboard()
-    )
-
-@authorization_required
-async def start_turbomatiz_template3(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Запускает TurboMatiz шаблон 3: каждый второй понедельник в 15:00 МСК"""
-    chat_id = update.effective_chat.id
-    print(f"🚀 Запуск TurboMatiz шаблона 3 для чата {chat_id}")
-
-    # Останавливаем предыдущее задание если есть
-    if chat_id in active_jobs and 'turbomatiz_template3' in active_jobs[chat_id]:
-        active_jobs[chat_id]['turbomatiz_template3'].schedule_removal()
-
-    # Конвертируем время: понедельник 15:00 МСК -> UTC
-    utc_time = moscow_to_utc("15:00")
-
-    # Создаем задание (понедельник = 0)
-    job = context.job_queue.run_daily(
-        lambda ctx: send_template_message(ctx, chat_id, "turbomatiz_template3"),
-        time=utc_time,
-        days=(0,),  # Понедельник
-        chat_id=chat_id,
-        name=f"turbomatiz_template3_{chat_id}"
-    )
-
-    # Сохраняем задание
-    if chat_id not in active_jobs:
-        active_jobs[chat_id] = {}
-    active_jobs[chat_id]['turbomatiz_template3'] = job
-
-    print(f"✅ TurboMatiz шаблон 3 активирован для чата {chat_id}")
-    await update.message.reply_text(
-        f'✅ Чистый кузов TurboMatiz активирован!\n'
-        f'📅 Расписание: каждый второй понедельник\n'
-        f'⏰ Время: 15:00 (МСК)\n'
-        f'✉️ Текст: напоминание о мойке автомобиля',
-        reply_markup=get_turbomatiz_keyboard()
-    )
-
-@authorization_required
-async def stop_turbomatiz_templates(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Останавливает все TurboMatiz шаблоны"""
-    chat_id = update.effective_chat.id
-    print(f"🛑 Остановка всех TurboMatiz шаблонов для чата {chat_id}")
-
-    stopped_count = 0
-
-    # Останавливаем TurboMatiz шаблоны
-    if chat_id in active_jobs:
-        for template_name in ['turbomatiz_template1', 'turbomatiz_template2', 'turbomatiz_template3']:
-            if template_name in active_jobs[chat_id]:
-                active_jobs[chat_id][template_name].schedule_removal()
-                stopped_count += 1
-                del active_jobs[chat_id][template_name]
-
-    await update.message.reply_text(
-        f'❌ Остановлено TurboMatiz шаблонов: {stopped_count}',
-        reply_markup=get_turbomatiz_keyboard()
-    )
-
-@authorization_required
-async def stop_all(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Останавливает все шаблоны"""
-    chat_id = update.effective_chat.id
-    print(f"🛑 Остановка всех шаблонов для чата {chat_id}")
-
-    stopped_count = 0
-
-    # Останавливаем основные шаблоны
-    if chat_id in active_jobs:
-        for template_name, job in active_jobs[chat_id].items():
-            job.schedule_removal()
-            stopped_count += 1
-        active_jobs[chat_id] = {}
-
-    # Останавливаем тестовые шаблоны
-    if chat_id in test_jobs:
-        for template_name, job in test_jobs[chat_id].items():
-            job.schedule_removal()
-            stopped_count += 1
-        test_jobs[chat_id] = {}
-
-    await update.message.reply_text(
-        f'❌ Остановлено шаблонов: {stopped_count}',
-        reply_markup=get_main_keyboard()
-    )
-
-@authorization_required
-async def cancel_tests(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Отменяет все тестовые отправки"""
-    chat_id = update.effective_chat.id
-    print(f"🛑 Отмена всех тестов для чата {chat_id}")
-
-    stopped_count = 0
-    if chat_id in test_jobs:
-        for template_name, job in test_jobs[chat_id].items():
-            job.schedule_removal()
-            stopped_count += 1
-        test_jobs[chat_id] = {}
-
-    await update.message.reply_text(
-        f'❌ Отменено тестов: {stopped_count}',
-        reply_markup=get_testing_keyboard()
-    )
-
-# Тестовые функции для Hongqi
-@authorization_required
-async def test_hongqi_template1(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Тестирует Hongqi шаблон 1 (отправка через 10 секунд)"""
-    chat_id = update.effective_chat.id
-    print(f"🧪 Тест Hongqi шаблона 1 для чата {chat_id}")
-
-    # Создаем задание на 10 секунд
-    job = context.job_queue.run_once(
-        lambda ctx: send_test_template_message(ctx, chat_id, "hongqi_template1"),
-        when=10,
-        chat_id=chat_id,
-        name=f"test_hongqi_template1_{chat_id}"
-    )
-
-    # Сохраняем тестовое задание
-    if chat_id not in test_jobs:
-        test_jobs[chat_id] = {}
-    test_jobs[chat_id]['hongqi_template1'] = job
-
-    current_time = datetime.datetime.now(pytz.timezone('Europe/Moscow'))
-    send_time = current_time + timedelta(seconds=10)
-
-    await update.message.reply_text(
-        f'✅ Тест "Дистанционный осмотр Н5" запущен!\n'
-        f'📅 Отправка в: {send_time.strftime("%H:%M:%S")}\n'
-        f'⏰ Осталось: 10 секунд',
-        reply_markup=get_test_hongqi_keyboard()
-    )
-
-@authorization_required
-async def test_hongqi_template2(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Тестирует Hongqi шаблон 2 (отправка через 10 секунд)"""
-    chat_id = update.effective_chat.id
-    print(f"🧪 Тест Hongqi шаблона 2 для чата {chat_id}")
-
-    # Создаем задание на 10 секунд
-    job = context.job_queue.run_once(
-        lambda ctx: send_test_template_message(ctx, chat_id, "hongqi_template2"),
-        when=10,
-        chat_id=chat_id,
-        name=f"test_hongqi_template2_{chat_id}"
-    )
-
-    # Сохраняем тестовое задание
-    if chat_id not in test_jobs:
-        test_jobs[chat_id] = {}
-    test_jobs[chat_id]['hongqi_template2'] = job
-
-    current_time = datetime.datetime.now(pytz.timezone('Europe/Moscow'))
-    send_time = current_time + timedelta(seconds=10)
-
-    await update.message.reply_text(
-        f'✅ Тест "Напоминание осмотра Н5" запущен!\n'
-        f'📅 Отправка в: {send_time.strftime("%H:%M:%S")}\n'
-        f'⏰ Осталось: 10 секунд',
-        reply_markup=get_test_hongqi_keyboard()
-    )
-
-# Тестовые функции для TurboMatiz
-@authorization_required
-async def test_turbomatiz_template1(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Тестирует TurboMatiz шаблон 1 (отправка через 10 секунд)"""
-    chat_id = update.effective_chat.id
-    print(f"🧪 Тест TurboMatiz шаблона 1 для чата {chat_id}")
-
-    # Создаем задание на 10 секунд
-    job = context.job_queue.run_once(
-        lambda ctx: send_test_template_message(ctx, chat_id, "turbomatiz_template1"),
-        when=10,
-        chat_id=chat_id,
-        name=f"test_turbomatiz_template1_{chat_id}"
-    )
-
-    # Сохраняем тестовое задание
-    if chat_id not in test_jobs:
-        test_jobs[chat_id] = {}
-    test_jobs[chat_id]['turbomatiz_template1'] = job
-
-    current_time = datetime.datetime.now(pytz.timezone('Europe/Moscow'))
-    send_time = current_time + timedelta(seconds=10)
-
-    await update.message.reply_text(
-        f'✅ Тест "Оплата TurboMatiz" запущен!\n'
-        f'📅 Отправка в: {send_time.strftime("%H:%M:%S")}\n'
-        f'⏰ Осталось: 10 секунд',
-        reply_markup=get_test_turbomatiz_keyboard()
-    )
-
-@authorization_required
-async def test_turbomatiz_template2(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Тестирует TurboMatiz шаблон 2 (отправка через 10 секунд)"""
-    chat_id = update.effective_chat.id
-    print(f"🧪 Тест TurboMatiz шаблона 2 для чата {chat_id}")
-
-    # Создаем задание на 10 секунд
-    job = context.job_queue.run_once(
-        lambda ctx: send_test_template_message(ctx, chat_id, "turbomatiz_template2"),
-        when=10,
-        chat_id=chat_id,
-        name=f"test_turbomatiz_template2_{chat_id}"
-    )
-
-    # Сохраняем тестовое задание
-    if chat_id not in test_jobs:
-        test_jobs[chat_id] = {}
-    test_jobs[chat_id]['turbomatiz_template2'] = job
-
-    current_time = datetime.datetime.now(pytz.timezone('Europe/Moscow'))
-    send_time = current_time + timedelta(seconds=10)
-
-    await update.message.reply_text(
-        f'✅ Тест "Осмотр TurboMatiz" запущен!\n'
-        f'📅 Отправка в: {send_time.strftime("%H:%M:%S")}\n'
-        f'⏰ Осталось: 10 секунд',
-        reply_markup=get_test_turbomatiz_keyboard()
-    )
-
-@authorization_required
-async def test_turbomatiz_template3(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Тестирует TurboMatiz шаблон 3 (отправка через 10 секунд)"""
-    chat_id = update.effective_chat.id
-    print(f"🧪 Тест TurboMatiz шаблона 3 для чата {chat_id}")
-
-    # Создаем задание на 10 секунд
-    job = context.job_queue.run_once(
-        lambda ctx: send_test_template_message(ctx, chat_id, "turbomatiz_template3"),
-        when=10,
-        chat_id=chat_id,
-        name=f"test_turbomatiz_template3_{chat_id}"
-    )
-
-    # Сохраняем тестовое задание
-    if chat_id not in test_jobs:
-        test_jobs[chat_id] = {}
-    test_jobs[chat_id]['turbomatiz_template3'] = job
-
-    current_time = datetime.datetime.now(pytz.timezone('Europe/Moscow'))
-    send_time = current_time + timedelta(seconds=10)
-
-    await update.message.reply_text(
-        f'✅ Тест "Чистый кузов TurboMatiz" запущен!\n'
-        f'📅 Отправка в: {send_time.strftime("%H:%M:%S")}\n'
-        f'⏰ Осталось: 10 секунд',
-        reply_markup=get_test_turbomatiz_keyboard()
-    )
-
-# Обработчики текстовых сообщений
-@authorization_required
-async def handle_text(update: Update, _: ContextTypes.DEFAULT_TYPE):
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает текстовые сообщения для навигации по меню"""
     text = update.message.text
     user_id = update.effective_user.id
 
     if text == "📋 Шаблоны":
-        await update.message.reply_text(
-            "🎯 Выберите бренд:",
-            reply_markup=get_templates_keyboard()
-        )
+        await templates_main(update, context)
+        return TEMPLATES_MAIN
 
     elif text == "🧪 Тестирование":
         await update.message.reply_text(
@@ -1250,60 +989,26 @@ async def handle_text(update: Update, _: ContextTypes.DEFAULT_TYPE):
             "🔙 Возврат в главное меню",
             reply_markup=get_main_keyboard()
         )
-
-    elif text == "🚗 Осмотры Hongqi":
-        await update.message.reply_text(
-            "🚗 УПРАВЛЕНИЕ ШАБЛОНАМИ HONGQI\n\n"
-            "Выберите шаблон для управления:",
-            reply_markup=get_hongqi_keyboard()
-        )
-
-    elif text == "🚙 Осмотры TurboMatiz":
-        await update.message.reply_text(
-            "🚙 УПРАВЛЕНИЕ ШАБЛОНАМИ TURBOMATIZ\n\n"
-            "Выберите шаблон для управления:",
-            reply_markup=get_turbomatiz_keyboard()
-        )
-
-    elif text == "🔙 К выбору бренда":
-        await update.message.reply_text(
-            "🔙 Возврат к выбору бренда",
-            reply_markup=get_templates_keyboard()
-        )
-
-    elif text == "🚗 Тест Hongqi":
-        await update.message.reply_text(
-            "🧪 ТЕСТИРОВАНИЕ ШАБЛОНОВ HONGQI\n\n"
-            "Тестовые отправки выполняются через 10 секунд\n"
-            "и работают только один раз",
-            reply_markup=get_test_hongqi_keyboard()
-        )
-
-    elif text == "🚙 Тест TurboMatiz":
-        await update.message.reply_text(
-            "🧪 ТЕСТИРОВАНИЕ ШАБЛОНОВ TURBOMATIZ\n\n"
-            "Тестовые отправки выполняются через 10 секунд\n"
-            "и работают только один раз",
-            reply_markup=get_test_turbomatiz_keyboard()
-        )
-
-    elif text == "🔙 К тестированию":
-        await update.message.reply_text(
-            "🔙 Возврат к тестированию",
-            reply_markup=get_testing_keyboard()
-        )
+        return ConversationHandler.END
 
     elif text == "📊 Статус команд":
-        await status(update, _)
+        await update.message.reply_text(
+            "⚠️ Статус временно недоступен",
+            reply_markup=get_main_keyboard()
+        )
 
     elif text == "🕒 Текущее время":
-        await now(update, _)
+        await now(update, context)
 
     elif text == "🆔 Мой ID":
-        await my_id(update, _)
+        await my_id(update, context)
 
     elif text == "👥 Управление пользователями" and is_admin(user_id):
-        await user_management(update, _)
+        await update.message.reply_text(
+            "👥 Управление пользователями\n\n"
+            "Выберите действие:",
+            reply_markup=get_user_management_keyboard()
+        )
 
     elif text == "🔙 Назад к ЕЩЕ":
         await update.message.reply_text(
@@ -1311,14 +1016,11 @@ async def handle_text(update: Update, _: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_more_keyboard(user_id)
         )
 
-    elif text == "🔙 Назад к управлению":
-        await user_management(update, _)
-
     elif text == "🆔 Получить ID":
-        await my_id(update, _)
+        await my_id(update, context)
 
     elif text == "📋 Справка":
-        await help_command(update, _)
+        await help_command(update, context)
 
     else:
         await update.message.reply_text(
@@ -1327,36 +1029,125 @@ async def handle_text(update: Update, _: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_main_keyboard() if is_authorized(user_id) else get_unauthorized_keyboard()
         )
 
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отмена любого действия"""
+    user_id = update.effective_user.id
+    
+    # Очищаем временные данные
+    context.user_data.clear()
+    
+    await update.message.reply_text(
+        "❌ Действие отменено",
+        reply_markup=get_main_keyboard()
+    )
+    return ConversationHandler.END
+
+# Keep-alive функция
+def keep_alive():
+    """Периодически пингует приложение чтобы не дать ему заснуть"""
+    def ping():
+        while True:
+            try:
+                render_url = os.environ.get('RENDER_EXTERNAL_URL')
+                if render_url:
+                    response = requests.get(render_url, timeout=10)
+                    print(f"🔄 Пинг отправлен: {response.status_code}")
+                else:
+                    print("🔄 Keep-alive: бот активен")
+            except Exception as e:
+                print(f"⚠️ Ошибка пинга: {e}")
+            time.sleep(300)
+    
+    ping_thread = threading.Thread(target=ping, daemon=True)
+    ping_thread.start()
+    print("✅ Keep-alive система запущена")
+
 def main():
     """Запуск бота"""
-    print("🚀 Запуск бота...")
+    print("🚀 Запуск бота с новой системой шаблонов...")
 
     # Запускаем keep-alive систему
     keep_alive()
-
-    # Явно создаем event loop для Python 3.14
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
 
     # Создаем приложение
     application = (
         Application.builder()
         .token(BOT_TOKEN)
-        .job_queue(JobQueue())
         .build()
     )
 
-    # ConversationHandler для добавления пользователя
-    add_user_conv_handler = ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex("^➕ Добавить пользователя$"), add_user_start)],
+    # ConversationHandler для системы шаблонов
+    template_conv_handler = ConversationHandler(
+        entry_points=[
+            MessageHandler(filters.Regex("^📋 Шаблоны$"), templates_main)
+        ],
         states={
-            ADD_USER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_user_id)],
-            ADD_USER_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_user_name)],
+            TEMPLATES_MAIN: [
+                MessageHandler(filters.Regex("^📋 Список шаблонов$"), template_list_start),
+                MessageHandler(filters.Regex("^➕ Добавить новый$"), add_template_start),
+                MessageHandler(filters.Regex("^✏️ Редактировать$"), edit_template_start),
+                MessageHandler(filters.Regex("^🗑️ Удалить$"), delete_template_start),
+                MessageHandler(filters.Regex("^🔙 Главное меню$"), lambda u, c: ConversationHandler.END)
+            ],
+            TEMPLATE_LIST_GROUPS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, template_list_choose_group),
+                MessageHandler(filters.Regex("^🔙 К шаблонам$"), templates_main)
+            ],
+            TEMPLATE_LIST_SUBGROUPS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, template_list_choose_subgroup),
+                MessageHandler(filters.Regex("^🔙 К группам$"), template_list_start)
+            ],
+            ADD_TEMPLATE_GROUP: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_choose_group),
+                MessageHandler(filters.Regex("^🔙 Назад$"), templates_main)
+            ],
+            ADD_TEMPLATE_SUBGROUP: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_choose_subgroup),
+                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_start)
+            ],
+            ADD_TEMPLATE_NAME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_name),
+                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_start)
+            ],
+            ADD_TEMPLATE_TEXT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_text),
+                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_choose_subgroup)
+            ],
+            ADD_TEMPLATE_IMAGE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_image),
+                MessageHandler(filters.PHOTO, add_template_image),
+                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_text)
+            ],
+            ADD_TEMPLATE_TIME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_time),
+                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_image)
+            ],
+            ADD_TEMPLATE_DAYS: [
+                MessageHandler(filters.Regex("^➡️ Далее$"), add_template_days_next),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_days),
+                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_time)
+            ],
+            ADD_TEMPLATE_FREQUENCY: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_frequency),
+                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_days)
+            ],
+            ADD_TEMPLATE_SECOND_DAY: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_second_day),
+                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_frequency)
+            ],
+            ADD_TEMPLATE_CONFIRM: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_confirm),
+                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_frequency)
+            ],
+            EDIT_TEMPLATE_FIELD: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_confirm),
+                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_confirm)
+            ],
         },
-        fallbacks=[CommandHandler("cancel", cancel)]
+        fallbacks=[CommandHandler("cancel", cancel)],
+        map_to_parent={
+            ConversationHandler.END: ConversationHandler.END
+        }
     )
 
     # Обработчики команд
@@ -1364,61 +1155,22 @@ def main():
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("my_id", my_id))
     application.add_handler(CommandHandler("now", now))
-    application.add_handler(CommandHandler("status", status))
     application.add_handler(CommandHandler("update_menu", update_menu))
-    application.add_handler(CommandHandler("adduser", quick_add_user))  # Альтернативная команда
 
-    # Обработчики кнопок
-    application.add_handler(MessageHandler(filters.Regex("^📋 Шаблоны$"), handle_text))
+    # Обработчики кнопок главного меню
     application.add_handler(MessageHandler(filters.Regex("^🧪 Тестирование$"), handle_text))
     application.add_handler(MessageHandler(filters.Regex("^⚙️ ЕЩЕ$"), handle_text))
     application.add_handler(MessageHandler(filters.Regex("^🔙 Главное меню$"), handle_text))
-    application.add_handler(MessageHandler(filters.Regex("^🚗 Осмотры Hongqi$"), handle_text))
-    application.add_handler(MessageHandler(filters.Regex("^🚙 Осмотры TurboMatiz$"), handle_text))
-    application.add_handler(MessageHandler(filters.Regex("^🔙 К выбору бренда$"), handle_text))
-    application.add_handler(MessageHandler(filters.Regex("^🚗 Тест Hongqi$"), handle_text))
-    application.add_handler(MessageHandler(filters.Regex("^🚙 Тест TurboMatiz$"), handle_text))
-    application.add_handler(MessageHandler(filters.Regex("^🔙 К тестированию$"), handle_text))
     application.add_handler(MessageHandler(filters.Regex("^📊 Статус команд$"), handle_text))
     application.add_handler(MessageHandler(filters.Regex("^🕒 Текущее время$"), handle_text))
     application.add_handler(MessageHandler(filters.Regex("^🆔 Мой ID$"), handle_text))
     application.add_handler(MessageHandler(filters.Regex("^👥 Управление пользователями$"), handle_text))
     application.add_handler(MessageHandler(filters.Regex("^🔙 Назад к ЕЩЕ$"), handle_text))
-    application.add_handler(MessageHandler(filters.Regex("^🔙 Назад к управлению$"), handle_text))
     application.add_handler(MessageHandler(filters.Regex("^🆔 Получить ID$"), handle_text))
     application.add_handler(MessageHandler(filters.Regex("^📋 Справка$"), handle_text))
 
-    # Hongqi шаблоны
-    application.add_handler(MessageHandler(filters.Regex("^🔍 Дистанционный осмотр Н5$"), start_hongqi_template1))
-    application.add_handler(MessageHandler(filters.Regex("^⏰ Напоминание осмотра Н5$"), start_hongqi_template2))
-    application.add_handler(MessageHandler(filters.Regex("^🛑 Остановить все шаблоны Hongqi$"), stop_hongqi_templates))
-
-    # TurboMatiz шаблоны
-    application.add_handler(MessageHandler(filters.Regex("^💳 Оплата$"), start_turbomatiz_template1))
-    application.add_handler(MessageHandler(filters.Regex("^🔍 Осмотр$"), start_turbomatiz_template2))
-    application.add_handler(MessageHandler(filters.Regex("^🧼 Чистый кузов$"), start_turbomatiz_template3))
-    application.add_handler(MessageHandler(filters.Regex("^🛑 Остановить все шаблоны TurboMatiz$"), stop_turbomatiz_templates))
-
-    # Тестирование Hongqi
-    application.add_handler(MessageHandler(filters.Regex("^🔍 Тест осмотр Н5$"), test_hongqi_template1))
-    application.add_handler(MessageHandler(filters.Regex("^⏰ Тест напоминание Н5$"), test_hongqi_template2))
-
-    # Тестирование TurboMatiz
-    application.add_handler(MessageHandler(filters.Regex("^💳 Тест оплата$"), test_turbomatiz_template1))
-    application.add_handler(MessageHandler(filters.Regex("^🔍 Тест осмотр$"), test_turbomatiz_template2))
-    application.add_handler(MessageHandler(filters.Regex("^🧼 Тест чистый кузов$"), test_turbomatiz_template3))
-
-    # Остановка всех тестов
-    application.add_handler(MessageHandler(filters.Regex("^🛑 Остановить все тестирования$"), cancel_tests))
-
-    # Управление пользователями
-    application.add_handler(add_user_conv_handler)
-    application.add_handler(MessageHandler(filters.Regex("^➖ Удалить пользователя$"), remove_user_start))
-    application.add_handler(MessageHandler(filters.Regex("^📋 Список пользователей$"), list_users))
-    application.add_handler(CallbackQueryHandler(remove_user_confirm, pattern="^(confirm_remove_|cancel_remove)"))
-
-    # Удаление пользователей по кнопкам
-    application.add_handler(MessageHandler(filters.Regex("^❌ .* \\(ID: \\d+\\)$"), remove_user_selected))
+    # Добавляем ConversationHandler для шаблонов
+    application.add_handler(template_conv_handler)
 
     # Обработчик для всех текстовых сообщений
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
@@ -1428,12 +1180,11 @@ def main():
     application.run_polling()
 
 if __name__ == '__main__':
-    # Для Render Web Service - добавляем обработку порта
+    # Для Render Web Service
     import os
     from threading import Thread
     from http.server import HTTPServer, BaseHTTPRequestHandler
     
-    # Простой HTTP обработчик для проверки здоровья
     class HealthHandler(BaseHTTPRequestHandler):
         def do_GET(self):
             self.send_response(200)
@@ -1441,20 +1192,16 @@ if __name__ == '__main__':
             self.wfile.write(b'Bot is running!')
         
         def log_message(self, format, *args):
-            # Отключаем логирование HTTP запросов
             return
     
-    # Запускаем HTTP сервер в отдельном потоке
     def run_http_server():
         port = int(os.environ.get('PORT', 5000))
         server = HTTPServer(('0.0.0.0', port), HealthHandler)
         print(f"✅ HTTP server listening on port {port}")
         server.serve_forever()
     
-    # Запускаем HTTP сервер в фоновом режиме
     http_thread = Thread(target=run_http_server)
     http_thread.daemon = True
     http_thread.start()
     
-    # Запускаем основного бота
-    main() 
+    main()
