@@ -109,3 +109,21 @@ def get_confirmation_keyboard():
         ["🔙 Назад"]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_edit_fields_keyboard():
+    """Клавиатура выбора поля для редактирования"""
+    keyboard = [
+        ["🏷️ Название", "📝 Текст"],
+        ["🖼️ Изображение", "⏰ Время"],
+        ["📅 Дни отправки", "🔄 Периодичность"],
+        ["✅ Завершить редактирование", "🔙 Назад"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_delete_confirmation_keyboard():
+    """Клавиатура подтверждения удаления"""
+    keyboard = [
+        ["✅ Да, удалить шаблон"],
+        ["❌ Нет, отменить удаление"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
