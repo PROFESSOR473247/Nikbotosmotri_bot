@@ -859,7 +859,7 @@ async def proceed_to_frequency(update: Update, context: ContextTypes.DEFAULT_TYP
 
 @authorization_required
 async def add_template_frequency(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Выбор периодичности"""
+    """Выбор периодичности - Шаг 9"""
     frequency_text = update.message.text
     
     frequency_map = {
@@ -871,59 +871,20 @@ async def add_template_frequency(update: Update, context: ContextTypes.DEFAULT_T
     
     if frequency_text not in frequency_map:
         await update.message.reply_text(
-            "❌ Неверный выбор. Выберите из списка:",
+            "❌ Пожалуйста, выберите периодичность из списка",
             reply_markup=get_frequency_keyboard()
         )
         return ADD_TEMPLATE_FREQUENCY
     
     context.user_data['new_template']['frequency'] = frequency_map[frequency_text]
     
-    # Если выбрано "2 в неделю", запрашиваем второй день
-    if frequency_map[frequency_text] == "2_per_week":
-        await update.message.reply_text(
-            "🔄 Выберите второй день отправки:",
-            reply_markup=get_days_keyboard()
-        )
-        return ADD_TEMPLATE_SECOND_DAY
-    
-    # Переходим к подтверждению
-    return await show_template_confirmation(update, context)
-
-@authorization_required
-async def add_template_second_day(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Выбор второго дня для периодичности 2 в неделю"""
-    day_text = update.message.text
-    
-    # Находим номер дня по тексту
-    day_number = None
-    for num, text in DAYS_OF_WEEK.items():
-        if text == day_text:
-            day_number = num
-            break
-    
-    if day_number is None:
-        await update.message.reply_text(
-            "❌ Неверный день. Выберите из списка:",
-            reply_markup=get_days_keyboard()
-        )
-        return ADD_TEMPLATE_SECOND_DAY
-    
-    # Добавляем второй день
-    if day_number not in context.user_data['new_template']['days']:
-        context.user_data['new_template']['days'].append(day_number)
-    
-    return await show_template_confirmation(update, context)
-
-async def show_template_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает подтверждение создания шаблона"""
+    # Показываем подтверждение - Шаг 10
     template_data = context.user_data['new_template']
-    
-    # Форматируем информацию для показа
     info = format_template_info(template_data)
     
     await update.message.reply_text(
-        f"✅ **ПОДТВЕРЖДЕНИЕ СОЗДАНИЯ ШАБЛОНА**\n\n{info}\n"
-        "Всё верно?",
+        f"✅ **Шаг 10: Подтверждение создания шаблона**\n\n{info}\n"
+        "Всё верно? Подтверждаем создание шаблона?",
         parse_mode='Markdown',
         reply_markup=get_confirmation_keyboard()
     )
