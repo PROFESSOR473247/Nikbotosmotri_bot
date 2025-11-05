@@ -20,14 +20,11 @@ from template_manager import (
     ADD_TEMPLATE_IMAGE, ADD_TEMPLATE_TIME, ADD_TEMPLATE_DAYS, ADD_TEMPLATE_FREQUENCY,
     ADD_TEMPLATE_SECOND_DAY, ADD_TEMPLATE_CONFIRM,
     # Добавленные состояния для редактирования и удаления
-    # Добавьте DELETE_TEMPLATE_FINAL в список состояний
-(
-    # ... существующие состояния ...
     EDIT_TEMPLATE_SELECT, EDIT_TEMPLATE_FIELD, EDIT_TEMPLATE_GROUP, EDIT_TEMPLATE_SUBGROUP,
     EDIT_TEMPLATE_NAME, EDIT_TEMPLATE_TEXT, EDIT_TEMPLATE_IMAGE, EDIT_TEMPLATE_TIME,
     EDIT_TEMPLATE_DAYS, EDIT_TEMPLATE_FREQUENCY, EDIT_TEMPLATE_CONFIRM,
     DELETE_TEMPLATE_SELECT, DELETE_TEMPLATE_CONFIRM, DELETE_TEMPLATE_FINAL
-) = range(14, 28)  # Продолжаем нумерацию
+) = range(28)  # Исправлено на 28, так как теперь 28 состояний
 
 # ===== ОСНОВНЫЕ ФУНКЦИИ ШАБЛОНОВ =====
 
@@ -1052,7 +1049,7 @@ async def delete_template_confirm(update: Update, context: ContextTypes.DEFAULT_
         parse_mode='Markdown',
         reply_markup=get_delete_confirmation_keyboard()
     )
-    return DELETE_TEMPLATE_CONFIRM
+    return DELETE_TEMPLATE_FINAL
 
 def get_delete_confirmation_keyboard():
     """Клавиатура подтверждения удаления"""
@@ -1099,7 +1096,7 @@ async def delete_template_final(update: Update, context: ContextTypes.DEFAULT_TY
             "❌ Неверный выбор",
             reply_markup=get_delete_confirmation_keyboard()
         )
-        return DELETE_TEMPLATE_CONFIRM
+        return DELETE_TEMPLATE_FINAL
     
     # Очищаем временные данные
     context.user_data.clear()
