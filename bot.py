@@ -737,29 +737,34 @@ async def add_template_image(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 @authorization_required
 async def add_template_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ввод времени отправки"""
+    """Ввод времени отправки - Шаг 6"""
     time_str = update.message.text.strip()
     
     try:
-        # Проверяем формат времени
         hours, minutes = map(int, time_str.split(':'))
-        if not (0 <= hours <= 23 and 0 <= minutes <= 59):
-            raise ValueError
-        
-        context.user_data['new_template']['time'] = time_str
-        
-        await update.message.reply_text(
-            "Шаг 7 из 8: Выберите дни отправки:",
-            reply_markup=get_days_keyboard()
-        )
-        return ADD_TEMPLATE_DAYS
-        
-    except ValueError:
-        await update.message.reply_text(
-            "❌ Неверный формат времени. Используйте ЧЧ:ММ (например, 14:30):",
-            reply_markup=get_back_keyboard()
-        )
-        return ADD_TEMPLATE_TIME
+        if 0 <= hours <= 23 and 0 <= minutes <= 59:
+            context.user_data['new_template']['time'] = time_str
+            
+            # Инициализируем список дней если его нет
+            if 'days' not in context.user_data['new_template']:
+                context.user_data['new_template']['days'] = []
+            
+            await update.message.reply_text(
+                "📅 **Шаг 7: Выберите день отправки:**\n\n"
+                "Выберите первый день из списка:",
+                parse_mode='Markdown',
+                reply_markup=get_days_keyboard()
+            )
+            return ADD_TEMPLATE_DAYS
+    except:
+        pass
+    
+    await update.message.reply_text(
+        "❌ Неверный формат времени.\n"
+        "Используйте формат ЧЧ:ММ (например, 14:30):",
+        reply_markup=get_back_keyboard()
+    )
+    return ADD_TEMPLATE_TIME
 
 @authorization_required
 async def add_template_days(update: Update, context: ContextTypes.DEFAULT_TYPE):
