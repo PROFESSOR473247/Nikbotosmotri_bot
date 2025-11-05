@@ -1114,15 +1114,30 @@ def main():
         TEMPLATES_MAIN: [
             MessageHandler(filters.Regex("^📋 Список шаблонов$"), template_list_start),
             MessageHandler(filters.Regex("^➕ Добавить новый$"), add_template_start),
+            MessageHandler(filters.Regex("^✏️ Редактировать$"), edit_template_start),
+            MessageHandler(filters.Regex("^🗑️ Удалить$"), delete_template_start),
             MessageHandler(filters.Regex("^🔙 Главное меню$"), lambda u, c: ConversationHandler.END)
         ],
         TEMPLATE_LIST_GROUPS: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, template_list_choose_group),
+            MessageHandler(filters.Regex("^🚗 Hongqi$"), template_list_choose_group),
+            MessageHandler(filters.Regex("^🚙 TurboMatiz$"), template_list_choose_group),
             MessageHandler(filters.Regex("^🔙 К шаблонам$"), templates_main)
         ],
         ADD_TEMPLATE_GROUP: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_choose_group),
+            MessageHandler(filters.Regex("^🚗 Hongqi$"), add_template_choose_group),
+            MessageHandler(filters.Regex("^🚙 TurboMatiz$"), add_template_choose_group),
             MessageHandler(filters.Regex("^🔙 Назад$"), templates_main)
+        ],
+        ADD_TEMPLATE_SUBGROUP: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_choose_subgroup),
+            MessageHandler(filters.Regex("^🔍 Осмотры$"), add_template_choose_subgroup),
+            MessageHandler(filters.Regex("^⏰ Напоминания$"), add_template_choose_subgroup),
+            MessageHandler(filters.Regex("^💳 Оплаты$"), add_template_choose_subgroup),
+            MessageHandler(filters.Regex("^🧼 Чистка$"), add_template_choose_subgroup),
+            MessageHandler(filters.Regex("^📁 Без подгруппы$"), add_template_choose_subgroup),
+            MessageHandler(filters.Regex("^🔙 Назад$"), add_template_start)
         ],
         ADD_TEMPLATE_NAME: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_name),
@@ -1130,7 +1145,7 @@ def main():
         ],
         ADD_TEMPLATE_TEXT: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_text),
-            MessageHandler(filters.Regex("^🔙 Назад$"), add_template_choose_group)
+            MessageHandler(filters.Regex("^🔙 Назад$"), add_template_choose_subgroup)
         ],
         ADD_TEMPLATE_IMAGE: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_image),
@@ -1143,14 +1158,30 @@ def main():
         ],
         ADD_TEMPLATE_DAYS: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_days),
+            MessageHandler(filters.Regex("^📅 Понедельник$"), add_template_days),
+            MessageHandler(filters.Regex("^📅 Вторник$"), add_template_days),
+            MessageHandler(filters.Regex("^📅 Среда$"), add_template_days),
+            MessageHandler(filters.Regex("^📅 Четверг$"), add_template_days),
+            MessageHandler(filters.Regex("^📅 Пятница$"), add_template_days),
+            MessageHandler(filters.Regex("^📅 Суббота$"), add_template_days),
+            MessageHandler(filters.Regex("^📅 Воскресенье$"), add_template_days),
+            MessageHandler(filters.Regex("^➕ Выбрать еще день$"), add_template_days),
+            MessageHandler(filters.Regex("^➡️ Перейти к следующему шагу$"), add_template_days),
+            MessageHandler(filters.Regex("^✅ Завершить выбор дней$"), add_template_days),
             MessageHandler(filters.Regex("^🔙 Назад$"), add_template_time)
         ],
         ADD_TEMPLATE_FREQUENCY: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_frequency),
+            MessageHandler(filters.Regex("^🔄 2 в неделю$"), add_template_frequency),
+            MessageHandler(filters.Regex("^📅 1 в неделю$"), add_template_frequency),
+            MessageHandler(filters.Regex("^🗓️ 2 в месяц$"), add_template_frequency),
+            MessageHandler(filters.Regex("^📆 1 в месяц$"), add_template_frequency),
             MessageHandler(filters.Regex("^🔙 Назад$"), add_template_days)
         ],
         ADD_TEMPLATE_CONFIRM: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_confirm),
+            MessageHandler(filters.Regex("^✅ Подтвердить создание$"), add_template_confirm),
+            MessageHandler(filters.Regex("^✏️ Внести изменения$"), add_template_confirm),
             MessageHandler(filters.Regex("^🔙 Назад$"), add_template_frequency)
         ],
     },
