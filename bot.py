@@ -148,14 +148,41 @@ def get_skip_keyboard():
     """Клавиатура с пропуском"""
     return ReplyKeyboardMarkup([["⏭️ Пропустить"], ["🔙 Назад"]], resize_keyboard=True)
 
-def get_days_keyboard():
+def get_days_keyboard(selected_days=None, is_additional=False):
     """Клавиатура выбора дней недели"""
+    if selected_days is None:
+        selected_days = []
+    
     keyboard = []
     days_list = list(DAYS_OF_WEEK.values())
     
-    # Разбиваем на 2 строки
+    # Разбиваем дни на 2 строки
     keyboard.append(days_list[:4])  # Пн-Чт
     keyboard.append(days_list[4:])  # Пт-Вс
+    
+    # Добавляем кнопки навигации
+    if is_additional:
+        # Для дополнительного выбора дней
+        keyboard.append(["✅ Завершить выбор дней"])
+        keyboard.append(["🔙 Назад"])
+    else:
+        # Для основного выбора дней
+        if selected_days:
+            keyboard.append(["✅ Завершить выбор дней"])
+        keyboard.append(["🔙 Назад"])
+    
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_days_continue_keyboard(selected_days):
+    """Клавиатура после выбора первого дня"""
+    keyboard = []
+    
+    # Показываем выбранные дни
+    selected_text = ", ".join(selected_days) if selected_days else "не выбрано"
+    
+    # Основные кнопки
+    keyboard.append(["➕ Выбрать еще день"])
+    keyboard.append(["➡️ Перейти к следующему шагу"])
     keyboard.append(["🔙 Назад"])
     
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
