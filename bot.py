@@ -182,10 +182,10 @@ def get_edit_fields_keyboard():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def get_confirmation_keyboard():
-    """Клавиатура подтверждения"""
+    """Клавиатура подтверждения создания шаблона"""
     keyboard = [
-        ["✅ Подтвердить"],
-        ["✏️ Изменить"],
+        ["✅ Подтвердить создание"],
+        ["✏️ Внести изменения"], 
         ["🔙 Назад"]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
