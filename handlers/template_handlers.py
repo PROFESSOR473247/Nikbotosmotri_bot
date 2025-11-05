@@ -1260,23 +1260,23 @@ def get_template_conversation_handler():
             ],
             
             # === УДАЛЕНИЕ ШАБЛОНОВ ===
-DELETE_TEMPLATE_SELECT: [
-    MessageHandler(filters.TEXT & ~filters.COMMAND, delete_template_select_group),
-    MessageHandler(filters.Regex("^🚗 Hongqi$"), delete_template_select_group),
-    MessageHandler(filters.Regex("^🚙 TurboMatiz$"), delete_template_select_group),
-    MessageHandler(filters.Regex("^🔙 Назад$"), templates_main)
-],
-DELETE_TEMPLATE_CONFIRM: [
-    MessageHandler(filters.TEXT & ~filters.COMMAND, delete_template_confirm),
-    MessageHandler(filters.Regex("^🗑️ .* \\(ID: .*\\)$"), delete_template_confirm),
-    MessageHandler(filters.Regex("^🔙 Назад$"), delete_template_start)
-],
-DELETE_TEMPLATE_FINAL: [  # ← ИЗМЕНИТЕ НАЗВАНИЕ НА FINAL
-    MessageHandler(filters.TEXT & ~filters.COMMAND, delete_template_final),
-    MessageHandler(filters.Regex("^✅ Да, удалить шаблон$"), delete_template_final),
-    MessageHandler(filters.Regex("^❌ Нет, отменить удаление$"), delete_template_final),
-    MessageHandler(filters.Regex("^🔙 Назад$"), delete_template_select_group)
-],
+            DELETE_TEMPLATE_SELECT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, delete_template_select_group),
+                MessageHandler(filters.Regex("^🚗 Hongqi$"), delete_template_select_group),
+                MessageHandler(filters.Regex("^🚙 TurboMatiz$"), delete_template_select_group),
+                MessageHandler(filters.Regex("^🔙 Назад$"), templates_main)
+            ],
+            DELETE_TEMPLATE_CONFIRM: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, delete_template_confirm),
+                MessageHandler(filters.Regex("^🗑️ .* \\(ID: .*\\)$"), delete_template_confirm),
+                MessageHandler(filters.Regex("^🔙 Назад$"), delete_template_start)
+            ],
+            DELETE_TEMPLATE_FINAL: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, delete_template_final),
+                MessageHandler(filters.Regex("^✅ Да, удалить шаблон$"), delete_template_final),
+                MessageHandler(filters.Regex("^❌ Нет, отменить удаление$"), delete_template_final),
+                MessageHandler(filters.Regex("^🔙 Назад$"), delete_template_select_group)
+            ],
         },
         fallbacks=[CommandHandler("cancel", cancel_template)]
     )
