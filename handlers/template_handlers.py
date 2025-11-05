@@ -1,4 +1,4 @@
-from telegram import Update
+from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, filters
 from keyboards.template_keyboards import (
     get_templates_main_keyboard, get_groups_keyboard, get_subgroups_keyboard,
@@ -9,7 +9,8 @@ from keyboards.main_keyboards import get_main_keyboard
 from authorized_users import is_authorized
 from template_manager import (
     get_user_accessible_groups, create_template, get_templates_by_group,
-    save_image, format_template_info, DAYS_OF_WEEK, FREQUENCY_TYPES, load_groups
+    save_image, format_template_info, DAYS_OF_WEEK, FREQUENCY_TYPES, load_groups,
+    get_template_by_id, update_template_field, delete_template_by_id
 )
 
 # Состояния для ConversationHandler
@@ -17,8 +18,13 @@ from template_manager import (
     TEMPLATES_MAIN, TEMPLATE_LIST_GROUPS, TEMPLATE_LIST_SUBGROUPS, TEMPLATE_LIST_TEMPLATES,
     ADD_TEMPLATE_GROUP, ADD_TEMPLATE_SUBGROUP, ADD_TEMPLATE_NAME, ADD_TEMPLATE_TEXT,
     ADD_TEMPLATE_IMAGE, ADD_TEMPLATE_TIME, ADD_TEMPLATE_DAYS, ADD_TEMPLATE_FREQUENCY,
-    ADD_TEMPLATE_SECOND_DAY, ADD_TEMPLATE_CONFIRM
-) = range(14)
+    ADD_TEMPLATE_SECOND_DAY, ADD_TEMPLATE_CONFIRM,
+    # Добавленные состояния для редактирования и удаления
+    EDIT_TEMPLATE_SELECT, EDIT_TEMPLATE_FIELD, EDIT_TEMPLATE_GROUP, EDIT_TEMPLATE_SUBGROUP,
+    EDIT_TEMPLATE_NAME, EDIT_TEMPLATE_TEXT, EDIT_TEMPLATE_IMAGE, EDIT_TEMPLATE_TIME,
+    EDIT_TEMPLATE_DAYS, EDIT_TEMPLATE_FREQUENCY, EDIT_TEMPLATE_CONFIRM,
+    DELETE_TEMPLATE_SELECT, DELETE_TEMPLATE_CONFIRM
+) = range(27)
 
 # ===== ОСНОВНЫЕ ФУНКЦИИ ШАБЛОНОВ =====
 
@@ -473,28 +479,627 @@ async def add_template_confirm(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         return ADD_TEMPLATE_CONFIRM
 
-# ===== ЗАГЛУШКИ ДЛЯ НЕРЕАЛИЗОВАННЫХ ФУНКЦИЙ =====
+# ===== РЕДАКТИРОВАНИЕ ШАБЛОНОВ =====
 
 async def edit_template_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Начало редактирования шаблона"""
+    user_id = update.effective_user.id
+    accessible_groups = get_user_accessible_groups(user_id)
+    
+    if not accessible_groups:
+        await update.message.reply_text(
+            "❌ У вас нет доступа ни к одной группе шаблонов",
+            reply_markup=get_templates_main_keyboard()
+        )
+        return TEMPLATES_MAIN
+    
     await update.message.reply_text(
-        "⚠️ **Редактирование шаблонов**\n\n"
-        "Функция редактирования в разработке.\n"
-        "Используйте создание нового шаблона или удаление + создание заново.",
+        "✏️ **Редактирование шаблона**\n\n"
+        "Выберите группу:",
         parse_mode='Markdown',
-        reply_markup=get_templates_main_keyboard()
+        reply_markup=get_groups_keyboard(user_id, "edit")
     )
-    return TEMPLATES_MAIN
+    return EDIT_TEMPLATE_SELECT
+
+async def edit_template_select_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор группы для редактирования"""
+    group_name = update.message.text
+    user_id = update.effective_user.id
+    
+    # Находим ID группы по имени
+    accessible_groups = get_user_accessible_groups(user_id)
+    group_id = None
+    for gid, gdata in accessible_groups.items():
+        if gdata['name'] == group_name:
+            group_id = gid
+            break
+    
+    if not group_id:
+        await update.message.reply_text(
+            "❌ Группа не найдена",
+            reply_markup=get_groups_keyboard(user_id, "edit")
+        )
+        return EDIT_TEMPLATE_SELECT
+    
+    context.user_data['edit_group'] = group_id
+    context.user_data['edit_group_name'] = group_name
+    
+    # Получаем шаблоны этой группы
+    templates = get_templates_by_group(group_id)
+    
+    if not templates:
+        await update.message.reply_text(
+            f"📭 В группе '{group_name}' нет шаблонов для редактирования",
+            reply_markup=get_templates_main_keyboard()
+        )
+        return TEMPLATES_MAIN
+    
+    # Создаем клавиатуру с шаблонами
+    keyboard = []
+    for template_id, template in templates:
+        keyboard.append([f"📝 {template['name']} (ID: {template_id})"])
+    
+    keyboard.append(["🔙 Назад"])
+    
+    await update.message.reply_text(
+        f"✏️ **Выберите шаблон для редактирования:**\n\n"
+        f"Группа: {group_name}",
+        parse_mode='Markdown',
+        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    )
+    return EDIT_TEMPLATE_FIELD
+
+async def edit_template_select_template(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор шаблона и поля для редактирования"""
+    template_text = update.message.text
+    
+    # Извлекаем ID шаблона из текста
+    if "(ID:" in template_text:
+        try:
+            template_id = template_text.split("(ID:")[1].split(")")[0].strip()
+        except:
+            await update.message.reply_text(
+                "❌ Ошибка при выборе шаблона",
+                reply_markup=get_templates_main_keyboard()
+            )
+            return TEMPLATES_MAIN
+    else:
+        await update.message.reply_text(
+            "❌ Ошибка при выборе шаблона",
+            reply_markup=get_templates_main_keyboard()
+        )
+        return TEMPLATES_MAIN
+    
+    # Получаем данные шаблона
+    template = get_template_by_id(template_id)
+    if not template:
+        await update.message.reply_text(
+            "❌ Шаблон не найден",
+            reply_markup=get_templates_main_keyboard()
+        )
+        return TEMPLATES_MAIN
+    
+    # Сохраняем данные для редактирования
+    context.user_data['editing_template_id'] = template_id
+    context.user_data['editing_template'] = template
+    
+    # Показываем информацию о шаблоне и кнопки выбора поля
+    info = format_template_info(template)
+    
+    await update.message.reply_text(
+        f"✏️ **Редактирование шаблона**\n\n{info}\n"
+        "**Выберите поле для редактирования:**",
+        parse_mode='Markdown',
+        reply_markup=get_edit_fields_keyboard()
+    )
+    return EDIT_TEMPLATE_FIELD
+
+def get_edit_fields_keyboard():
+    """Клавиатура выбора поля для редактирования"""
+    keyboard = [
+        ["🏷️ Название", "📝 Текст"],
+        ["🖼️ Изображение", "⏰ Время"],
+        ["📅 Дни отправки", "🔄 Периодичность"],
+        ["✅ Завершить редактирование", "🔙 Назад"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+async def edit_template_choose_field(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка выбора поля для редактирования"""
+    field_text = update.message.text
+    template_id = context.user_data['editing_template_id']
+    template = context.user_data['editing_template']
+    
+    field_map = {
+        "🏷️ Название": "name",
+        "📝 Текст": "text", 
+        "🖼️ Изображение": "image",
+        "⏰ Время": "time",
+        "📅 Дни отправки": "days",
+        "🔄 Периодичность": "frequency"
+    }
+    
+    if field_text == "✅ Завершить редактирование":
+        await update.message.reply_text(
+            "✅ Редактирование завершено!",
+            reply_markup=get_templates_main_keyboard()
+        )
+        context.user_data.clear()
+        return TEMPLATES_MAIN
+    
+    elif field_text in field_map:
+        field = field_map[field_text]
+        context.user_data['editing_field'] = field
+        
+        if field == "name":
+            await update.message.reply_text(
+                "✏️ Введите новое название шаблона:",
+                reply_markup=get_back_keyboard()
+            )
+            return EDIT_TEMPLATE_NAME
+            
+        elif field == "text":
+            await update.message.reply_text(
+                "✏️ Введите новый текст шаблона:",
+                reply_markup=get_back_keyboard()
+            )
+            return EDIT_TEMPLATE_TEXT
+            
+        elif field == "image":
+            await update.message.reply_text(
+                "✏️ Пришлите новое изображение или нажмите 'Пропустить':",
+                reply_markup=get_skip_keyboard()
+            )
+            return EDIT_TEMPLATE_IMAGE
+            
+        elif field == "time":
+            await update.message.reply_text(
+                "✏️ Введите новое время отправки (ЧЧ:ММ МСК):",
+                reply_markup=get_back_keyboard()
+            )
+            return EDIT_TEMPLATE_TIME
+            
+        elif field == "days":
+            # Сбрасываем выбранные дни для нового выбора
+            context.user_data['selected_days'] = []
+            await update.message.reply_text(
+                "📅 **Выберите дни отправки:**\n\n"
+                "Выберите первый день из списка:",
+                parse_mode='Markdown',
+                reply_markup=get_days_keyboard()
+            )
+            return EDIT_TEMPLATE_DAYS
+            
+        elif field == "frequency":
+            await update.message.reply_text(
+                "🔄 Выберите новую периодичность:",
+                reply_markup=get_frequency_keyboard()
+            )
+            return EDIT_TEMPLATE_FREQUENCY
+    
+    else:
+        await update.message.reply_text(
+            "❌ Неверный выбор поля",
+            reply_markup=get_edit_fields_keyboard()
+        )
+        return EDIT_TEMPLATE_FIELD
+
+# Функции редактирования конкретных полей
+
+async def edit_template_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Редактирование названия"""
+    new_name = update.message.text.strip()
+    template_id = context.user_data['editing_template_id']
+    
+    if not new_name:
+        await update.message.reply_text(
+            "❌ Название не может быть пустым. Введите название:",
+            reply_markup=get_back_keyboard()
+        )
+        return EDIT_TEMPLATE_NAME
+    
+    success, message = update_template_field(template_id, "name", new_name)
+    
+    if success:
+        await update.message.reply_text(
+            f"✅ Название обновлено: {new_name}",
+            reply_markup=get_edit_fields_keyboard()
+        )
+        # Обновляем данные в контексте
+        context.user_data['editing_template']['name'] = new_name
+    else:
+        await update.message.reply_text(
+            f"❌ Ошибка: {message}",
+            reply_markup=get_edit_fields_keyboard()
+        )
+    
+    return EDIT_TEMPLATE_FIELD
+
+async def edit_template_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Редактирование текста"""
+    new_text = update.message.text.strip()
+    template_id = context.user_data['editing_template_id']
+    
+    if not new_text:
+        await update.message.reply_text(
+            "❌ Текст не может быть пустым. Введите текст:",
+            reply_markup=get_back_keyboard()
+        )
+        return EDIT_TEMPLATE_TEXT
+    
+    success, message = update_template_field(template_id, "text", new_text)
+    
+    if success:
+        await update.message.reply_text(
+            "✅ Текст шаблона обновлен",
+            reply_markup=get_edit_fields_keyboard()
+        )
+        context.user_data['editing_template']['text'] = new_text
+    else:
+        await update.message.reply_text(
+            f"❌ Ошибка: {message}",
+            reply_markup=get_edit_fields_keyboard()
+        )
+    
+    return EDIT_TEMPLATE_FIELD
+
+async def edit_template_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Редактирование изображения"""
+    template_id = context.user_data['editing_template_id']
+    
+    if update.message.text == "⏭️ Пропустить":
+        success, message = update_template_field(template_id, "image", None)
+        
+        if success:
+            await update.message.reply_text(
+                "✅ Изображение удалено из шаблона",
+                reply_markup=get_edit_fields_keyboard()
+            )
+            context.user_data['editing_template']['image'] = None
+        else:
+            await update.message.reply_text(
+                f"❌ Ошибка: {message}",
+                reply_markup=get_edit_fields_keyboard()
+            )
+        
+        return EDIT_TEMPLATE_FIELD
+    
+    if update.message.photo:
+        photo = update.message.photo[-1]
+        photo_file = await photo.get_file()
+        photo_content = await photo_file.download_as_bytearray()
+        
+        image_path = save_image(photo_content, f"template_edit_{template_id}.jpg")
+        
+        if image_path:
+            success, message = update_template_field(template_id, "image", image_path)
+            
+            if success:
+                await update.message.reply_text(
+                    "✅ Изображение обновлено!",
+                    reply_markup=get_edit_fields_keyboard()
+                )
+                context.user_data['editing_template']['image'] = image_path
+            else:
+                await update.message.reply_text(
+                    f"❌ Ошибка: {message}",
+                    reply_markup=get_edit_fields_keyboard()
+                )
+        else:
+            await update.message.reply_text(
+                "❌ Ошибка сохранения изображения",
+                reply_markup=get_edit_fields_keyboard()
+            )
+    else:
+        await update.message.reply_text(
+            "❌ Пришлите изображение или нажмите 'Пропустить':",
+            reply_markup=get_skip_keyboard()
+        )
+        return EDIT_TEMPLATE_IMAGE
+    
+    return EDIT_TEMPLATE_FIELD
+
+async def edit_template_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Редактирование времени"""
+    new_time = update.message.text.strip()
+    template_id = context.user_data['editing_template_id']
+    
+    try:
+        hours, minutes = map(int, new_time.split(':'))
+        if 0 <= hours <= 23 and 0 <= minutes <= 59:
+            success, message = update_template_field(template_id, "time", new_time)
+            
+            if success:
+                await update.message.reply_text(
+                    f"✅ Время обновлено: {new_time}",
+                    reply_markup=get_edit_fields_keyboard()
+                )
+                context.user_data['editing_template']['time'] = new_time
+            else:
+                await update.message.reply_text(
+                    f"❌ Ошибка: {message}",
+                    reply_markup=get_edit_fields_keyboard()
+                )
+        else:
+            raise ValueError
+    except:
+        await update.message.reply_text(
+            "❌ Неверный формат времени. Используйте ЧЧ:ММ:",
+            reply_markup=get_back_keyboard()
+        )
+        return EDIT_TEMPLATE_TIME
+    
+    return EDIT_TEMPLATE_FIELD
+
+async def edit_template_days(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Редактирование дней отправки"""
+    user_text = update.message.text
+    template_id = context.user_data['editing_template_id']
+    
+    if 'selected_days' not in context.user_data:
+        context.user_data['selected_days'] = []
+    
+    selected_days = context.user_data['selected_days']
+    
+    # Обработка завершения выбора дней
+    if user_text == "✅ Завершить выбор дней":
+        if not selected_days:
+            await update.message.reply_text(
+                "❌ Нужно выбрать хотя бы один день",
+                reply_markup=get_days_keyboard(selected_days)
+            )
+            return EDIT_TEMPLATE_DAYS
+        
+        success, message = update_template_field(template_id, "days", selected_days)
+        
+        if success:
+            selected_days_text = [DAYS_OF_WEEK[d] for d in selected_days]
+            await update.message.reply_text(
+                f"✅ Дни отправки обновлены: {', '.join(selected_days_text)}",
+                reply_markup=get_edit_fields_keyboard()
+            )
+            context.user_data['editing_template']['days'] = selected_days
+        else:
+            await update.message.reply_text(
+                f"❌ Ошибка: {message}",
+                reply_markup=get_edit_fields_keyboard()
+            )
+        
+        return EDIT_TEMPLATE_FIELD
+    
+    # Обработка выбора дня
+    day_number = None
+    for num, text in DAYS_OF_WEEK.items():
+        if text == user_text:
+            day_number = num
+            break
+    
+    if day_number is not None:
+        if day_number not in selected_days:
+            selected_days.append(day_number)
+        
+        selected_days_text = [DAYS_OF_WEEK[d] for d in selected_days]
+        await update.message.reply_text(
+            f"✅ Выбраны дни: {', '.join(selected_days_text)}\n\n"
+            "Выберите еще дни или завершите выбор:",
+            reply_markup=get_days_keyboard(selected_days, is_additional=True)
+        )
+        return EDIT_TEMPLATE_DAYS
+    
+    await update.message.reply_text(
+        "❌ Выберите день из списка:",
+        reply_markup=get_days_keyboard(selected_days)
+    )
+    return EDIT_TEMPLATE_DAYS
+
+async def edit_template_frequency(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Редактирование периодичности"""
+    frequency_text = update.message.text
+    template_id = context.user_data['editing_template_id']
+    
+    frequency_map = {
+        "🔄 2 в неделю": "2_per_week",
+        "📅 1 в неделю": "weekly", 
+        "🗓️ 2 в месяц": "2_per_month",
+        "📆 1 в месяц": "monthly"
+    }
+    
+    if frequency_text in frequency_map:
+        new_frequency = frequency_map[frequency_text]
+        success, message = update_template_field(template_id, "frequency", new_frequency)
+        
+        if success:
+            await update.message.reply_text(
+                f"✅ Периодичность обновлена: {frequency_text}",
+                reply_markup=get_edit_fields_keyboard()
+            )
+            context.user_data['editing_template']['frequency'] = new_frequency
+        else:
+            await update.message.reply_text(
+                f"❌ Ошибка: {message}",
+                reply_markup=get_edit_fields_keyboard()
+            )
+    else:
+        await update.message.reply_text(
+            "❌ Выберите периодичность из списка:",
+            reply_markup=get_frequency_keyboard()
+        )
+        return EDIT_TEMPLATE_FREQUENCY
+    
+    return EDIT_TEMPLATE_FIELD
+
+# ===== УДАЛЕНИЕ ШАБЛОНОВ =====
 
 async def delete_template_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Начало удаления шаблона"""
+    user_id = update.effective_user.id
+    accessible_groups = get_user_accessible_groups(user_id)
+    
+    if not accessible_groups:
+        await update.message.reply_text(
+            "❌ У вас нет доступа ни к одной группе шаблонов",
+            reply_markup=get_templates_main_keyboard()
+        )
+        return TEMPLATES_MAIN
+    
     await update.message.reply_text(
-        "⚠️ **Удаление шаблонов**\n\n"
-        "Функция удаления в разработке.\n"
-        "Пока что шаблоны можно только просматривать и создавать новые.",
+        "🗑️ **Удаление шаблона**\n\n"
+        "Выберите группу:",
         parse_mode='Markdown',
-        reply_markup=get_templates_main_keyboard()
+        reply_markup=get_groups_keyboard(user_id, "delete")
     )
+    return DELETE_TEMPLATE_SELECT
+
+async def delete_template_select_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор группы для удаления"""
+    group_name = update.message.text
+    user_id = update.effective_user.id
+    
+    # Находим ID группы по имени
+    accessible_groups = get_user_accessible_groups(user_id)
+    group_id = None
+    for gid, gdata in accessible_groups.items():
+        if gdata['name'] == group_name:
+            group_id = gid
+            break
+    
+    if not group_id:
+        await update.message.reply_text(
+            "❌ Группа не найдена",
+            reply_markup=get_groups_keyboard(user_id, "delete")
+        )
+        return DELETE_TEMPLATE_SELECT
+    
+    context.user_data['delete_group'] = group_id
+    context.user_data['delete_group_name'] = group_name
+    
+    # Получаем шаблоны этой группы
+    templates = get_templates_by_group(group_id)
+    
+    if not templates:
+        await update.message.reply_text(
+            f"📭 В группе '{group_name}' нет шаблонов для удаления",
+            reply_markup=get_templates_main_keyboard()
+        )
+        return TEMPLATES_MAIN
+    
+    # Создаем клавиатуру с шаблонами
+    keyboard = []
+    for template_id, template in templates:
+        keyboard.append([f"🗑️ {template['name']} (ID: {template_id})"])
+    
+    keyboard.append(["🔙 Назад"])
+    
+    await update.message.reply_text(
+        f"🗑️ **Выберите шаблон для удаления:**\n\n"
+        f"Группа: {group_name}",
+        parse_mode='Markdown',
+        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    )
+    return DELETE_TEMPLATE_CONFIRM
+
+async def delete_template_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Подтверждение удаления шаблона"""
+    template_text = update.message.text
+    
+    if template_text == "🔙 Назад":
+        await update.message.reply_text(
+            "🔙 Возврат к выбору группы",
+            reply_markup=get_groups_keyboard(update.effective_user.id, "delete")
+        )
+        return DELETE_TEMPLATE_SELECT
+    
+    # Извлекаем ID шаблона из текста
+    if "(ID:" in template_text:
+        try:
+            template_id = template_text.split("(ID:")[1].split(")")[0].strip()
+        except:
+            await update.message.reply_text(
+                "❌ Ошибка при выборе шаблона",
+                reply_markup=get_templates_main_keyboard()
+            )
+            return TEMPLATES_MAIN
+    else:
+        await update.message.reply_text(
+            "❌ Ошибка при выборе шаблона",
+            reply_markup=get_templates_main_keyboard()
+        )
+        return TEMPLATES_MAIN
+    
+    # Получаем данные шаблона
+    template = get_template_by_id(template_id)
+    if not template:
+        await update.message.reply_text(
+            "❌ Шаблон не найден",
+            reply_markup=get_templates_main_keyboard()
+        )
+        return TEMPLATES_MAIN
+    
+    # Сохраняем ID для удаления
+    context.user_data['deleting_template_id'] = template_id
+    context.user_data['deleting_template'] = template
+    
+    # Показываем подтверждение
+    info = format_template_info(template)
+    
+    await update.message.reply_text(
+        f"⚠️ **ПОДТВЕРЖДЕНИЕ УДАЛЕНИЯ**\n\n{info}\n"
+        "❌ **ВЫ УВЕРЕНЫ, ЧТО ХОТИТЕ УДАЛИТЬ ДАННЫЙ ШАБЛОН?**\n\n"
+        "Это действие нельзя отменить!",
+        parse_mode='Markdown',
+        reply_markup=get_delete_confirmation_keyboard()
+    )
+    return DELETE_TEMPLATE_CONFIRM
+
+def get_delete_confirmation_keyboard():
+    """Клавиатура подтверждения удаления"""
+    keyboard = [
+        ["✅ Да, удалить шаблон"],
+        ["❌ Нет, отменить удаление"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+async def delete_template_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Финальное подтверждение удаления"""
+    user_choice = update.message.text
+    template_id = context.user_data.get('deleting_template_id')
+    template = context.user_data.get('deleting_template')
+    
+    if user_choice == "✅ Да, удалить шаблон":
+        if template_id and template:
+            success, message = delete_template_by_id(template_id)
+            
+            if success:
+                await update.message.reply_text(
+                    f"✅ Шаблон '{template['name']}' успешно удален!",
+                    reply_markup=get_templates_main_keyboard()
+                )
+            else:
+                await update.message.reply_text(
+                    f"❌ Ошибка при удалении: {message}",
+                    reply_markup=get_templates_main_keyboard()
+                )
+        else:
+            await update.message.reply_text(
+                "❌ Ошибка: данные шаблона не найдены",
+                reply_markup=get_templates_main_keyboard()
+            )
+    
+    elif user_choice == "❌ Нет, отменить удаление":
+        await update.message.reply_text(
+            "✅ Удаление отменено",
+            reply_markup=get_templates_main_keyboard()
+        )
+    
+    else:
+        await update.message.reply_text(
+            "❌ Неверный выбор",
+            reply_markup=get_delete_confirmation_keyboard()
+        )
+        return DELETE_TEMPLATE_CONFIRM
+    
+    # Очищаем временные данные
+    context.user_data.clear()
     return TEMPLATES_MAIN
 
 # ===== ФУНКЦИЯ ОТМЕНЫ =====
@@ -524,12 +1129,16 @@ def get_template_conversation_handler():
                 MessageHandler(filters.Regex("^🗑️ Удалить$"), delete_template_start),
                 MessageHandler(filters.Regex("^🔙 Главное меню$"), lambda u, c: ConversationHandler.END)
             ],
+            
+            # === СПИСОК ШАБЛОНОВ ===
             TEMPLATE_LIST_GROUPS: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, template_list_choose_group),
                 MessageHandler(filters.Regex("^🚗 Hongqi$"), template_list_choose_group),
                 MessageHandler(filters.Regex("^🚙 TurboMatiz$"), template_list_choose_group),
                 MessageHandler(filters.Regex("^🔙 К шаблонам$"), templates_main)
             ],
+            
+            # === СОЗДАНИЕ ШАБЛОНОВ ===
             ADD_TEMPLATE_GROUP: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_choose_group),
                 MessageHandler(filters.Regex("^🚗 Hongqi$"), add_template_choose_group),
@@ -589,6 +1198,81 @@ def get_template_conversation_handler():
                 MessageHandler(filters.Regex("^✅ Подтвердить создание$"), add_template_confirm),
                 MessageHandler(filters.Regex("^✏️ Внести изменения$"), add_template_confirm),
                 MessageHandler(filters.Regex("^🔙 Назад$"), add_template_frequency)
+            ],
+            
+            # === РЕДАКТИРОВАНИЕ ШАБЛОНОВ ===
+            EDIT_TEMPLATE_SELECT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_select_group),
+                MessageHandler(filters.Regex("^🚗 Hongqi$"), edit_template_select_group),
+                MessageHandler(filters.Regex("^🚙 TurboMatiz$"), edit_template_select_group),
+                MessageHandler(filters.Regex("^🔙 Назад$"), templates_main)
+            ],
+            EDIT_TEMPLATE_FIELD: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_choose_field),
+                MessageHandler(filters.Regex("^🏷️ Название$"), edit_template_choose_field),
+                MessageHandler(filters.Regex("^📝 Текст$"), edit_template_choose_field),
+                MessageHandler(filters.Regex("^🖼️ Изображение$"), edit_template_choose_field),
+                MessageHandler(filters.Regex("^⏰ Время$"), edit_template_choose_field),
+                MessageHandler(filters.Regex("^📅 Дни отправки$"), edit_template_choose_field),
+                MessageHandler(filters.Regex("^🔄 Периодичность$"), edit_template_choose_field),
+                MessageHandler(filters.Regex("^✅ Завершить редактирование$"), edit_template_choose_field),
+                MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_start)
+            ],
+            EDIT_TEMPLATE_NAME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_name),
+                MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_choose_field)
+            ],
+            EDIT_TEMPLATE_TEXT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_text),
+                MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_choose_field)
+            ],
+            EDIT_TEMPLATE_IMAGE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_image),
+                MessageHandler(filters.PHOTO, edit_template_image),
+                MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_choose_field)
+            ],
+            EDIT_TEMPLATE_TIME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_time),
+                MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_choose_field)
+            ],
+            EDIT_TEMPLATE_DAYS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_days),
+                MessageHandler(filters.Regex("^📅 Понедельник$"), edit_template_days),
+                MessageHandler(filters.Regex("^📅 Вторник$"), edit_template_days),
+                MessageHandler(filters.Regex("^📅 Среда$"), edit_template_days),
+                MessageHandler(filters.Regex("^📅 Четверг$"), edit_template_days),
+                MessageHandler(filters.Regex("^📅 Пятница$"), edit_template_days),
+                MessageHandler(filters.Regex("^📅 Суббота$"), edit_template_days),
+                MessageHandler(filters.Regex("^📅 Воскресенье$"), edit_template_days),
+                MessageHandler(filters.Regex("^✅ Завершить выбор дней$"), edit_template_days),
+                MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_choose_field)
+            ],
+            EDIT_TEMPLATE_FREQUENCY: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_frequency),
+                MessageHandler(filters.Regex("^🔄 2 в неделю$"), edit_template_frequency),
+                MessageHandler(filters.Regex("^📅 1 в неделю$"), edit_template_frequency),
+                MessageHandler(filters.Regex("^🗓️ 2 в месяц$"), edit_template_frequency),
+                MessageHandler(filters.Regex("^📆 1 в месяц$"), edit_template_frequency),
+                MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_choose_field)
+            ],
+            
+            # === УДАЛЕНИЕ ШАБЛОНОВ ===
+            DELETE_TEMPLATE_SELECT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, delete_template_select_group),
+                MessageHandler(filters.Regex("^🚗 Hongqi$"), delete_template_select_group),
+                MessageHandler(filters.Regex("^🚙 TurboMatiz$"), delete_template_select_group),
+                MessageHandler(filters.Regex("^🔙 Назад$"), templates_main)
+            ],
+            DELETE_TEMPLATE_CONFIRM: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, delete_template_confirm),
+                MessageHandler(filters.Regex("^🗑️ .* \\(ID: .*\\)$"), delete_template_confirm),
+                MessageHandler(filters.Regex("^🔙 Назад$"), delete_template_start)
+            ],
+            DELETE_TEMPLATE_CONFIRM: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, delete_template_final),
+                MessageHandler(filters.Regex("^✅ Да, удалить шаблон$"), delete_template_final),
+                MessageHandler(filters.Regex("^❌ Нет, отменить удаление$"), delete_template_final),
+                MessageHandler(filters.Regex("^🔙 Назад$"), delete_template_select_group)
             ],
         },
         fallbacks=[CommandHandler("cancel", cancel_template)]
