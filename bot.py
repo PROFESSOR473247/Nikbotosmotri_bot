@@ -768,55 +768,91 @@ async def add_template_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @authorization_required
 async def add_template_days(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Выбор дней отправки"""
-    day_text = update.message.text
+    """Обработка выбора дней - Шаги 7-8"""
+    user_text = update.message.text
+    template_data = context.user_data['new_template']
+    selected_days = template_data.get('days', [])
     
-    # Находим номер дня по тексту
+    # Обработка кнопки "Завершить выбор дней"
+    if user_text == "✅ Завершить выбор дней":
+        if not selected_days:
+            await update.message.reply_text(
+                "❌ Нужно выбрать хотя бы один день",
+                reply_markup=get_days_keyboard(selected_days)
+            )
+            return ADD_TEMPLATE_DAYS
+        
+        # Переходим к выбору периодичности
+        return await proceed_to_frequency(update, context)
+    
+    # Обработка кнопки "➕ Выбрать еще день" (из шага 8)
+    if user_text == "➕ Выбрать еще день":
+        await update.message.reply_text(
+            "📅 **Выберите ДОПОЛНИТЕЛЬНЫЙ день отправки:**\n\n"
+            f"Уже выбрано: {', '.join([DAYS_OF_WEEK[d] for d in selected_days])}",
+            parse_mode='Markdown',
+            reply_markup=get_days_keyboard(selected_days, is_additional=True)
+        )
+        return ADD_TEMPLATE_DAYS
+    
+    # Обработка кнопки "➡️ Перейти к следующему шагу" (из шага 8)
+    if user_text == "➡️ Перейти к следующему шагу":
+        return await proceed_to_frequency(update, context)
+    
+    # Обработка выбора конкретного дня
     day_number = None
     for num, text in DAYS_OF_WEEK.items():
-        if text == day_text:
+        if text == user_text:
             day_number = num
             break
     
     if day_number is None:
         await update.message.reply_text(
-            "❌ Неверный день. Выберите из списка:",
-            reply_markup=get_days_keyboard()
+            "❌ Пожалуйста, выберите день из списка",
+            reply_markup=get_days_keyboard(selected_days)
         )
         return ADD_TEMPLATE_DAYS
-    
-    if 'days' not in context.user_data['new_template']:
-        context.user_data['new_template']['days'] = []
     
     # Добавляем день если его еще нет
-    if day_number not in context.user_data['new_template']['days']:
-        context.user_data['new_template']['days'].append(day_number)
+    if day_number not in selected_days:
+        selected_days.append(day_number)
+        template_data['days'] = selected_days
     
-    # Показываем выбранные дни
-    selected_days = [DAYS_OF_WEEK[day] for day in context.user_data['new_template']['days']]
+    # Формируем текст выбранных дней
+    selected_days_text = [DAYS_OF_WEEK[d] for d in selected_days]
     
-    await update.message.reply_text(
-        f"✅ Выбранные дни: {', '.join(selected_days)}\n\n"
-        "Выберите еще дни или нажмите 'Далее' для продолжения:",
-        reply_markup=ReplyKeyboardMarkup([
-            ["➡️ Далее"],
-            ["🔙 Назад"]
-        ], resize_keyboard=True)
-    )
-    return ADD_TEMPLATE_DAYS
-
-@authorization_required
-async def add_template_days_next(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Переход к выбору периодичности после выбора дней"""
-    if not context.user_data['new_template'].get('days'):
+    # Определяем на каком мы шаге
+    if len(selected_days) == 1:
+        # Первый день выбран - переходим к шагу 8
         await update.message.reply_text(
-            "❌ Нужно выбрать хотя бы один день",
-            reply_markup=get_days_keyboard()
+            f"✅ **Первый день выбран:** {selected_days_text[0]}\n\n"
+            "📅 **Шаг 8: Хотите добавить еще дни?**\n\n"
+            "Вы можете добавить дополнительные дни отправки или перейти к следующему шагу",
+            parse_mode='Markdown',
+            reply_markup=get_days_continue_keyboard(selected_days_text)
         )
         return ADD_TEMPLATE_DAYS
+    else:
+        # Уже есть выбранные дни - показываем обновленный список
+        await update.message.reply_text(
+            f"✅ **Выбраны дни:** {', '.join(selected_days_text)}\n\n"
+            "📅 **Шаг 8: Хотите добавить еще дни?**\n\n"
+            "Вы можете добавить дополнительные дни отправки или перейти к следующему шагу",
+            parse_mode='Markdown',
+            reply_markup=get_days_continue_keyboard(selected_days_text)
+        )
+        return ADD_TEMPLATE_DAYS
+
+async def proceed_to_frequency(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Переход к выбору периодичности - Шаг 9"""
+    template_data = context.user_data['new_template']
+    selected_days = template_data.get('days', [])
+    selected_days_text = [DAYS_OF_WEEK[d] for d in selected_days]
     
     await update.message.reply_text(
-        "Шаг 8 из 8: Выберите периодичность:",
+        f"📅 **Шаг 9: Выберите периодичность**\n\n"
+        f"✅ Выбраны дни: {', '.join(selected_days_text)}",
+        parse_mode='Markdown',
         reply_markup=get_frequency_keyboard()
     )
     return ADD_TEMPLATE_FREQUENCY
