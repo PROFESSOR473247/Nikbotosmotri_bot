@@ -9,7 +9,21 @@ def load_users():
     try:
         if os.path.exists(USERS_FILE):
             with open(USERS_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                data = json.load(f)
+                # Конвертируем старый формат в новый
+                if 'users' in data and data['users']:
+                    first_user = next(iter(data['users'].values()))
+                    if isinstance(first_user, str):
+                        # Конвертируем старый формат в новый
+                        new_users = {}
+                        for user_id, username in data['users'].items():
+                            new_users[user_id] = {
+                                "name": username,
+                                "groups": ["hongqi", "turbomatiz"]  # Даем доступ ко всем группам по умолчанию
+                            }
+                        data['users'] = new_users
+                        save_users(data)  # Сохраняем в новом формате
+                return data
         else:
             # Создаем файл с администратором по умолчанию
             default_users = {
@@ -56,12 +70,12 @@ def add_user(user_id, username, groups=None):
     
     users_data['users'][str(user_id)] = {
         "name": username,
-        "groups": groups or []
+        "groups": groups or ["hongqi", "turbomatiz"]  # По умолчанию доступ ко всем группам
     }
     success, message = save_users(users_data)
     
     if success:
-        return True, f"Пользователь {username} (ID: {user_id}) добавлен в группы: {', '.join(groups) if groups else 'нет групп'}"
+        return True, f"Пользователь {username} (ID: {user_id}) добавлен в группы: {', '.join(groups) if groups else 'все группы'}"
     else:
         return False, message
 
@@ -100,6 +114,12 @@ def get_user_groups(user_id):
     """Возвращает группы пользователя"""
     users_data = load_users()
     user_data = users_data.get('users', {}).get(str(user_id), {})
+    
+    # Если user_data - строка (старый формат), возвращаем все группы
+    if isinstance(user_data, str):
+        return ["hongqi", "turbomatiz"]
+    
+    # Если это словарь, возвращаем группы
     return user_data.get('groups', [])
 
 def update_user_groups(user_id, groups):
@@ -110,7 +130,16 @@ def update_user_groups(user_id, groups):
     if user_id_str not in users_data.get('users', {}):
         return False, "Пользователь не найден"
     
-    users_data['users'][user_id_str]['groups'] = groups
+    # Если пользователь в старом формате, конвертируем
+    user_data = users_data['users'][user_id_str]
+    if isinstance(user_data, str):
+        users_data['users'][user_id_str] = {
+            "name": user_data,
+            "groups": groups
+        }
+    else:
+        users_data['users'][user_id_str]['groups'] = groups
+    
     success, message = save_users(users_data)
     
     if success:
