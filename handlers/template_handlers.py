@@ -1206,6 +1206,7 @@ def get_template_conversation_handler():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_select_group),
                 MessageHandler(filters.Regex("^🚗 Hongqi$"), edit_template_select_group),
                 MessageHandler(filters.Regex("^🚙 TurboMatiz$"), edit_template_select_group),
+                MessageHandler(filters.Regex("^📝 .* \\(ID: .*\\)$"), edit_template_select_template),  # ДОБАВЛЕНО
                 MessageHandler(filters.Regex("^🔙 Назад$"), templates_main)
             ],
             EDIT_TEMPLATE_FIELD: [
