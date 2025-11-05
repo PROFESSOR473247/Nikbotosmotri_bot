@@ -534,7 +534,7 @@ async def edit_template_select_group(update: Update, context: ContextTypes.DEFAU
         parse_mode='Markdown',
         reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     )
-    # ИЗМЕНЕНИЕ: Возвращаем состояние для выбора шаблона, а не поля
+    # ВАЖНО: Остаемся в том же состоянии для обработки выбора шаблона
     return EDIT_TEMPLATE_SELECT  # Было: EDIT_TEMPLATE_FIELD
 
 async def edit_template_select_template(update: Update, context: ContextTypes.DEFAULT_TYPE):
