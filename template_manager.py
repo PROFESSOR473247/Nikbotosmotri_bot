@@ -3,9 +3,9 @@ import os
 import uuid
 from datetime import datetime
 
-TEMPLATES_FILE = 'templates_data.json'
-GROUPS_FILE = 'template_groups.json'
-IMAGES_DIR = 'images'
+TEMPLATES_FILE = 'data/templates.json'
+GROUPS_FILE = 'data/groups.json'
+IMAGES_DIR = 'data/images'
 
 # Дни недели для отображения
 DAYS_OF_WEEK = {
@@ -25,33 +25,30 @@ FREQUENCY_TYPES = {
     "monthly": "📆 1 в месяц"
 }
 
+def ensure_data_directory():
+    """Создает необходимые директории если их нет"""
+    os.makedirs('data', exist_ok=True)
+    os.makedirs(IMAGES_DIR, exist_ok=True)
+
 def init_files():
     """Инициализирует необходимые файлы если их нет"""
-    if not os.path.exists(IMAGES_DIR):
-        os.makedirs(IMAGES_DIR)
+    ensure_data_directory()
     
+    # Инициализация файла шаблонов
     if not os.path.exists(TEMPLATES_FILE):
         with open(TEMPLATES_FILE, 'w', encoding='utf-8') as f:
-            json.dump({"templates": {}}, f, ensure_ascii=False, indent=4)
+            json.dump({}, f, ensure_ascii=False, indent=4)
     
+    # Инициализация файла групп (без подгрупп)
     if not os.path.exists(GROUPS_FILE):
         default_groups = {
             "groups": {
                 "hongqi": {
                     "name": "🚗 Hongqi",
-                    "subgroups": {
-                        "inspection": "🔍 Осмотры",
-                        "reminders": "⏰ Напоминания"
-                    },
                     "allowed_users": ["812934047"]
                 },
                 "turbomatiz": {
-                    "name": "🚙 TurboMatiz",
-                    "subgroups": {
-                        "payments": "💳 Оплаты", 
-                        "inspections": "🔍 Осмотры",
-                        "cleaning": "🧼 Чистка"
-                    },
+                    "name": "🚙 TurboMatiz", 
                     "allowed_users": ["812934047"]
                 }
             }
@@ -64,11 +61,15 @@ def load_templates():
     try:
         if os.path.exists(TEMPLATES_FILE):
             with open(TEMPLATES_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        return {"templates": {}}
+                data = json.load(f)
+                # Обеспечиваем обратную совместимость
+                if isinstance(data, dict) and 'templates' in data:
+                    return data['templates']
+                return data
+        return {}
     except Exception as e:
         print(f"❌ Ошибка загрузки шаблонов: {e}")
-        return {"templates": {}}
+        return {}
 
 def save_templates(templates_data):
     """Сохраняет шаблоны в файл"""
@@ -109,24 +110,25 @@ def create_template(template_data):
     templates_data = load_templates()
     template_id = str(uuid.uuid4())[:8]
     
+    # Убедимся, что subgroup всегда None (убрали подгруппы)
+    template_data['subgroup'] = None
     template_data['id'] = template_id
     template_data['created_at'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    templates_data['templates'][template_id] = template_data
+    templates_data[template_id] = template_data
     
     if save_templates(templates_data):
         return True, template_id
     return False, None
 
-def get_templates_by_group(group_id, subgroup_id=None):
-    """Возвращает шаблоны по группе и подгруппе"""
+def get_templates_by_group(group_id):
+    """Возвращает шаблоны по группе"""
     templates_data = load_templates()
     templates = []
     
-    for template_id, template in templates_data['templates'].items():
+    for template_id, template in templates_data.items():
         if template.get('group') == group_id:
-            if subgroup_id is None or template.get('subgroup') == subgroup_id:
-                templates.append((template_id, template))
+            templates.append((template_id, template))
     
     return templates
 
@@ -153,39 +155,34 @@ def format_template_info(template):
     
     info = f"📝 **{template['name']}**\n\n"
     info += f"🏷️ **Группа:** {template.get('group', 'Не указана')}\n"
-    if template.get('subgroup'):
-        info += f"📂 **Подгруппа:** {template.get('subgroup', 'Не указана')}\n"
     info += f"⏰ **Время:** {template.get('time', 'Не указано')} (МСК)\n"
-    info += f"📅 **Дни:** {', '.join(days_names)}\n"
+    info += f"📅 **Дни:** {', '.join(days_names) if days_names else 'Не указаны'}\n"
     info += f"🔄 **Периодичность:** {frequency}\n"
     info += f"📄 **Текст:** {template.get('text', '')[:100]}...\n"
     info += f"🖼️ **Изображение:** {'✅ Есть' if template.get('image') else '❌ Нет'}\n"
     
     return info
 
-# НОВЫЕ ФУНКЦИИ ДЛЯ РЕДАКТИРОВАНИЯ И УДАЛЕНИЯ
-
 def get_all_templates():
     """Возвращает все шаблоны"""
-    templates_data = load_templates()
-    return templates_data.get('templates', {})
+    return load_templates()
 
 def delete_template_by_id(template_id):
     """Удаляет шаблон по ID"""
     templates_data = load_templates()
     
-    if template_id not in templates_data['templates']:
+    if template_id not in templates_data:
         return False, "Шаблон не найден"
     
     # Удаляем изображение если есть
-    template = templates_data['templates'][template_id]
+    template = templates_data[template_id]
     if template.get('image') and os.path.exists(template['image']):
         try:
             os.remove(template['image'])
         except Exception as e:
             print(f"⚠️ Ошибка удаления изображения: {e}")
     
-    del templates_data['templates'][template_id]
+    del templates_data[template_id]
     
     if save_templates(templates_data):
         return True, "Шаблон удален"
@@ -194,16 +191,16 @@ def delete_template_by_id(template_id):
 def get_template_by_id(template_id):
     """Возвращает шаблон по ID"""
     templates_data = load_templates()
-    return templates_data['templates'].get(template_id)
+    return templates_data.get(template_id)
 
 def update_template_field(template_id, field, value):
     """Обновляет конкретное поле шаблона"""
     templates_data = load_templates()
     
-    if template_id not in templates_data['templates']:
+    if template_id not in templates_data:
         return False, "Шаблон не найден"
     
-    templates_data['templates'][template_id][field] = value
+    templates_data[template_id][field] = value
     
     if save_templates(templates_data):
         return True, f"Поле {field} обновлено"
