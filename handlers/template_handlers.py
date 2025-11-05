@@ -161,26 +161,13 @@ async def add_template_choose_group(update: Update, context: ContextTypes.DEFAUL
     context.user_data['new_template']['group'] = group_id
     context.user_data['current_group'] = group_id
     
-    # Проверяем есть ли подгруппы
-    groups_data = load_groups()
-    group_data = groups_data['groups'].get(group_id, {})
-    subgroups = group_data.get('subgroups', {})
-    
-    print(f"🔍 Подгруппы в группе {group_id}: {subgroups}")
-    
-    if subgroups:
-        await update.message.reply_text(
-            "Шаг 2 из 10: Выберите подгруппу:",
-            reply_markup=get_subgroups_keyboard(group_id, "add")
-        )
-        return ADD_TEMPLATE_SUBGROUP
-    else:
-        context.user_data['new_template']['subgroup'] = None
-        await update.message.reply_text(
-            "Шаг 3 из 10: Введите название шаблона:",
-            reply_markup=get_back_keyboard()
-        )
-        return ADD_TEMPLATE_NAME
+    # УДАЛЕНО: Проверка подгрупп - сразу переходим к вводу названия
+    context.user_data['new_template']['subgroup'] = None
+    await update.message.reply_text(
+        "Шаг 2 из 9: Введите название шаблона:",
+        reply_markup=get_back_keyboard()
+    )
+    return ADD_TEMPLATE_NAME
 
 async def add_template_choose_subgroup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Выбор подгруппы для нового шаблона"""
