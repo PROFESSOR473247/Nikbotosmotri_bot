@@ -2,6 +2,7 @@ import json
 import os
 
 USERS_FILE = 'authorized_users.json'
+GROUPS_FILE = 'template_groups.json'
 
 def load_users():
     """Загружает список пользователей из файла"""
@@ -13,9 +14,12 @@ def load_users():
             # Создаем файл с администратором по умолчанию
             default_users = {
                 "users": {
-                    "812934047": "Никита"  # Ваш user_id
+                    "812934047": {
+                        "name": "Никита",
+                        "groups": ["hongqi", "turbomatiz"]
+                    }
                 },
-                "admin_id": 812934047  # Ваш user_id
+                "admin_id": 812934047
             }
             save_users(default_users)
             return default_users
@@ -43,18 +47,21 @@ def is_admin(user_id):
     users_data = load_users()
     return user_id == users_data.get('admin_id')
 
-def add_user(user_id, username):
-    """Добавляет пользователя"""
+def add_user(user_id, username, groups=None):
+    """Добавляет пользователя с указанием групп"""
     users_data = load_users()
-    
+    
     if str(user_id) in users_data.get('users', {}):
         return False, "Пользователь уже существует"
-    
-    users_data['users'][str(user_id)] = username
+    
+    users_data['users'][str(user_id)] = {
+        "name": username,
+        "groups": groups or []
+    }
     success, message = save_users(users_data)
-    
+    
     if success:
-        return True, f"Пользователь {username} (ID: {user_id}) добавлен"
+        return True, f"Пользователь {username} (ID: {user_id}) добавлен в группы: {', '.join(groups) if groups else 'нет групп'}"
     else:
         return False, message
 
@@ -62,18 +69,18 @@ def remove_user(user_id):
     """Удаляет пользователя"""
     users_data = load_users()
     user_id_str = str(user_id)
-    
+    
     if user_id_str not in users_data.get('users', {}):
         return False, "Пользователь не найден"
-    
+    
     if user_id == users_data.get('admin_id'):
         return False, "Нельзя удалить администратора"
-    
-    username = users_data['users'][user_id_str]
+    
+    username = users_data['users'][user_id_str]['name']
     del users_data['users'][user_id_str]
-    
+    
     success, message = save_users(users_data)
-    
+    
     if success:
         return True, f"Пользователь {username} (ID: {user_id}) удален"
     else:
@@ -88,3 +95,25 @@ def get_admin_id():
     """Возвращает ID администратора"""
     users_data = load_users()
     return users_data.get('admin_id')
+
+def get_user_groups(user_id):
+    """Возвращает группы пользователя"""
+    users_data = load_users()
+    user_data = users_data.get('users', {}).get(str(user_id), {})
+    return user_data.get('groups', [])
+
+def update_user_groups(user_id, groups):
+    """Обновляет группы пользователя"""
+    users_data = load_users()
+    user_id_str = str(user_id)
+    
+    if user_id_str not in users_data.get('users', {}):
+        return False, "Пользователь не найден"
+    
+    users_data['users'][user_id_str]['groups'] = groups
+    success, message = save_users(users_data)
+    
+    if success:
+        return True, f"Группы пользователя обновлены"
+    else:
+        return False, message
