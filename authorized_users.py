@@ -50,16 +50,16 @@ def is_admin(user_id):
 def add_user(user_id, username, groups=None):
     """Добавляет пользователя с указанием групп"""
     users_data = load_users()
-    
+    
     if str(user_id) in users_data.get('users', {}):
         return False, "Пользователь уже существует"
-    
+    
     users_data['users'][str(user_id)] = {
         "name": username,
         "groups": groups or []
     }
     success, message = save_users(users_data)
-    
+    
     if success:
         return True, f"Пользователь {username} (ID: {user_id}) добавлен в группы: {', '.join(groups) if groups else 'нет групп'}"
     else:
@@ -69,18 +69,18 @@ def remove_user(user_id):
     """Удаляет пользователя"""
     users_data = load_users()
     user_id_str = str(user_id)
-    
+    
     if user_id_str not in users_data.get('users', {}):
         return False, "Пользователь не найден"
-    
+    
     if user_id == users_data.get('admin_id'):
         return False, "Нельзя удалить администратора"
-    
+    
     username = users_data['users'][user_id_str]['name']
     del users_data['users'][user_id_str]
-    
+    
     success, message = save_users(users_data)
-    
+    
     if success:
         return True, f"Пользователь {username} (ID: {user_id}) удален"
     else:
@@ -106,13 +106,13 @@ def update_user_groups(user_id, groups):
     """Обновляет группы пользователя"""
     users_data = load_users()
     user_id_str = str(user_id)
-    
+    
     if user_id_str not in users_data.get('users', {}):
         return False, "Пользователь не найден"
-    
+    
     users_data['users'][user_id_str]['groups'] = groups
     success, message = save_users(users_data)
-    
+    
     if success:
         return True, f"Группы пользователя обновлены"
     else:
