@@ -5,6 +5,7 @@ from keyboards.template_keyboards import (
     get_back_keyboard, get_skip_keyboard, get_days_keyboard, 
     get_days_continue_keyboard, get_frequency_keyboard, get_confirmation_keyboard
 )
+from keyboards.main_keyboards import get_main_keyboard
 from authorized_users import is_authorized
 from template_manager import (
     get_user_accessible_groups, create_template, get_templates_by_group,
@@ -436,8 +437,6 @@ async def add_template_frequency(update: Update, context: ContextTypes.DEFAULT_T
 
 async def add_template_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Подтверждение создания шаблона - Шаг 10"""
-    from handlers.basic_handlers import cancel
-    
     if update.message.text == "✅ Подтвердить создание":
         template_data = context.user_data['new_template']
         success, template_id = create_template(template_data)
@@ -474,7 +473,8 @@ async def add_template_confirm(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         return ADD_TEMPLATE_CONFIRM
 
-# Заглушки для нереализованных функций
+# ===== ЗАГЛУШКИ ДЛЯ НЕРЕАЛИЗОВАННЫХ ФУНКЦИЙ =====
+
 async def edit_template_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Начало редактирования шаблона"""
     await update.message.reply_text(
@@ -496,6 +496,21 @@ async def delete_template_start(update: Update, context: ContextTypes.DEFAULT_TY
         reply_markup=get_templates_main_keyboard()
     )
     return TEMPLATES_MAIN
+
+# ===== ФУНКЦИЯ ОТМЕНЫ =====
+
+async def cancel_template(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отмена создания шаблона"""
+    # Очищаем временные данные
+    context.user_data.clear()
+    
+    await update.message.reply_text(
+        "❌ Создание шаблона отменено",
+        reply_markup=get_main_keyboard()
+    )
+    return ConversationHandler.END
+
+# ===== CONVERSATION HANDLER =====
 
 def get_template_conversation_handler():
     """Возвращает настроенный ConversationHandler для шаблонов"""
@@ -576,5 +591,5 @@ def get_template_conversation_handler():
                 MessageHandler(filters.Regex("^🔙 Назад$"), add_template_frequency)
             ],
         },
-        fallbacks=[CommandHandler("cancel", cancel)]
+        fallbacks=[CommandHandler("cancel", cancel_template)]
     )
