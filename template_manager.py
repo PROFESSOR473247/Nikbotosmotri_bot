@@ -91,16 +91,6 @@ def load_groups():
         print(f"❌ Ошибка загрузки групп: {e}")
         return {"groups": {}}
 
-def save_groups(groups_data):
-    """Сохраняет группы в файл"""
-    try:
-        with open(GROUPS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(groups_data, f, ensure_ascii=False, indent=4)
-        return True
-    except Exception as e:
-        print(f"❌ Ошибка сохранения групп: {e}")
-        return False
-
 def get_user_accessible_groups(user_id):
     """Возвращает группы доступные пользователю"""
     from authorized_users import get_user_groups
@@ -127,45 +117,6 @@ def create_template(template_data):
     if save_templates(templates_data):
         return True, template_id
     return False, None
-
-def update_template(template_id, updates):
-    """Обновляет шаблон"""
-    templates_data = load_templates()
-    
-    if template_id not in templates_data['templates']:
-        return False, "Шаблон не найден"
-    
-    templates_data['templates'][template_id].update(updates)
-    
-    if save_templates(templates_data):
-        return True, "Шаблон обновлен"
-    return False, "Ошибка сохранения"
-
-def delete_template(template_id):
-    """Удаляет шаблон"""
-    templates_data = load_templates()
-    
-    if template_id not in templates_data['templates']:
-        return False, "Шаблон не найден"
-    
-    # Удаляем изображение если есть
-    template = templates_data['templates'][template_id]
-    if template.get('image') and os.path.exists(template['image']):
-        try:
-            os.remove(template['image'])
-        except Exception as e:
-            print(f"⚠️ Ошибка удаления изображения: {e}")
-    
-    del templates_data['templates'][template_id]
-    
-    if save_templates(templates_data):
-        return True, "Шаблон удален"
-    return False, "Ошибка удаления"
-
-def get_template(template_id):
-    """Возвращает шаблон по ID"""
-    templates_data = load_templates()
-    return templates_data['templates'].get(template_id)
 
 def get_templates_by_group(group_id, subgroup_id=None):
     """Возвращает шаблоны по группе и подгруппе"""
@@ -211,54 +162,10 @@ def format_template_info(template):
     info += f"🖼️ **Изображение:** {'✅ Есть' if template.get('image') else '❌ Нет'}\n"
     
     return info
-    
-    # Добавьте эти функции в конец файла template_manager.py
+
+# НОВЫЕ ФУНКЦИИ ДЛЯ РЕДАКТИРОВАНИЯ И УДАЛЕНИЯ
 
 def get_all_templates():
-    """Возвращает все шаблоны"""
-    templates_data = load_templates()
-    return templates_data.get('templates', {})
-
-def delete_template_by_id(template_id):
-    """Удаляет шаблон по ID"""
-    templates_data = load_templates()
-    
-    if template_id not in templates_data['templates']:
-        return False, "Шаблон не найден"
-    
-    # Удаляем изображение если есть
-    template = templates_data['templates'][template_id]
-    if template.get('image') and os.path.exists(template['image']):
-        try:
-            os.remove(template['image'])
-        except Exception as e:
-            print(f"⚠️ Ошибка удаления изображения: {e}")
-    
-    del templates_data['templates'][template_id]
-    
-    if save_templates(templates_data):
-        return True, "Шаблон удален"
-    return False, "Ошибка удаления"
-
-def get_template_by_id(template_id):
-    """Возвращает шаблон по ID"""
-    templates_data = load_templates()
-    return templates_data['templates'].get(template_id)
-
-def update_template_field(template_id, field, value):
-    """Обновляет конкретное поле шаблона"""
-    templates_data = load_templates()
-    
-    if template_id not in templates_data['templates']:
-        return False, "Шаблон не найден"
-    
-    templates_data['templates'][template_id][field] = value
-    
-    if save_templates(templates_data):
-        return True, f"Поле {field} обновлено"
-    return False, "Ошибка обновления"
-    
-    def get_all_templates():
     """Возвращает все шаблоны"""
     templates_data = load_templates()
     return templates_data.get('templates', {})
