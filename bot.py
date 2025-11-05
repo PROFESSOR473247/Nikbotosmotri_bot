@@ -1155,7 +1155,6 @@ def main():
                 MessageHandler(filters.Regex("^🔙 Назад$"), add_template_image)
             ],
             ADD_TEMPLATE_DAYS: [
-                MessageHandler(filters.Regex("^➡️ Далее$"), add_template_days_next),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_days),
                 MessageHandler(filters.Regex("^🔙 Назад$"), add_template_time)
             ],
