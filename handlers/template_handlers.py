@@ -608,6 +608,15 @@ def get_edit_fields_keyboard():
 async def edit_template_choose_field(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка выбора поля для редактирования"""
     field_text = update.message.text
+    
+    # Проверяем, что данные шаблона загружены
+    if 'editing_template_id' not in context.user_data or 'editing_template' not in context.user_data:
+        await update.message.reply_text(
+            "❌ Ошибка: данные шаблона не найдены. Начните редактирование заново.",
+            reply_markup=get_templates_main_keyboard()
+        )
+        return TEMPLATES_MAIN
+    
     template_id = context.user_data['editing_template_id']
     template = context.user_data['editing_template']
     
