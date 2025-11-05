@@ -864,7 +864,7 @@ async def show_template_confirmation(update: Update, context: ContextTypes.DEFAU
 @authorization_required
 async def add_template_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Подтверждение создания шаблона"""
-    if update.message.text == "✅ Подтвердить":
+    if update.message.text == "✅ Подтвердить создание":
         template_data = context.user_data['new_template']
         
         success, template_id = create_template(template_data)
