@@ -16,7 +16,7 @@ from template_manager import (
 # Состояния для ConversationHandler
 (
     TEMPLATES_MAIN, TEMPLATE_LIST_GROUPS, TEMPLATE_LIST_SUBGROUPS, TEMPLATE_LIST_TEMPLATES,
-    ADD_TEMPLATE_GROUP, ADD_TEMPLATE_SUBGROUP, ADD_TEMPLATE_NAME, ADD_TEMPLATE_TEXT,
+    ADD_TEMPLATE_GROUP, ADD_TEMPLATE_NAME, ADD_TEMPLATE_TEXT,
     ADD_TEMPLATE_IMAGE, ADD_TEMPLATE_TIME, ADD_TEMPLATE_DAYS, ADD_TEMPLATE_FREQUENCY,
     ADD_TEMPLATE_SECOND_DAY, ADD_TEMPLATE_CONFIRM,
     # Добавленные состояния для редактирования и удаления
@@ -1142,18 +1142,9 @@ def get_template_conversation_handler():
                 MessageHandler(filters.Regex("^🚙 TurboMatiz$"), add_template_choose_group),
                 MessageHandler(filters.Regex("^🔙 Назад$"), templates_main)
             ],
-            ADD_TEMPLATE_SUBGROUP: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_choose_subgroup),
-                MessageHandler(filters.Regex("^🔍 Осмотры$"), add_template_choose_subgroup),
-                MessageHandler(filters.Regex("^⏰ Напоминания$"), add_template_choose_subgroup),
-                MessageHandler(filters.Regex("^💳 Оплаты$"), add_template_choose_subgroup),
-                MessageHandler(filters.Regex("^🧼 Чистка$"), add_template_choose_subgroup),
-                MessageHandler(filters.Regex("^📁 Без подгруппы$"), add_template_choose_subgroup),
-                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_start)
-            ],
             ADD_TEMPLATE_NAME: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_name),
-                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_start)
+                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_start)  # Возврат к выбору группы
             ],
             ADD_TEMPLATE_TEXT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_text),
