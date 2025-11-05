@@ -1109,77 +1109,53 @@ def main():
 
     # ConversationHandler для шаблонов
     template_conv_handler = ConversationHandler(
-        # ... остальной код без изменений
-        entry_points=[
-            MessageHandler(filters.Regex("^📋 Шаблоны$"), templates_main)
+    entry_points=[MessageHandler(filters.Regex("^📋 Шаблоны$"), templates_main)],
+    states={
+        TEMPLATES_MAIN: [
+            MessageHandler(filters.Regex("^📋 Список шаблонов$"), template_list_start),
+            MessageHandler(filters.Regex("^➕ Добавить новый$"), add_template_start),
+            MessageHandler(filters.Regex("^🔙 Главное меню$"), lambda u, c: ConversationHandler.END)
         ],
-        states={
-            TEMPLATES_MAIN: [
-                MessageHandler(filters.Regex("^📋 Список шаблонов$"), template_list_start),
-                MessageHandler(filters.Regex("^➕ Добавить новый$"), add_template_start),
-                MessageHandler(filters.Regex("^✏️ Редактировать$"), edit_template_start),
-                MessageHandler(filters.Regex("^🗑️ Удалить$"), delete_template_start),
-                MessageHandler(filters.Regex("^🔙 Главное меню$"), lambda u, c: ConversationHandler.END)
-            ],
-            TEMPLATE_LIST_GROUPS: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, template_list_choose_group),
-                MessageHandler(filters.Regex("^🔙 К шаблонам$"), templates_main)
-            ],
-            TEMPLATE_LIST_SUBGROUPS: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, template_list_choose_subgroup),
-                MessageHandler(filters.Regex("^🔙 К группам$"), template_list_start)
-            ],
-            ADD_TEMPLATE_GROUP: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_choose_group),
-                MessageHandler(filters.Regex("^🔙 Назад$"), templates_main)
-            ],
-            ADD_TEMPLATE_SUBGROUP: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_choose_subgroup),
-                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_start)
-            ],
-            ADD_TEMPLATE_NAME: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_name),
-                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_start)
-            ],
-            ADD_TEMPLATE_TEXT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_text),
-                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_choose_subgroup)
-            ],
-            ADD_TEMPLATE_IMAGE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_image),
-                MessageHandler(filters.PHOTO, add_template_image),
-                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_text)
-            ],
-            ADD_TEMPLATE_TIME: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_time),
-                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_image)
-            ],
-            ADD_TEMPLATE_DAYS: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_days),
-                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_time)
-            ],
-            ADD_TEMPLATE_FREQUENCY: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_frequency),
-                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_days)
-            ],
-            ADD_TEMPLATE_SECOND_DAY: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_second_day),
-                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_frequency)
-            ],
-            ADD_TEMPLATE_CONFIRM: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_confirm),
-                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_frequency)
-            ],
-            EDIT_TEMPLATE_FIELD: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_confirm),
-                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_confirm)
-            ],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-        map_to_parent={
-            ConversationHandler.END: ConversationHandler.END
-        }
-    )
+        TEMPLATE_LIST_GROUPS: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, template_list_choose_group),
+            MessageHandler(filters.Regex("^🔙 К шаблонам$"), templates_main)
+        ],
+        ADD_TEMPLATE_GROUP: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_choose_group),
+            MessageHandler(filters.Regex("^🔙 Назад$"), templates_main)
+        ],
+        ADD_TEMPLATE_NAME: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_name),
+            MessageHandler(filters.Regex("^🔙 Назад$"), add_template_start)
+        ],
+        ADD_TEMPLATE_TEXT: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_text),
+            MessageHandler(filters.Regex("^🔙 Назад$"), add_template_choose_group)
+        ],
+        ADD_TEMPLATE_IMAGE: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_image),
+            MessageHandler(filters.PHOTO, add_template_image),
+            MessageHandler(filters.Regex("^🔙 Назад$"), add_template_text)
+        ],
+        ADD_TEMPLATE_TIME: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_time),
+            MessageHandler(filters.Regex("^🔙 Назад$"), add_template_image)
+        ],
+        ADD_TEMPLATE_DAYS: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_days),
+            MessageHandler(filters.Regex("^🔙 Назад$"), add_template_time)
+        ],
+        ADD_TEMPLATE_FREQUENCY: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_frequency),
+            MessageHandler(filters.Regex("^🔙 Назад$"), add_template_days)
+        ],
+        ADD_TEMPLATE_CONFIRM: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_confirm),
+            MessageHandler(filters.Regex("^🔙 Назад$"), add_template_frequency)
+        ],
+    },
+    fallbacks=[CommandHandler("cancel", cancel)]
+)
 
     # Обработчики команд
     application.add_handler(CommandHandler("start", start))
