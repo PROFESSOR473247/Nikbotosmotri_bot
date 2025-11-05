@@ -1063,21 +1063,24 @@ def keep_alive():
     print("✅ Keep-alive система запущена")
 
 def main():
-    """Запуск бота"""
-    print("🚀 Запуск бота с новой системой шаблонов...")
-
-    # Запускаем keep-alive систему
+    print("🚀 Запуск бота...")
+    
+    # Исправляем структуру данных при запуске
+    try:
+        from fix_data import fix_users_data, init_required_files
+        fix_users_data()
+        init_required_files()
+        print("✅ Структура данных проверена и исправлена")
+    except Exception as e:
+        print(f"⚠️ Предупреждение при проверке данных: {e}")
+    
     keep_alive()
 
-    # Создаем приложение
-    application = (
-        Application.builder()
-        .token(BOT_TOKEN)
-        .build()
-    )
+    application = Application.builder().token(BOT_TOKEN).build()
 
-    # ConversationHandler для системы шаблонов
+    # ConversationHandler для шаблонов
     template_conv_handler = ConversationHandler(
+        # ... остальной код без изменений
         entry_points=[
             MessageHandler(filters.Regex("^📋 Шаблоны$"), templates_main)
         ],
