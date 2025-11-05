@@ -1189,11 +1189,13 @@ def get_template_conversation_handler():
             ],
             
             # === РЕДАКТИРОВАНИЕ ШАБЛОНОВ ===
+            # === РЕДАКТИРОВАНИЕ ШАБЛОНОВ ===
             EDIT_TEMPLATE_SELECT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_select_group),
                 MessageHandler(filters.Regex("^🚗 Hongqi$"), edit_template_select_group),
                 MessageHandler(filters.Regex("^🚙 TurboMatiz$"), edit_template_select_group),
-                MessageHandler(filters.Regex("^📝 .* \\(ID: .*\\)$"), edit_template_select_template),  # ДОБАВЛЕНО
+    # ДОБАВЛЕНО: Обработчик выбора шаблона
+                MessageHandler(filters.Regex("^📝 .*"), edit_template_select_template),
                 MessageHandler(filters.Regex("^🔙 Назад$"), templates_main)
             ],
             EDIT_TEMPLATE_FIELD: [
