@@ -8,7 +8,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user_id = update.effective_user.id
 
-    if text == "📋 Шаблоны":
+    if text == "📋 Задачи":
+        from handlers.task_handlers import tasks_main
+        return await tasks_main(update, context)
+
+    elif text == "📋 Шаблоны":
         from handlers.template_handlers import templates_main
         return await templates_main(update, context)
 
