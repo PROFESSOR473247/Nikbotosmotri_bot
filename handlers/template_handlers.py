@@ -2,7 +2,7 @@ from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, filters
 from keyboards.template_keyboards import (
     get_templates_main_keyboard, get_groups_keyboard,
-    get_back_keyboard, get_skip_keyboard, get_days_keyboard, 
+    get_back_keyboard, get_skip_keyboard, get_days_keyboard,
     get_days_continue_keyboard, get_frequency_keyboard, get_confirmation_keyboard
 )
 from keyboards.main_keyboards import get_main_keyboard
@@ -14,7 +14,7 @@ from template_manager import (
 
 # Состояния для ConversationHandler
 (
-    TEMPLATES_MAIN, TEMPLATE_LIST_GROUPS, 
+    TEMPLATES_MAIN, TEMPLATE_LIST_GROUPS,
     ADD_TEMPLATE_GROUP, ADD_TEMPLATE_NAME, ADD_TEMPLATE_TEXT,
     ADD_TEMPLATE_IMAGE, ADD_TEMPLATE_TIME, ADD_TEMPLATE_DAYS, ADD_TEMPLATE_FREQUENCY,
     ADD_TEMPLATE_CONFIRM,
@@ -375,7 +375,7 @@ async def add_template_frequency(update: Update, context: ContextTypes.DEFAULT_T
     frequency_text = update.message.text
     
     frequency_map = {
-        "📅 1 в неделю": "weekly", 
+        "📅 1 в неделю": "weekly",
         "🗓️ 2 в месяц": "2_per_month",
         "📆 1 в месяц": "monthly"
     }
@@ -593,7 +593,7 @@ async def edit_template_choose_field(update: Update, context: ContextTypes.DEFAU
     
     field_map = {
         "🏷️ Название": "name",
-        "📝 Текст": "text", 
+        "📝 Текст": "text",
         "🖼️ Изображение": "image",
         "⏰ Время": "time",
         "📅 Дни отправки": "days",
@@ -861,7 +861,7 @@ async def edit_template_frequency(update: Update, context: ContextTypes.DEFAULT_
     frequency_text = update.message.text
     
     frequency_map = {
-        "📅 1 в неделю": "weekly", 
+        "📅 1 в неделю": "weekly",
         "🗓️ 2 в месяц": "2_per_month",
         "📆 1 в месяц": "monthly"
     }
