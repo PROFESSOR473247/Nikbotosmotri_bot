@@ -2,13 +2,13 @@ from telegram import ReplyKeyboardMarkup
 from authorized_users import is_authorized, is_admin
 
 def get_main_keyboard():
-    """Создает главное меню для авторизованных пользователей"""
+    """Главное меню"""
     keyboard = [
-        ["📋 Шаблоны"],
-        ["🧪 Тестирование"],
-        ["⚙️ ЕЩЕ"]
+        ["📋 Задачи", "📋 Шаблоны"],  # Добавлена кнопка Задачи
+        ["👥 Пользователи", "⚙️ Настройки"],
+        ["ℹ️ Помощь"]
     ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, input_field_placeholder="Выберите раздел...")
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def get_unauthorized_keyboard():
     """Создает меню для неавторизованных пользователей"""
