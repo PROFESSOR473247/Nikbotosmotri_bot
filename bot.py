@@ -13,6 +13,7 @@ from telegram.ext import (
 from config import BOT_TOKEN
 from handlers.start_handlers import start, help_command, my_id, now, update_menu
 from handlers.template_handlers import get_template_conversation_handler
+from handlers.task_handlers import get_task_conversation_handler
 from handlers.basic_handlers import handle_text, cancel
 
 # Настройка логирования
@@ -59,6 +60,9 @@ def main():
 
     # Получаем ConversationHandler для шаблонов
     template_conv_handler = get_template_conversation_handler()
+    
+    # Получаем ConversationHandler для задач
+    task_conv_handler = get_task_conversation_handler()
 
     # Обработчики команд
     application.add_handler(CommandHandler("start", start))
@@ -69,6 +73,9 @@ def main():
 
     # Добавляем ConversationHandler для шаблонов
     application.add_handler(template_conv_handler)
+    
+    # Добавляем ConversationHandler для задач
+    application.add_handler(task_conv_handler)
 
     # Обработчик для всех текстовых сообщений (должен быть последним)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
