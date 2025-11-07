@@ -63,8 +63,29 @@ async def create_task_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def create_task_select_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Выбор группы для создания задачи"""
-    group_name = update.message.text
+    user_text = update.message.text
     user_id = update.effective_user.id
+    
+    print(f"🔍 Пользователь выбрал: {user_text}")
+    
+    # Если нажата кнопка "Назад"
+    if user_text == "🔙 Назад":
+        await tasks_main(update, context)
+        return TASKS_MAIN
+    
+    # Определяем группу по тексту
+    group_name = None
+    if user_text in ["🚗 Hongqi", "Hongqi"]:
+        group_name = "🚗 Hongqi"
+    elif user_text in ["🚙 TurboMatiz", "TurboMatiz"]:
+        group_name = "🚙 TurboMatiz"
+    else:
+        # Если текст не соответствует кнопкам, показываем сообщение об ошибке
+        await update.message.reply_text(
+            "❌ Пожалуйста, выберите группу из предложенных кнопок",
+            reply_markup=get_groups_keyboard(user_id, "task")
+        )
+        return CREATE_TASK_GROUP
     
     # Находим ID группы по имени
     accessible_groups = get_user_accessible_groups(user_id)
@@ -102,7 +123,7 @@ async def create_task_select_group(update: Update, context: ContextTypes.DEFAULT
         has_image = "🖼️" if template.get('image') else "❌"
         time_str = template.get('time', '??:??')
         
-        # Создаем кнопку с названием шаблона (остальная информация только для отображения)
+        # Создаем кнопку с названием шаблона
         button_text = f"📝 {template['name']}"
         keyboard.append([button_text])
     
@@ -111,8 +132,7 @@ async def create_task_select_group(update: Update, context: ContextTypes.DEFAULT
     await update.message.reply_text(
         f"➕ **Выберите шаблон для задачи:**\n\n"
         f"Группа: {group_name}\n"
-        f"Доступно шаблонов: {len(templates)}\n\n"
-        "📝 - название шаблона",
+        f"Доступно шаблонов: {len(templates)}",
         parse_mode='Markdown',
         reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     )
@@ -122,24 +142,22 @@ async def create_task_select_template(update: Update, context: ContextTypes.DEFA
     """Выбор шаблона для задачи"""
     template_text = update.message.text
     
-    print(f"🔍 Пользователь выбрал: {template_text}")  # Для отладки
+    print(f"🔍 Пользователь выбрал шаблон: {template_text}")
     
-    # Извлекаем название шаблона из текста (все до первого "|")
-    if "|" in template_text:
-        try:
-            template_name = template_text.split("|")[0].strip().replace("📝 ", "")
-        except:
-            await update.message.reply_text(
-                "❌ Ошибка при выборе шаблона",
-                reply_markup=get_tasks_main_keyboard()
-            )
-            return TASKS_MAIN
-    else:
+    # Если нажата кнопка "Назад"
+    if template_text == "🔙 Назад":
+        user_id = update.effective_user.id
         await update.message.reply_text(
-            "❌ Ошибка при выборе шаблона",
-            reply_markup=get_tasks_main_keyboard()
+            "🔄 Возврат к выбору группы",
+            reply_markup=get_groups_keyboard(user_id, "task")
         )
-        return TASKS_MAIN
+        return CREATE_TASK_GROUP
+    
+    # Извлекаем название шаблона из текста (убираем эмодзи)
+    if template_text.startswith("📝 "):
+        template_name = template_text[2:].strip()  # Убираем "📝 "
+    else:
+        template_name = template_text
     
     # Получаем ID группы из контекста
     group_id = context.user_data['task_creation']['group']
@@ -240,6 +258,24 @@ async def create_task_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return CREATE_TASK_EDIT
     
+    elif user_choice == "🔙 Назад":
+        # Возвращаемся к выбору шаблона
+        group_id = context.user_data['task_creation']['group']
+        templates = get_templates_by_group(group_id)
+        
+        # Создаем клавиатуру с шаблонами
+        keyboard = []
+        for template_id, template in templates:
+            keyboard.append([f"📝 {template['name']}"])
+        
+        keyboard.append(["🔙 Назад"])
+        
+        await update.message.reply_text(
+            "🔄 **Выберите шаблон:**",
+            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        )
+        return CREATE_TASK_SELECT
+    
     else:
         await update.message.reply_text(
             "❌ Неверный выбор",
@@ -279,7 +315,7 @@ async def create_task_edit_choice(update: Update, context: ContextTypes.DEFAULT_
         # Создаем клавиатуру с шаблонами
         keyboard = []
         for template_id, template in templates:
-            keyboard.append([f"📝 {template['name']} (ID: {template_id})"])
+            keyboard.append([f"📝 {template['name']}"])
         
         keyboard.append(["🔙 Назад"])
         
@@ -290,8 +326,6 @@ async def create_task_edit_choice(update: Update, context: ContextTypes.DEFAULT_
         return CREATE_TASK_SELECT
     
     elif choice == "⚙️ Изменить настройки шаблона":
-        # Здесь можно добавить переход к редактированию шаблона
-        # Пока просто возвращаем к списку шаблонов
         await update.message.reply_text(
             "⚠️ Редактирование шаблонов доступно в основном меню шаблонов\n\n"
             "Выберите другой шаблон или вернитесь к подтверждению",
@@ -330,8 +364,26 @@ async def deactivate_task_start(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def deactivate_task_select_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Выбор группы для деактивации задачи"""
-    group_name = update.message.text
+    user_text = update.message.text
     user_id = update.effective_user.id
+    
+    # Если нажата кнопка "Назад"
+    if user_text == "🔙 Назад":
+        await tasks_main(update, context)
+        return TASKS_MAIN
+    
+    # Определяем группу по тексту
+    group_name = None
+    if user_text in ["🚗 Hongqi", "Hongqi"]:
+        group_name = "🚗 Hongqi"
+    elif user_text in ["🚙 TurboMatiz", "TurboMatiz"]:
+        group_name = "🚙 TurboMatiz"
+    else:
+        await update.message.reply_text(
+            "❌ Пожалуйста, выберите группу из предложенных кнопок",
+            reply_markup=get_groups_keyboard(user_id, "deactivate")
+        )
+        return DEACTIVATE_TASK_GROUP
     
     # Находим ID группы по имени
     accessible_groups = get_user_accessible_groups(user_id)
@@ -361,7 +413,7 @@ async def deactivate_task_select_group(update: Update, context: ContextTypes.DEF
     # Создаем клавиатуру с задачами
     keyboard = []
     for task_id, task in tasks:
-        keyboard.append([f"🗑️ {task['template_name']} (ID: {task_id})"])
+        keyboard.append([f"🗑️ {task['template_name']}"])
     
     keyboard.append(["🔙 Назад"])
     
@@ -377,26 +429,36 @@ async def deactivate_task_select_task(update: Update, context: ContextTypes.DEFA
     """Выбор задачи для деактивации"""
     task_text = update.message.text
     
-    # Извлекаем ID задачи из текста
-    if "(ID:" in task_text:
-        try:
-            task_id = task_text.split("(ID:")[1].split(")")[0].strip()
-        except:
-            await update.message.reply_text(
-                "❌ Ошибка при выборе задачи",
-                reply_markup=get_tasks_main_keyboard()
-            )
-            return TASKS_MAIN
-    else:
+    # Если нажата кнопка "Назад"
+    if task_text == "🔙 Назад":
+        user_id = update.effective_user.id
         await update.message.reply_text(
-            "❌ Ошибка при выборе задачи",
-            reply_markup=get_tasks_main_keyboard()
+            "🔄 Возврат к выбору группы",
+            reply_markup=get_groups_keyboard(user_id, "deactivate")
         )
-        return TASKS_MAIN
+        return DEACTIVATE_TASK_GROUP
     
-    # Получаем данные задачи
-    task = get_task_by_id(task_id)
-    if not task:
+    # Извлекаем название шаблона из текста (убираем эмодзи)
+    if task_text.startswith("🗑️ "):
+        template_name = task_text[2:].strip()  # Убираем "🗑️ "
+    else:
+        template_name = task_text
+    
+    # Получаем ID группы из контекста
+    group_id = context.user_data.get('deactivate_group')
+    
+    # Ищем задачу по имени шаблона в этой группе
+    tasks = get_active_tasks_by_group(group_id)
+    task_id = None
+    task_data = None
+    
+    for tid, tdata in tasks:
+        if tdata['template_name'] == template_name:
+            task_id = tid
+            task_data = tdata
+            break
+    
+    if not task_data:
         await update.message.reply_text(
             "❌ Задача не найдена",
             reply_markup=get_tasks_main_keyboard()
@@ -405,17 +467,17 @@ async def deactivate_task_select_task(update: Update, context: ContextTypes.DEFA
     
     # Сохраняем ID для деактивации
     context.user_data['deactivating_task_id'] = task_id
-    context.user_data['deactivating_task'] = task
+    context.user_data['deactivating_task'] = task_data
     
     # Показываем подтверждение
-    info = format_task_info(task)
+    info = format_task_info(task_data)
     
     await update.message.reply_text(
         f"⚠️ **ПОДТВЕРЖДЕНИЕ ОТМЕНЫ ЗАДАЧИ**\n\n{info}\n"
         "❌ **ВЫ УВЕРЕНЫ, ЧТО ХОТИТЕ ОТМЕНИТЬ ДАННУЮ ЗАДАЧУ?**\n\n"
         "Это действие нельзя отменить!",
         parse_mode='Markdown',
-        reply_mup=get_deactivate_confirmation_keyboard()
+        reply_markup=get_deactivate_confirmation_keyboard()
     )
     return DEACTIVATE_TASK_CONFIRM
 
@@ -582,17 +644,16 @@ def get_task_conversation_handler():
                 MessageHandler(filters.Regex("^🚙 TurboMatiz$"), create_task_select_group),
                 MessageHandler(filters.Regex("^🔙 Назад$"), tasks_main)
             ],
-            # В функции get_task_conversation_handler() обновить состояние CREATE_TASK_SELECT:
             CREATE_TASK_SELECT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, create_task_select_template),
-                MessageHandler(filters.Regex("^📝 .*"), create_task_select_template),  # Любой текст начинающийся с 📝
+                MessageHandler(filters.Regex("^📝 .*"), create_task_select_template),
                 MessageHandler(filters.Regex("^🔙 Назад$"), create_task_start)
             ],
             CREATE_TASK_CONFIRM: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, create_task_confirm),
                 MessageHandler(filters.Regex("^✅ Подтвердить$"), create_task_confirm),
                 MessageHandler(filters.Regex("^✏️ Изменить$"), create_task_confirm),
-                MessageHandler(filters.Regex("^🔙 Назад$"), create_task_select_group)
+                MessageHandler(filters.Regex("^🔙 Назад$"), create_task_select_template)
             ],
             CREATE_TASK_EDIT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, create_task_edit_choice),
@@ -618,7 +679,7 @@ def get_task_conversation_handler():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, deactivate_task_confirm),
                 MessageHandler(filters.Regex("^✅ Да, отменить задачу$"), deactivate_task_confirm),
                 MessageHandler(filters.Regex("^❌ Нет, оставить активной$"), deactivate_task_confirm),
-                MessageHandler(filters.Regex("^🔙 Назад$"), deactivate_task_select_group)
+                MessageHandler(filters.Regex("^🔙 Назад$"), deactivate_task_select_task)
             ],
             
             # === ТЕСТИРОВАНИЕ ===
@@ -637,7 +698,7 @@ def get_task_conversation_handler():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, test_task_confirm),
                 MessageHandler(filters.Regex("^✅ Подтвердить$"), test_task_confirm),
                 MessageHandler(filters.Regex("^✏️ Изменить$"), test_task_confirm),
-                MessageHandler(filters.Regex("^🔙 Назад$"), test_task_select_group)
+                MessageHandler(filters.Regex("^🔙 Назад$"), test_task_select_template)
             ],
         },
         fallbacks=[CommandHandler("cancel", cancel_task)]
