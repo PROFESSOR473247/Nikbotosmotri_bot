@@ -94,16 +94,21 @@ async def create_task_select_group(update: Update, context: ContextTypes.DEFAULT
         )
         return TASKS_MAIN
     
-    # Создаем клавиатуру с шаблонами
+    # Создаем клавиатуру с шаблонами и информацией
     keyboard = []
     for template_id, template in templates:
-        keyboard.append([f"📝 {template['name']} (ID: {template_id})"])
+        # Добавляем краткую информацию о каждом шаблоне
+        days_count = len(template.get('days', []))
+        has_image = "🖼️" if template.get('image') else "❌"
+        keyboard.append([f"📝 {template['name']} | ⏰{template.get('time', '?')} | 📅{days_count}дн {has_image}"])
     
     keyboard.append(["🔙 Назад"])
     
     await update.message.reply_text(
         f"➕ **Выберите шаблон для задачи:**\n\n"
-        f"Группа: {group_name}",
+        f"Группа: {group_name}\n"
+        f"Доступно шаблонов: {len(templates)}\n\n"
+        "📝 - название | ⏰ - время | 📅 - кол-во дней | 🖼️ - есть изображение",
         parse_mode='Markdown',
         reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     )
