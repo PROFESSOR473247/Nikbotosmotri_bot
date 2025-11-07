@@ -53,7 +53,16 @@ def main():
     except Exception as e:
         print(f"⚠️ Предупреждение при проверке данных: {e}")
     
+    # Инициализируем файлы шаблонов
+    try:
+        from template_manager import init_files
+        init_files()
+        print("✅ Файлы шаблонов инициализированы")
+    except Exception as e:
+        print(f"⚠️ Ошибка инициализации шаблонов: {e}")
+    
     keep_alive()
+    # ... остальной код
 
     # Создаем приложение
     application = Application.builder().token(BOT_TOKEN).build()
