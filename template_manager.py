@@ -33,10 +33,11 @@ def init_files():
     """Инициализирует необходимые файлы если их нет"""
     ensure_data_directory()
     
-    # Инициализация файла шаблонов с правильной структурой
+    # Инициализация файла шаблонов
     if not os.path.exists(TEMPLATES_FILE):
         with open(TEMPLATES_FILE, 'w', encoding='utf-8') as f:
             json.dump({}, f, ensure_ascii=False, indent=4)
+        print("✅ Файл шаблонов создан")
     
     # Инициализация файла групп
     if not os.path.exists(GROUPS_FILE):
@@ -54,6 +55,7 @@ def init_files():
         }
         with open(GROUPS_FILE, 'w', encoding='utf-8') as f:
             json.dump(default_groups, f, ensure_ascii=False, indent=4)
+        print("✅ Файл групп создан")
 
 def load_templates():
     """Загружает шаблоны из файла"""
@@ -61,10 +63,9 @@ def load_templates():
         if os.path.exists(TEMPLATES_FILE):
             with open(TEMPLATES_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                # Обеспечиваем обратную совместимость
-                if isinstance(data, dict):
-                    return data
-                return {}
+                print(f"✅ Загружено {len(data)} шаблонов из файла")
+                return data
+        print("⚠️ Файл шаблонов не существует, возвращаю пустой словарь")
         return {}
     except Exception as e:
         print(f"❌ Ошибка загрузки шаблонов: {e}")
@@ -75,6 +76,7 @@ def save_templates(templates_data):
     try:
         with open(TEMPLATES_FILE, 'w', encoding='utf-8') as f:
             json.dump(templates_data, f, ensure_ascii=False, indent=4)
+        print(f"✅ Шаблоны сохранены в файл ({len(templates_data)} записей)")
         return True
     except Exception as e:
         print(f"❌ Ошибка сохранения шаблонов: {e}")
@@ -109,6 +111,8 @@ def create_template(template_data):
     templates_data = load_templates()
     template_id = str(uuid.uuid4())[:8]
     
+    print(f"🔧 Создание шаблона с ID: {template_id}")
+    
     # Убедимся, что subgroup всегда None (убрали подгруппы)
     template_data['subgroup'] = None
     template_data['id'] = template_id
@@ -117,7 +121,10 @@ def create_template(template_data):
     templates_data[template_id] = template_data
     
     if save_templates(templates_data):
+        print(f"✅ Шаблон {template_id} успешно создан и сохранен")
         return True, template_id
+    
+    print(f"❌ Ошибка сохранения шаблона {template_id}")
     return False, None
 
 def get_templates_by_group(group_id):
@@ -129,6 +136,7 @@ def get_templates_by_group(group_id):
         if template.get('group') == group_id:
             templates.append((template_id, template))
     
+    print(f"📋 Найдено {len(templates)} шаблонов для группы {group_id}")
     return templates
 
 def save_image(file_content, filename):
@@ -142,6 +150,7 @@ def save_image(file_content, filename):
         with open(filepath, 'wb') as f:
             f.write(file_content)
         
+        print(f"✅ Изображение сохранено: {filepath}")
         return filepath
     except Exception as e:
         print(f"❌ Ошибка сохранения изображения: {e}")
@@ -208,19 +217,30 @@ def delete_template_by_id(template_id):
     if template.get('image') and os.path.exists(template['image']):
         try:
             os.remove(template['image'])
+            print(f"✅ Изображение шаблона {template_id} удалено")
         except Exception as e:
             print(f"⚠️ Ошибка удаления изображения: {e}")
     
     del templates_data[template_id]
     
     if save_templates(templates_data):
+        print(f"✅ Шаблон {template_id} удален")
         return True, "Шаблон удален"
+    
+    print(f"❌ Ошибка удаления шаблона {template_id}")
     return False, "Ошибка удаления"
 
 def get_template_by_id(template_id):
     """Возвращает шаблон по ID"""
     templates_data = load_templates()
-    return templates_data.get(template_id)
+    template = templates_data.get(template_id)
+    
+    if template:
+        print(f"✅ Шаблон {template_id} найден")
+    else:
+        print(f"❌ Шаблон {template_id} не найден")
+    
+    return template
 
 def update_template_field(template_id, field, value):
     """Обновляет конкретное поле шаблона"""
@@ -232,7 +252,10 @@ def update_template_field(template_id, field, value):
     templates_data[template_id][field] = value
     
     if save_templates(templates_data):
+        print(f"✅ Поле {field} шаблона {template_id} обновлено")
         return True, f"Поле {field} обновлено"
+    
+    print(f"❌ Ошибка обновления поля {field} шаблона {template_id}")
     return False, "Ошибка обновления"
 
 def update_template(template_id, updated_data):
@@ -249,8 +272,13 @@ def update_template(template_id, updated_data):
     templates_data[template_id] = updated_data
     
     if save_templates(templates_data):
+        print(f"✅ Шаблон {template_id} полностью обновлен")
         return True, "Шаблон обновлен"
+    
+    print(f"❌ Ошибка обновления шаблона {template_id}")
     return False, "Ошибка обновления"
 
 # Инициализация при импорте
+print("🔄 Инициализация template_manager...")
 init_files()
+print("✅ Template_manager инициализирован")
