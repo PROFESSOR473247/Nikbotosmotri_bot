@@ -33,12 +33,12 @@ def init_files():
     """Инициализирует необходимые файлы если их нет"""
     ensure_data_directory()
     
-    # Инициализация файла шаблонов
+    # Инициализация файла шаблонов с правильной структурой
     if not os.path.exists(TEMPLATES_FILE):
         with open(TEMPLATES_FILE, 'w', encoding='utf-8') as f:
             json.dump({}, f, ensure_ascii=False, indent=4)
     
-    # Инициализация файла групп (без подгрупп)
+    # Инициализация файла групп
     if not os.path.exists(GROUPS_FILE):
         default_groups = {
             "groups": {
@@ -62,9 +62,9 @@ def load_templates():
             with open(TEMPLATES_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 # Обеспечиваем обратную совместимость
-                if isinstance(data, dict) and 'templates' in data:
-                    return data['templates']
-                return data
+                if isinstance(data, dict):
+                    return data
+                return {}
         return {}
     except Exception as e:
         print(f"❌ Ошибка загрузки шаблонов: {e}")
@@ -149,8 +149,16 @@ def save_image(file_content, filename):
 
 def format_template_info(template):
     """Форматирует информацию о шаблоне для отображения"""
-    days_names = [DAYS_OF_WEEK[day] for day in template.get('days', [])]
-    frequency = FREQUENCY_TYPES.get(template.get('frequency'), template.get('frequency', 'Не указана'))
+    days_names = []
+    if template.get('days'):
+        days_names = [DAYS_OF_WEEK[day] for day in template.get('days', [])]
+    
+    frequency_map = {
+        "weekly": "1 в неделю",
+        "2_per_month": "2 в месяц", 
+        "monthly": "1 в месяц"
+    }
+    frequency = frequency_map.get(template.get('frequency'), template.get('frequency', 'Не указана'))
     
     info = f"📝 **{template['name']}**\n\n"
     info += f"🏷️ **Группа:** {template.get('group', 'Не указана')}\n"
@@ -159,6 +167,28 @@ def format_template_info(template):
     info += f"🔄 **Периодичность:** {frequency}\n"
     info += f"📄 **Текст:** {template.get('text', '')[:100]}...\n"
     info += f"🖼️ **Изображение:** {'✅ Есть' if template.get('image') else '❌ Нет'}\n"
+    
+    return info
+
+def format_template_list_info(template):
+    """Форматирует краткую информацию о шаблоне для списка"""
+    days_names = []
+    if template.get('days'):
+        days_names = [DAYS_OF_WEEK[day] for day in template.get('days', [])]
+    
+    frequency_map = {
+        "weekly": "1 в неделю",
+        "2_per_month": "2 в месяц", 
+        "monthly": "1 в месяц"
+    }
+    frequency = frequency_map.get(template.get('frequency'), template.get('frequency', 'Не указана'))
+    
+    info = f"📝 **{template['name']}**\n"
+    info += f"⏰ Время: {template.get('time', 'Не указано')} | "
+    info += f"📅 Дни: {len(days_names)} | "
+    info += f"🔄 {frequency} | "
+    info += f"🖼️ {'✅' if template.get('image') else '❌'}\n"
+    info += f"📄 {template.get('text', '')[:80]}...\n"
     
     return info
 
@@ -203,6 +233,23 @@ def update_template_field(template_id, field, value):
     
     if save_templates(templates_data):
         return True, f"Поле {field} обновлено"
+    return False, "Ошибка обновления"
+
+def update_template(template_id, updated_data):
+    """Полностью обновляет шаблон"""
+    templates_data = load_templates()
+    
+    if template_id not in templates_data:
+        return False, "Шаблон не найден"
+    
+    # Сохраняем ID и дату создания
+    updated_data['id'] = template_id
+    updated_data['created_at'] = templates_data[template_id].get('created_at', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    
+    templates_data[template_id] = updated_data
+    
+    if save_templates(templates_data):
+        return True, "Шаблон обновлен"
     return False, "Ошибка обновления"
 
 # Инициализация при импорте
