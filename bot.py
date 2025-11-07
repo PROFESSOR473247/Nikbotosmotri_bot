@@ -190,33 +190,53 @@ async def debug_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ У вас нет прав для этой команды")
         return
     
-    from template_manager import template_manager
+    # Используем прямые импорты функций вместо глобального template_manager
+    from template_manager import get_all_templates, load_groups
     from task_manager import load_active_tasks, load_test_tasks
     
     message = "🤖 **Информация о боте**\n\n"
     
     # Информация о шаблонах
-    templates = template_manager.get_all_templates()
-    message += f"📝 **Шаблоны:** {len(templates)}\n"
+    try:
+        templates = get_all_templates()
+        message += f"📝 **Шаблоны:** {len(templates)}\n"
+    except Exception as e:
+        message += f"📝 **Шаблоны:** Ошибка загрузки: {e}\n"
     
     # Информация о задачах
-    active_tasks = load_active_tasks()
-    test_tasks = load_test_tasks()
-    message += f"📋 **Активные задачи:** {len(active_tasks)}\n"
-    message += f"🧪 **Тестовые задачи:** {len(test_tasks)}\n\n"
+    try:
+        active_tasks = load_active_tasks()
+        test_tasks = load_test_tasks()
+        message += f"📋 **Активные задачи:** {len(active_tasks)}\n"
+        message += f"🧪 **Тестовые задачи:** {len(test_tasks)}\n\n"
+    except Exception as e:
+        message += f"📋 **Задачи:** Ошибка загрузки: {e}\n\n"
+    
+    # Информация о группах
+    try:
+        groups_data = load_groups()
+        groups_count = len(groups_data.get('groups', {}))
+        message += f"👥 **Группы:** {groups_count}\n\n"
+    except Exception as e:
+        message += f"👥 **Группы:** Ошибка загрузки: {e}\n\n"
     
     # Информация о пользовательских данных
-    message += f"📊 **Данные пользователей:**\n"
-    if 'user_data' in context.application.persistence:
-        user_data_count = len(context.application.persistence.user_data)
-        message += f"   👤 Пользователей: {user_data_count}\n"
-    else:
-        message += f"   👤 Данные пользователей: не доступны\n"
-    
-    # Информация о чатах
-    if 'chat_data' in context.application.persistence:
-        chat_data_count = len(context.application.persistence.chat_data)
-        message += f"   💬 Чатов: {chat_data_count}\n"
+    message += f"📊 **Данные:**\n"
+    try:
+        if hasattr(context.application, 'persistence') and context.application.persistence:
+            if hasattr(context.application.persistence, 'user_data'):
+                user_data_count = len(context.application.persistence.user_data)
+                message += f"   👤 Пользователей: {user_data_count}\n"
+            else:
+                message += f"   👤 Данные пользователей: не доступны\n"
+            
+            if hasattr(context.application.persistence, 'chat_data'):
+                chat_data_count = len(context.application.persistence.chat_data)
+                message += f"   💬 Чатов: {chat_data_count}\n"
+        else:
+            message += f"   💾 Persistence: не настроен\n"
+    except Exception as e:
+        message += f"   ⚠️ Ошибка получения данных: {e}\n"
     
     await update.message.reply_text(message, parse_mode='Markdown')
 
@@ -285,17 +305,17 @@ def main():
         check_template_files()
         
         # Дополнительная проверка через template_manager
-        from template_manager import template_manager
-        templates = template_manager.get_all_templates()
-        print(f"📊 Итог: {len(templates)} шаблонов загружено через TemplateManager")
+        from template_manager import get_all_templates
+        templates = get_all_templates()
+        print(f"📊 Итог: {len(templates)} шаблонов загружено")
         
     except Exception as e:
         print(f"⚠️ Предупреждение при проверке данных: {e}")
     
     # Инициализация файлов шаблонов
     try:
-        from template_manager import template_manager
-        template_manager._init_files()
+        from template_manager import init_files
+        init_files()
         print("✅ Файлы шаблонов инициализированы")
     except Exception as e:
         print(f"⚠️ Ошибка инициализации шаблонов: {e}")
