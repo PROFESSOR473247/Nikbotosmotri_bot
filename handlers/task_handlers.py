@@ -582,9 +582,10 @@ def get_task_conversation_handler():
                 MessageHandler(filters.Regex("^🚙 TurboMatiz$"), create_task_select_group),
                 MessageHandler(filters.Regex("^🔙 Назад$"), tasks_main)
             ],
+            # В функции get_task_conversation_handler() обновить состояние CREATE_TASK_SELECT:
             CREATE_TASK_SELECT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, create_task_select_template),
-                MessageHandler(filters.Regex("^📝 .*"), create_task_select_template),
+                MessageHandler(filters.Regex("^📝 .*"), create_task_select_template),  # Любой текст начинающийся с 📝
                 MessageHandler(filters.Regex("^🔙 Назад$"), create_task_start)
             ],
             CREATE_TASK_CONFIRM: [
