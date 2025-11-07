@@ -140,39 +140,83 @@ async def debug_system(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ У вас нет прав для этой команды")
         return
     
-    import psutil
     import json
+    import platform
+    from datetime import datetime
     
     message = "🖥️ **Системная информация**\n\n"
     
-    # Информация о памяти
-    memory = psutil.virtual_memory()
-    message += f"💾 **Память:**\n"
-    message += f"   Всего: {memory.total // (1024**3)} GB\n"
-    message += f"   Использовано: {memory.used // (1024**3)} GB\n"
-    message += f"   Свободно: {memory.available // (1024**3)} GB\n"
-    message += f"   Процент: {memory.percent}%\n\n"
+    # Базовая информация о системе
+    message += f"💻 **Платформа:** {platform.system()} {platform.release()}\n"
+    message += f"🐍 **Python:** {platform.python_version()}\n"
+    message += f"🕐 **Время сервера:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
     
-    # Информация о диске
-    disk = psutil.disk_usage('/')
-    message += f"💽 **Диск:**\n"
-    message += f"   Всего: {disk.total // (1024**3)} GB\n"
-    message += f"   Использовано: {disk.used // (1024**3)} GB\n"
-    message += f"   Свободно: {disk.free // (1024**3)} GB\n"
-    message += f"   Процент: {disk.percent}%\n\n"
+    # Информация о файловой системе
+    message += f"📊 **Файловая система:**\n"
     
-    # Информация о процессе
-    process = psutil.Process()
-    message += f"⚙️ **Процесс бота:**\n"
-    message += f"   PID: {process.pid}\n"
-    message += f"   Память: {process.memory_info().rss // 1024 // 1024} MB\n"
-    message += f"   CPU: {process.cpu_percent()}%\n\n"
+    try:
+        # Проверяем доступное место в текущей директории
+        import shutil
+        total, used, free = shutil.disk_usage(".")
+        message += f"   💽 Всего места: {total // (2**30)} GB\n"
+        message += f"   📁 Использовано: {used // (2**30)} GB\n"
+        message += f"   📂 Свободно: {free // (2**30)} GB\n"
+    except Exception as e:
+        message += f"   ⚠️ Не удалось получить информацию о диске: {e}\n"
+    
+    message += f"\n"
     
     # Переменные окружения
     message += f"🌐 **Окружение:**\n"
     message += f"   RENDER: {'✅ Да' if 'RENDER' in os.environ else '❌ Нет'}\n"
     if 'RENDER_EXTERNAL_URL' in os.environ:
         message += f"   URL: {os.environ['RENDER_EXTERNAL_URL']}\n"
+    if 'RENDER_SERVICE_NAME' in os.environ:
+        message += f"   Сервис: {os.environ['RENDER_SERVICE_NAME']}\n"
+    
+    # Информация о процессе
+    message += f"\n⚙️ **Процесс:**\n"
+    message += f"   PID: {os.getpid()}\n"
+    message += f"   Рабочая директория: {os.getcwd()}\n"
+    
+    await update.message.reply_text(message, parse_mode='Markdown')
+
+async def debug_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Информация о состоянии бота"""
+    user_id = update.effective_user.id
+    
+    from authorized_users import is_admin
+    if not is_admin(user_id):
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    from template_manager import template_manager
+    from task_manager import load_active_tasks, load_test_tasks
+    
+    message = "🤖 **Информация о боте**\n\n"
+    
+    # Информация о шаблонах
+    templates = template_manager.get_all_templates()
+    message += f"📝 **Шаблоны:** {len(templates)}\n"
+    
+    # Информация о задачах
+    active_tasks = load_active_tasks()
+    test_tasks = load_test_tasks()
+    message += f"📋 **Активные задачи:** {len(active_tasks)}\n"
+    message += f"🧪 **Тестовые задачи:** {len(test_tasks)}\n\n"
+    
+    # Информация о пользовательских данных
+    message += f"📊 **Данные пользователей:**\n"
+    if 'user_data' in context.application.persistence:
+        user_data_count = len(context.application.persistence.user_data)
+        message += f"   👤 Пользователей: {user_data_count}\n"
+    else:
+        message += f"   👤 Данные пользователей: не доступны\n"
+    
+    # Информация о чатах
+    if 'chat_data' in context.application.persistence:
+        chat_data_count = len(context.application.persistence.chat_data)
+        message += f"   💬 Чатов: {chat_data_count}\n"
     
     await update.message.reply_text(message, parse_mode='Markdown')
 
@@ -286,6 +330,7 @@ def main():
     # Отладочные команды (только для админов)
     application.add_handler(CommandHandler("debug", debug_templates))
     application.add_handler(CommandHandler("debug_system", debug_system))
+    application.add_handler(CommandHandler("debug_bot", debug_bot))
 
     # Добавляем ConversationHandler для шаблонов
     application.add_handler(template_conv_handler)
@@ -299,7 +344,8 @@ def main():
     print("✅ Бот запущен и готов к работе!")
     print("📝 Доступные отладочные команды для админов:")
     print("   /debug - информация о шаблонах")
-    print("   /debug_system - системная информация")
+    print("   /debug_system - системная информация") 
+    print("   /debug_bot - информация о состоянии бота")
     
     application.run_polling()
 
