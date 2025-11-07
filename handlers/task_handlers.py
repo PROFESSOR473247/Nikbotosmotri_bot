@@ -118,10 +118,12 @@ async def create_task_select_template(update: Update, context: ContextTypes.DEFA
     """Выбор шаблона для задачи"""
     template_text = update.message.text
     
-    # Извлекаем ID шаблона из текста
-    if "(ID:" in template_text:
+    print(f"🔍 Пользователь выбрал: {template_text}")  # Для отладки
+    
+    # Извлекаем название шаблона из текста (все до первого "|")
+    if "|" in template_text:
         try:
-            template_id = template_text.split("(ID:")[1].split(")")[0].strip()
+            template_name = template_text.split("|")[0].strip().replace("📝 ", "")
         except:
             await update.message.reply_text(
                 "❌ Ошибка при выборе шаблона",
@@ -135,9 +137,21 @@ async def create_task_select_template(update: Update, context: ContextTypes.DEFA
         )
         return TASKS_MAIN
     
-    # Получаем данные шаблона
-    template = get_template_by_id(template_id)
-    if not template:
+    # Получаем ID группы из контекста
+    group_id = context.user_data['task_creation']['group']
+    
+    # Ищем шаблон по имени в этой группе
+    templates = get_templates_by_group(group_id)
+    template_id = None
+    template_data = None
+    
+    for tid, tdata in templates:
+        if tdata['name'] == template_name:
+            template_id = tid
+            template_data = tdata
+            break
+    
+    if not template_data:
         await update.message.reply_text(
             "❌ Шаблон не найден",
             reply_markup=get_tasks_main_keyboard()
@@ -145,11 +159,11 @@ async def create_task_select_template(update: Update, context: ContextTypes.DEFA
         return TASKS_MAIN
     
     # Сохраняем данные шаблона
-    context.user_data['task_creation']['template'] = template
+    context.user_data['task_creation']['template'] = template_data
     context.user_data['task_creation']['template_id'] = template_id
     
     # Показываем подтверждение
-    info = format_task_confirmation(template)
+    info = format_task_confirmation(template_data)
     
     await update.message.reply_text(
         info,
