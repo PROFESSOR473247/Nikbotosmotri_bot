@@ -4,6 +4,8 @@ import os
 import threading
 import time
 import requests
+import signal
+import sys
 from telegram import Update
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, filters, 
@@ -22,10 +24,20 @@ logging.basicConfig(
     level=logging.INFO
 )
 
+# Глобальная переменная для graceful shutdown
+is_shutting_down = False
+
+def signal_handler(signum, frame):
+    """Обработчик сигналов для graceful shutdown"""
+    global is_shutting_down
+    print(f"🛑 Получен сигнал {signum}, завершаем работу...")
+    is_shutting_down = True
+    sys.exit(0)
+
 def keep_alive():
     """Периодически пингует приложение чтобы не дать ему заснуть"""
     def ping():
-        while True:
+        while not is_shutting_down:
             try:
                 render_url = os.environ.get('RENDER_EXTERNAL_URL')
                 if render_url:
@@ -297,8 +309,22 @@ def check_template_files():
     
     print("=" * 60)
 
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик ошибок"""
+    try:
+        raise context.error
+    except Exception as e:
+        print(f"❌ Ошибка в обработчике: {e}")
+        if "Conflict" in str(e):
+            print("⚠️ Обнаружен конфликт - вероятно запущен другой экземпляр бота")
+            # Не пытаемся отправлять сообщение, чтобы не усугублять конфликт
+
 def main():
     print("🚀 Запуск бота с улучшенным логированием...")
+    
+    # Регистрируем обработчики сигналов
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
     
     # Детальная проверка файлов при запуске
     try:
@@ -331,8 +357,11 @@ def main():
     
     keep_alive()
 
-    # Создаем приложение
+    # Создаем приложение с обработчиком ошибок
     application = Application.builder().token(BOT_TOKEN).build()
+    
+    # Добавляем обработчик ошибок
+    application.add_error_handler(error_handler)
 
     # Получаем ConversationHandler для шаблонов
     template_conv_handler = get_template_conversation_handler()
@@ -367,7 +396,17 @@ def main():
     print("   /debug_system - системная информация") 
     print("   /debug_bot - информация о состоянии бота")
     
-    application.run_polling()
+    try:
+        application.run_polling(
+            drop_pending_updates=True,  # Игнорируем старые сообщения при запуске
+            allowed_updates=Update.ALL_TYPES,
+            close_loop=False
+        )
+    except Exception as e:
+        print(f"❌ Критическая ошибка при запуске бота: {e}")
+        if "Conflict" in str(e):
+            print("💡 Решение: Подождите 10 секунд и перезапустите бота")
+            print("💡 Или остановите все другие экземпляры бота")
 
 if __name__ == '__main__':
     # Для Render Web Service
@@ -388,7 +427,10 @@ if __name__ == '__main__':
         port = int(os.environ.get('PORT', 5000))
         server = HTTPServer(('0.0.0.0', port), HealthHandler)
         print(f"✅ HTTP server listening on port {port}")
-        server.serve_forever()
+        try:
+            server.serve_forever()
+        except Exception as e:
+            print(f"❌ Ошибка HTTP сервера: {e}")
     
     http_thread = Thread(target=run_http_server)
     http_thread.daemon = True
