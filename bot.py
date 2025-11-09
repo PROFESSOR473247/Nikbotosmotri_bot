@@ -62,84 +62,43 @@ async def debug_templates(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ У вас нет прав для этой команды")
         return
     
-    import os
-    import json
-    
-    templates_file = 'data/templates.json'
-    groups_file = 'data/groups.json'
+    from template_manager import get_all_templates, load_groups
     
     message = f"🔍 **Отладочная информация о шаблонах**\n\n"
     
-    # Проверяем файл шаблонов
-    templates_exists = os.path.exists(templates_file)
-    templates_size = os.path.getsize(templates_file) if templates_exists else 0
-    
-    message += f"📁 **Файл шаблонов:** `{templates_file}`\n"
-    message += f"   Существует: {'✅ Да' if templates_exists else '❌ Нет'}\n"
-    message += f"   Размер: {templates_size} байт\n"
-    
-    if templates_exists and templates_size > 0:
-        try:
-            with open(templates_file, 'r', encoding='utf-8') as f:
-                templates_data = json.load(f)
+    # Проверяем шаблоны из базы данных
+    try:
+        templates = get_all_templates()
+        message += f"📝 **Шаблоны в базе данных:** {len(templates)}\n\n"
+        
+        if templates:
+            message += "**Список шаблонов:**\n"
+            for i, (template_id, template) in enumerate(templates.items(), 1):
+                message += f"{i}. **{template.get('name', 'Без названия')}**\n"
+                message += f"   ID: `{template_id}`\n"
+                message += f"   Группа: {template.get('group', 'Не указана')}\n"
+                message += f"   Время: {template.get('time', 'Не указано')}\n"
+                message += f"   Дней: {len(template.get('days', []))}\n"
+                message += f"   Текст: {template.get('text', '')[:50]}...\n\n"
+        else:
+            message += "📭 Шаблонов нет\n\n"
             
-            message += f"   📋 Шаблонов в файле: {len(templates_data)}\n\n"
-            
-            if templates_data:
-                message += "**Список шаблонов:**\n"
-                for i, (template_id, template) in enumerate(templates_data.items(), 1):
-                    message += f"{i}. **{template.get('name', 'Без названия')}**\n"
-                    message += f"   ID: `{template_id}`\n"
-                    message += f"   Группа: {template.get('group', 'Не указана')}\n"
-                    message += f"   Время: {template.get('time', 'Не указано')}\n"
-                    message += f"   Дней: {len(template.get('days', []))}\n"
-                    message += f"   Текст: {template.get('text', '')[:50]}...\n\n"
-            else:
-                message += "📭 Шаблонов нет\n\n"
-                
-        except Exception as e:
-            message += f"❌ Ошибка чтения: {e}\n\n"
-    else:
-        message += "📭 Файл пуст или не существует\n\n"
+    except Exception as e:
+        message += f"❌ Ошибка загрузки шаблонов: {e}\n\n"
     
-    # Проверяем файл групп
-    groups_exists = os.path.exists(groups_file)
-    groups_size = os.path.getsize(groups_file) if groups_exists else 0
-    
-    message += f"📁 **Файл групп:** `{groups_file}`\n"
-    message += f"   Существует: {'✅ Да' if groups_exists else '❌ Нет'}\n"
-    message += f"   Размер: {groups_size} байт\n"
-    
-    if groups_exists and groups_size > 0:
-        try:
-            with open(groups_file, 'r', encoding='utf-8') as f:
-                groups_data = json.load(f)
-            
-            groups_count = len(groups_data.get('groups', {}))
-            message += f"   👥 Групп в файле: {groups_count}\n\n"
-            
-            if groups_count > 0:
-                message += "**Список групп:**\n"
-                for group_id, group_data in groups_data.get('groups', {}).items():
-                    message += f"• {group_data.get('name', 'Без названия')} (ID: {group_id})\n"
-            
-        except Exception as e:
-            message += f"❌ Ошибка чтения: {e}\n\n"
-    else:
-        message += "📭 Файл пуст или не существует\n\n"
-    
-    # Проверяем директорию images
-    images_dir = 'data/images'
-    images_exists = os.path.exists(images_dir)
-    message += f"📁 **Директория изображений:** `{images_dir}`\n"
-    message += f"   Существует: {'✅ Да' if images_exists else '❌ Нет'}\n"
-    
-    if images_exists:
-        try:
-            images_count = len([f for f in os.listdir(images_dir) if os.path.isfile(os.path.join(images_dir, f))])
-            message += f"   🖼️ Изображений: {images_count}\n"
-        except Exception as e:
-            message += f"❌ Ошибка чтения: {e}\n"
+    # Проверяем группы из базы данных
+    try:
+        groups_data = load_groups()
+        groups_count = len(groups_data.get('groups', {}))
+        message += f"👥 **Группы в базе данных:** {groups_count}\n\n"
+        
+        if groups_count > 0:
+            message += "**Список групп:**\n"
+            for group_id, group_data in groups_data.get('groups', {}).items():
+                message += f"• {group_data.get('name', 'Без названия')} (ID: {group_id})\n"
+        
+    except Exception as e:
+        message += f"❌ Ошибка загрузки групп: {e}\n\n"
     
     await update.message.reply_text(message, parse_mode='Markdown')
 
@@ -152,7 +111,6 @@ async def debug_system(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ У вас нет прав для этой команды")
         return
     
-    import json
     import platform
     from datetime import datetime
     
@@ -202,7 +160,7 @@ async def debug_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ У вас нет прав для этой команды")
         return
     
-    # Используем прямые импорты функций вместо глобального template_manager
+    # Используем прямые импорты функций
     from template_manager import get_all_templates, load_groups
     from task_manager import load_active_tasks, load_test_tasks
     
@@ -252,6 +210,121 @@ async def debug_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(message, parse_mode='Markdown')
 
+async def debug_database(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отладочная информация о базе данных"""
+    user_id = update.effective_user.id
+    
+    from authorized_users import is_admin
+    if not is_admin(user_id):
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    from database import db
+    
+    message = "🗄️ **Информация о базе данных**\n\n"
+    
+    # Проверяем подключение
+    conn = db.get_connection()
+    if conn:
+        message += "✅ **Подключение:** Успешно\n"
+        
+        try:
+            cursor = conn.cursor()
+            
+            # Проверяем таблицы
+            cursor.execute("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public'
+            """)
+            tables = cursor.fetchall()
+            
+            message += f"📊 **Таблицы в базе:** {len(tables)}\n"
+            for table in tables:
+                message += f"   - {table[0]}\n"
+            
+            # Проверяем шаблоны
+            cursor.execute("SELECT COUNT(*) FROM templates")
+            templates_count = cursor.fetchone()[0]
+            message += f"\n📝 **Шаблонов в базе:** {templates_count}\n"
+            
+            if templates_count > 0:
+                cursor.execute("SELECT id, name, group_name FROM templates LIMIT 10")
+                templates = cursor.fetchall()
+                message += "**Последние шаблоны:**\n"
+                for template in templates:
+                    message += f"   - {template[1]} (ID: {template[0]}, Группа: {template[2]})\n"
+            
+            # Проверяем группы
+            cursor.execute("SELECT COUNT(*) FROM groups")
+            groups_count = cursor.fetchone()[0]
+            message += f"👥 **Групп в базе:** {groups_count}\n"
+            
+            if groups_count > 0:
+                cursor.execute("SELECT id, name FROM groups")
+                groups = cursor.fetchall()
+                message += "**Группы:**\n"
+                for group in groups:
+                    message += f"   - {group[1]} (ID: {group[0]})\n"
+            
+            cursor.close()
+            conn.close()
+            
+        except Exception as e:
+            message += f"❌ **Ошибка запроса:** {e}\n"
+            try:
+                conn.close()
+            except:
+                pass
+    else:
+        message += "❌ **Подключение:** Не удалось\n"
+        message += f"📡 **DATABASE_URL:** {'✅ Найден' if db.connection_string else '❌ Не найден'}\n"
+        if db.connection_string:
+            # Показываем только начало URL для безопасности
+            safe_url = db.connection_string.split('@')[0] + '@***' if '@' in db.connection_string else '***'
+            message += f"🔗 **Подключение:** {safe_url}\n"
+    
+    await update.message.reply_text(message, parse_mode='Markdown')
+
+async def debug_create_test_template(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Создание тестового шаблона для отладки"""
+    user_id = update.effective_user.id
+    
+    from authorized_users import is_admin
+    if not is_admin(user_id):
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    from template_manager import create_template
+    
+    # Создаем тестовый шаблон
+    test_template = {
+        'name': 'Тестовый шаблон',
+        'group': 'hongqi',
+        'text': 'Это тестовый шаблон для проверки работы базы данных',
+        'time': '12:00',
+        'days': [0, 2, 4],  # Понедельник, Среда, Пятница
+        'frequency': 'weekly',
+        'created_by': user_id
+    }
+    
+    success, template_id = create_template(test_template)
+    
+    if success:
+        await update.message.reply_text(
+            f"✅ Тестовый шаблон успешно создан!\n\n"
+            f"ID: `{template_id}`\n"
+            f"Название: {test_template['name']}\n"
+            f"Группа: {test_template['group']}",
+            parse_mode='Markdown'
+        )
+    else:
+        await update.message.reply_text(
+            f"❌ Ошибка создания тестового шаблона\n\n"
+            f"Проверьте логи для подробной информации",
+            parse_mode='Markdown'
+        )
+
 def check_template_files():
     """Проверяет состояние данных при запуске"""
     print("=" * 60)
@@ -263,7 +336,9 @@ def check_template_files():
         
         # Инициализируем базу данных
         from database import db
-        db.init_database()
+        print("🔄 Инициализация базы данных...")
+        db_success = db.init_database()
+        print(f"✅ База данных инициализирована: {db_success}")
         
         # Проверяем шаблоны
         templates = get_all_templates()
@@ -283,6 +358,8 @@ def check_template_files():
             
     except Exception as e:
         print(f"❌ Ошибка проверки данных: {e}")
+        import traceback
+        traceback.print_exc()
     
     print("=" * 60)
 
@@ -295,6 +372,8 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if "Conflict" in str(e):
             print("⚠️ Обнаружен конфликт - вероятно запущен другой экземпляр бота")
             # Не пытаемся отправлять сообщение, чтобы не усугублять конфликт
+        import traceback
+        traceback.print_exc()
 
 def main():
     print("🚀 Запуск бота с улучшенным логированием...")
@@ -314,6 +393,8 @@ def main():
         
     except Exception as e:
         print(f"⚠️ Предупреждение при проверке данных: {e}")
+        import traceback
+        traceback.print_exc()
     
     # Инициализация файлов шаблонов
     try:
@@ -322,6 +403,8 @@ def main():
         print("✅ Файлы шаблонов инициализированы")
     except Exception as e:
         print(f"⚠️ Ошибка инициализации шаблонов: {e}")
+        import traceback
+        traceback.print_exc()
     
     # Исправляем структуру данных при запуске
     try:
@@ -331,6 +414,8 @@ def main():
         print("✅ Структура данных проверена и исправлена")
     except Exception as e:
         print(f"⚠️ Предупреждение при проверке данных: {e}")
+        import traceback
+        traceback.print_exc()
     
     keep_alive()
 
@@ -357,6 +442,8 @@ def main():
     application.add_handler(CommandHandler("debug", debug_templates))
     application.add_handler(CommandHandler("debug_system", debug_system))
     application.add_handler(CommandHandler("debug_bot", debug_bot))
+    application.add_handler(CommandHandler("debug_database", debug_database))
+    application.add_handler(CommandHandler("debug_test_template", debug_create_test_template))
 
     # Добавляем ConversationHandler для шаблонов
     application.add_handler(template_conv_handler)
@@ -372,6 +459,8 @@ def main():
     print("   /debug - информация о шаблонах")
     print("   /debug_system - системная информация") 
     print("   /debug_bot - информация о состоянии бота")
+    print("   /debug_database - информация о базе данных")
+    print("   /debug_test_template - создать тестовый шаблон")
     
     try:
         application.run_polling(
@@ -384,6 +473,8 @@ def main():
         if "Conflict" in str(e):
             print("💡 Решение: Подождите 10 секунд и перезапустите бота")
             print("💡 Или остановите все другие экземпляры бота")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == '__main__':
     # Для Render Web Service
