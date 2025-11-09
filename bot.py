@@ -261,14 +261,22 @@ def check_template_files():
     import json
     import os
     
-    templates_file = 'data/templates.json'
-    groups_file = 'data/groups.json'
-    images_dir = 'data/images'
+    # Используем абсолютные пути как в template_manager
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    DATA_DIR = os.path.join(BASE_DIR, 'data')
+    TEMPLATES_FILE = os.path.join(DATA_DIR, 'templates.json')
+    GROUPS_FILE = os.path.join(DATA_DIR, 'groups.json')
+    IMAGES_DIR = os.path.join(DATA_DIR, 'images')
+    
+    # Создаем директорию если не существует
+    if not os.path.exists(DATA_DIR):
+        print("📁 Создаем директорию data...")
+        os.makedirs(DATA_DIR, exist_ok=True)
     
     # Проверяем файл шаблонов
-    if os.path.exists(templates_file):
+    if os.path.exists(TEMPLATES_FILE):
         try:
-            with open(templates_file, 'r', encoding='utf-8') as f:
+            with open(TEMPLATES_FILE, 'r', encoding='utf-8') as f:
                 templates_data = json.load(f)
             print(f"✅ Файл шаблонов: {len(templates_data)} записей")
             
@@ -278,13 +286,20 @@ def check_template_files():
                       
         except Exception as e:
             print(f"❌ Ошибка чтения файла шаблонов: {e}")
+            # Пытаемся восстановить
+            try:
+                with open(TEMPLATES_FILE, 'w', encoding='utf-8') as f:
+                    json.dump({}, f, ensure_ascii=False, indent=4)
+                print("✅ Файл шаблонов восстановлен")
+            except:
+                print("❌ Не удалось восстановить файл шаблонов")
     else:
-        print("❌ Файл шаблонов не существует")
+        print("📭 Файл шаблонов не существует")
     
     # Проверяем файл групп
-    if os.path.exists(groups_file):
+    if os.path.exists(GROUPS_FILE):
         try:
-            with open(groups_file, 'r', encoding='utf-8') as f:
+            with open(GROUPS_FILE, 'r', encoding='utf-8') as f:
                 groups_data = json.load(f)
             groups_count = len(groups_data.get('groups', {}))
             print(f"✅ Файл групп: {groups_count} групп")
@@ -294,18 +309,37 @@ def check_template_files():
                 
         except Exception as e:
             print(f"❌ Ошибка чтения файла групп: {e}")
+            # Пытаемся восстановить
+            try:
+                default_groups = {
+                    "groups": {
+                        "hongqi": {
+                            "name": "🚗 Hongqi",
+                            "allowed_users": ["812934047"]
+                        },
+                        "turbomatiz": {
+                            "name": "🚙 TurboMatiz", 
+                            "allowed_users": ["812934047"]
+                        }
+                    }
+                }
+                with open(GROUPS_FILE, 'w', encoding='utf-8') as f:
+                    json.dump(default_groups, f, ensure_ascii=False, indent=4)
+                print("✅ Файл групп восстановлен")
+            except:
+                print("❌ Не удалось восстановить файл групп")
     else:
-        print("❌ Файл групп не существует")
+        print("📭 Файл групп не существует")
     
     # Проверяем директорию изображений
-    if os.path.exists(images_dir):
+    if os.path.exists(IMAGES_DIR):
         try:
-            images_count = len([f for f in os.listdir(images_dir) if os.path.isfile(os.path.join(images_dir, f))])
+            images_count = len([f for f in os.listdir(IMAGES_DIR) if os.path.isfile(os.path.join(IMAGES_DIR, f))])
             print(f"✅ Директория изображений: {images_count} файлов")
         except Exception as e:
             print(f"❌ Ошибка чтения директории изображений: {e}")
     else:
-        print("❌ Директория изображений не существует")
+        print("📭 Директория изображений не существует")
     
     print("=" * 60)
 
