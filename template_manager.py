@@ -3,9 +3,12 @@ import os
 import uuid
 from datetime import datetime
 
-TEMPLATES_FILE = 'data/templates.json'
-GROUPS_FILE = 'data/groups.json'
-IMAGES_DIR = 'data/images'
+# Константы путей - используем абсолютные пути для надежности
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, 'data')
+TEMPLATES_FILE = os.path.join(DATA_DIR, 'templates.json')
+GROUPS_FILE = os.path.join(DATA_DIR, 'groups.json')
+IMAGES_DIR = os.path.join(DATA_DIR, 'images')
 
 # Дни недели для отображения
 DAYS_OF_WEEK = {
@@ -27,9 +30,9 @@ FREQUENCY_TYPES = {
 def ensure_data_directory():
     """Создает необходимые директории если их нет"""
     try:
-        if not os.path.exists('data'):
+        if not os.path.exists(DATA_DIR):
             print("📁 Создаю директорию 'data'...")
-            os.makedirs('data', exist_ok=True)
+            os.makedirs(DATA_DIR, exist_ok=True)
             print("✅ Директория 'data' создана")
         
         if not os.path.exists(IMAGES_DIR):
@@ -57,10 +60,19 @@ def init_files():
                 json.dump({}, f, ensure_ascii=False, indent=4)
             print("✅ Файл шаблонов создан")
         else:
-            print("✅ Файл шаблонов уже существует")
+            # Проверяем, что файл читается
+            with open(TEMPLATES_FILE, 'r', encoding='utf-8') as f:
+                json.load(f)
+            print("✅ Файл шаблонов уже существует и валиден")
     except Exception as e:
-        print(f"❌ Ошибка создания файла шаблонов: {e}")
-        return False
+        print(f"❌ Ошибка файла шаблонов: {e}. Пересоздаю...")
+        try:
+            with open(TEMPLATES_FILE, 'w', encoding='utf-8') as f:
+                json.dump({}, f, ensure_ascii=False, indent=4)
+            print("✅ Файл шаблонов пересоздан")
+        except Exception as e2:
+            print(f"❌ Критическая ошибка создания файла шаблонов: {e2}")
+            return False
     
     # Инициализация файла групп
     try:
@@ -82,10 +94,31 @@ def init_files():
                 json.dump(default_groups, f, ensure_ascii=False, indent=4)
             print("✅ Файл групп создан")
         else:
-            print("✅ Файл групп уже существует")
+            # Проверяем, что файл читается
+            with open(GROUPS_FILE, 'r', encoding='utf-8') as f:
+                json.load(f)
+            print("✅ Файл групп уже существует и валиден")
     except Exception as e:
-        print(f"❌ Ошибка создания файла групп: {e}")
-        return False
+        print(f"❌ Ошибка файла групп: {e}. Пересоздаю...")
+        try:
+            default_groups = {
+                "groups": {
+                    "hongqi": {
+                        "name": "🚗 Hongqi",
+                        "allowed_users": ["812934047"]
+                    },
+                    "turbomatiz": {
+                        "name": "🚙 TurboMatiz", 
+                        "allowed_users": ["812934047"]
+                    }
+                }
+            }
+            with open(GROUPS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(default_groups, f, ensure_ascii=False, indent=4)
+            print("✅ Файл групп пересоздан")
+        except Exception as e2:
+            print(f"❌ Критическая ошибка создания файла групп: {e2}")
+            return False
     
     print("✅ Все файлы инициализированы")
     return True
@@ -100,13 +133,13 @@ def load_templates():
         return {}
     
     try:
-        if os.path.exists(TEMPLATES_FILE):
+        if os.path.exists(TEMPLATES_FILE) and os.path.getsize(TEMPLATES_FILE) > 0:
             with open(TEMPLATES_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 print(f"✅ Загружено {len(data)} шаблонов")
                 return data
         else:
-            print("❌ Файл шаблонов не существует после инициализации")
+            print("📭 Файл шаблонов пуст или не существует")
             return {}
     except Exception as e:
         print(f"❌ Ошибка загрузки шаблонов: {e}")
@@ -114,7 +147,7 @@ def load_templates():
 
 def save_templates(templates_data):
     """Сохраняет шаблоны в файл"""
-    print("💾 Сохранение шаблонов в файл...")
+    print(f"💾 Сохранение {len(templates_data)} шаблонов в файл...")
     
     # Гарантируем что файл существует
     if not init_files():
@@ -129,10 +162,18 @@ def save_templates(templates_data):
         
         # Заменяем оригинальный файл
         os.replace(temp_file, TEMPLATES_FILE)
-        print(f"✅ Сохранено {len(templates_data)} шаблонов")
+        print(f"✅ Успешно сохранено {len(templates_data)} шаблонов")
+        
+        # Проверяем, что действительно сохранилось
+        verify_data = load_templates()
+        if len(verify_data) == len(templates_data):
+            print("✅ ПРОВЕРКА: данные корректно сохранены")
+        else:
+            print(f"⚠️ ПРОВЕРКА: расхождение в данных. Ожидалось: {len(templates_data)}, получилось: {len(verify_data)}")
+            
         return True
     except Exception as e:
-        print(f"❌ Ошибка сохранения шаблонов: {e}")
+        print(f"❌ Критическая ошибка сохранения шаблонов: {e}")
         return False
 
 def load_groups():
@@ -145,13 +186,13 @@ def load_groups():
         return {"groups": {}}
     
     try:
-        if os.path.exists(GROUPS_FILE):
+        if os.path.exists(GROUPS_FILE) and os.path.getsize(GROUPS_FILE) > 0:
             with open(GROUPS_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 print(f"✅ Загружено {len(data.get('groups', {}))} групп")
                 return data
         else:
-            print("❌ Файл групп не существует после инициализации")
+            print("📭 Файл групп пуст или не существует")
             return {"groups": {}}
     except Exception as e:
         print(f"❌ Ошибка загрузки групп: {e}")
@@ -197,14 +238,6 @@ def create_template(template_data):
     
     if save_templates(templates_data):
         print(f"✅ Шаблон '{template_data['name']}' успешно создан (ID: {template_id})")
-        
-        # Проверяем, что действительно сохранилось
-        verify_data = load_templates()
-        if template_id in verify_data:
-            print(f"✅ ПРОВЕРКА: Шаблон найден в файле после сохранения")
-        else:
-            print(f"❌ ПРОВЕРКА: Шаблон НЕ найден в файле после сохранения!")
-            
         return True, template_id
     else:
         print(f"❌ Ошибка сохранения шаблона {template_id}")
