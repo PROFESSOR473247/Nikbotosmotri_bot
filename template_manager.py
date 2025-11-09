@@ -23,17 +23,24 @@ FREQUENCY_TYPES = {
 
 def init_files():
     """Инициализирует базу данных"""
-    print("🔄 Инициализация базы данных...")
-    return db.init_database()
+    print("🔄 Инициализация базы данных в template_manager...")
+    success = db.init_database()
+    if success:
+        print("✅ База данных успешно инициализирована")
+    else:
+        print("❌ Не удалось инициализировать базу данных")
+    return success
 
 def load_templates():
     """Загружает шаблоны из базы данных"""
     print("📂 Загрузка шаблонов из базы данных...")
-    return db.load_templates()
+    templates = db.load_templates()
+    print(f"📊 Загружено {len(templates)} шаблонов")
+    return templates
 
 def save_templates(templates_data):
     """Сохраняет шаблоны в базу данных"""
-    print(f"💾 Сохранение {len(templates_data)} шаблонов в базу данных...")
+    print(f"💾 Попытка сохранения {len(templates_data)} шаблонов в базу данных...")
     
     success_count = 0
     for template_id, template_data in templates_data.items():
@@ -45,8 +52,10 @@ def save_templates(templates_data):
 
 def load_groups():
     """Загружает группы из базы данных"""
-    print("📂 Загрузка групп из базе данных...")
-    return db.load_groups()
+    print("📂 Загрузка групп из базы данных...")
+    groups = db.load_groups()
+    print(f"📊 Загружено {len(groups.get('groups', {}))} групп")
+    return groups
 
 def get_user_accessible_groups(user_id):
     """Возвращает группы доступные пользователю"""
@@ -65,6 +74,7 @@ def get_user_accessible_groups(user_id):
 def create_template(template_data):
     """Создает новый шаблон"""
     print("🔧 === НАЧАЛО СОЗДАНИЯ ШАБЛОНА ===")
+    print(f"📊 Полученные данные: {template_data}")
     
     # Гарантируем что база данных инициализирована
     if not init_files():
@@ -79,6 +89,8 @@ def create_template(template_data):
     template_data['id'] = template_id
     template_data['created_at'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     template_data['subgroup'] = None
+    
+    print(f"📦 Данные для сохранения: {template_data}")
     
     if db.save_template(template_data):
         print(f"✅ Шаблон '{template_data['name']}' успешно создан (ID: {template_id})")
