@@ -192,6 +192,22 @@ def get_template_by_id(template_id):
     
     return template
 
+def update_template_field(template_id, field, value):
+    """Обновляет конкретное поле шаблона"""
+    templates_data = load_templates()
+    
+    if template_id not in templates_data:
+        return False, "Шаблон не найден"
+    
+    templates_data[template_id][field] = value
+    
+    if save_templates(templates_data):
+        print(f"✅ Поле {field} шаблона {template_id} обновлено")
+        return True, f"Поле {field} обновлено"
+    
+    print(f"❌ Ошибка обновления поля {field} шаблона {template_id}")
+    return False, "Ошибка обновления"
+
 def update_template(template_id, updated_data):
     """Полностью обновляет шаблон"""
     templates_data = load_templates()
