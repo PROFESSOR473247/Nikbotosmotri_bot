@@ -2,13 +2,7 @@ import json
 import os
 import uuid
 from datetime import datetime
-
-# Константы путей - используем абсолютные пути для надежности
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, 'data')
-TEMPLATES_FILE = os.path.join(DATA_DIR, 'templates.json')
-GROUPS_FILE = os.path.join(DATA_DIR, 'groups.json')
-IMAGES_DIR = os.path.join(DATA_DIR, 'images')
+from database import db
 
 # Дни недели для отображения
 DAYS_OF_WEEK = {
@@ -27,176 +21,32 @@ FREQUENCY_TYPES = {
     "monthly": "📆 1 в месяц"
 }
 
-def ensure_data_directory():
-    """Создает необходимые директории если их нет"""
-    try:
-        if not os.path.exists(DATA_DIR):
-            print("📁 Создаю директорию 'data'...")
-            os.makedirs(DATA_DIR, exist_ok=True)
-            print("✅ Директория 'data' создана")
-        
-        if not os.path.exists(IMAGES_DIR):
-            print("📁 Создаю директорию 'data/images'...")
-            os.makedirs(IMAGES_DIR, exist_ok=True)
-            print("✅ Директория 'data/images' создана")
-            
-        return True
-    except Exception as e:
-        print(f"❌ Ошибка создания директорий: {e}")
-        return False
-
 def init_files():
-    """Инициализирует необходимые файлы если их нет"""
-    print("🔄 Инициализация файлов...")
-    
-    if not ensure_data_directory():
-        return False
-    
-    # Инициализация файла шаблонов
-    try:
-        if not os.path.exists(TEMPLATES_FILE):
-            print("📄 Создаю файл шаблонов...")
-            with open(TEMPLATES_FILE, 'w', encoding='utf-8') as f:
-                json.dump({}, f, ensure_ascii=False, indent=4)
-            print("✅ Файл шаблонов создан")
-        else:
-            # Проверяем, что файл читается
-            with open(TEMPLATES_FILE, 'r', encoding='utf-8') as f:
-                json.load(f)
-            print("✅ Файл шаблонов уже существует и валиден")
-    except Exception as e:
-        print(f"❌ Ошибка файла шаблонов: {e}. Пересоздаю...")
-        try:
-            with open(TEMPLATES_FILE, 'w', encoding='utf-8') as f:
-                json.dump({}, f, ensure_ascii=False, indent=4)
-            print("✅ Файл шаблонов пересоздан")
-        except Exception as e2:
-            print(f"❌ Критическая ошибка создания файла шаблонов: {e2}")
-            return False
-    
-    # Инициализация файла групп
-    try:
-        if not os.path.exists(GROUPS_FILE):
-            print("📄 Создаю файл групп...")
-            default_groups = {
-                "groups": {
-                    "hongqi": {
-                        "name": "🚗 Hongqi",
-                        "allowed_users": ["812934047"]
-                    },
-                    "turbomatiz": {
-                        "name": "🚙 TurboMatiz", 
-                        "allowed_users": ["812934047"]
-                    }
-                }
-            }
-            with open(GROUPS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(default_groups, f, ensure_ascii=False, indent=4)
-            print("✅ Файл групп создан")
-        else:
-            # Проверяем, что файл читается
-            with open(GROUPS_FILE, 'r', encoding='utf-8') as f:
-                json.load(f)
-            print("✅ Файл групп уже существует и валиден")
-    except Exception as e:
-        print(f"❌ Ошибка файла групп: {e}. Пересоздаю...")
-        try:
-            default_groups = {
-                "groups": {
-                    "hongqi": {
-                        "name": "🚗 Hongqi",
-                        "allowed_users": ["812934047"]
-                    },
-                    "turbomatiz": {
-                        "name": "🚙 TurboMatiz", 
-                        "allowed_users": ["812934047"]
-                    }
-                }
-            }
-            with open(GROUPS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(default_groups, f, ensure_ascii=False, indent=4)
-            print("✅ Файл групп пересоздан")
-        except Exception as e2:
-            print(f"❌ Критическая ошибка создания файла групп: {e2}")
-            return False
-    
-    print("✅ Все файлы инициализированы")
-    return True
+    """Инициализирует базу данных"""
+    print("🔄 Инициализация базы данных...")
+    return db.init_database()
 
 def load_templates():
-    """Загружает шаблоны из файла"""
-    print("📂 Загрузка шаблонов из файла...")
-    
-    # Гарантируем что файл существует
-    if not init_files():
-        print("❌ Не удалось инициализировать файлы")
-        return {}
-    
-    try:
-        if os.path.exists(TEMPLATES_FILE) and os.path.getsize(TEMPLATES_FILE) > 0:
-            with open(TEMPLATES_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                print(f"✅ Загружено {len(data)} шаблонов")
-                return data
-        else:
-            print("📭 Файл шаблонов пуст или не существует")
-            return {}
-    except Exception as e:
-        print(f"❌ Ошибка загрузки шаблонов: {e}")
-        return {}
+    """Загружает шаблоны из базы данных"""
+    print("📂 Загрузка шаблонов из базы данных...")
+    return db.load_templates()
 
 def save_templates(templates_data):
-    """Сохраняет шаблоны в файл"""
-    print(f"💾 Сохранение {len(templates_data)} шаблонов в файл...")
+    """Сохраняет шаблоны в базу данных"""
+    print(f"💾 Сохранение {len(templates_data)} шаблонов в базу данных...")
     
-    # Гарантируем что файл существует
-    if not init_files():
-        print("❌ Не удалось инициализировать файлы перед сохранением")
-        return False
+    success_count = 0
+    for template_id, template_data in templates_data.items():
+        if db.save_template(template_data):
+            success_count += 1
     
-    try:
-        # Создаем временный файл для безопасного сохранения
-        temp_file = TEMPLATES_FILE + '.tmp'
-        with open(temp_file, 'w', encoding='utf-8') as f:
-            json.dump(templates_data, f, ensure_ascii=False, indent=4)
-        
-        # Заменяем оригинальный файл
-        os.replace(temp_file, TEMPLATES_FILE)
-        print(f"✅ Успешно сохранено {len(templates_data)} шаблонов")
-        
-        # Проверяем, что действительно сохранилось
-        verify_data = load_templates()
-        if len(verify_data) == len(templates_data):
-            print("✅ ПРОВЕРКА: данные корректно сохранены")
-        else:
-            print(f"⚠️ ПРОВЕРКА: расхождение в данных. Ожидалось: {len(templates_data)}, получилось: {len(verify_data)}")
-            
-        return True
-    except Exception as e:
-        print(f"❌ Критическая ошибка сохранения шаблонов: {e}")
-        return False
+    print(f"✅ Успешно сохранено {success_count}/{len(templates_data)} шаблонов")
+    return success_count == len(templates_data)
 
 def load_groups():
-    """Загружает группы из файла"""
-    print("📂 Загрузка групп из файла...")
-    
-    # Гарантируем что файл существует
-    if not init_files():
-        print("❌ Не удалось инициализировать файлы")
-        return {"groups": {}}
-    
-    try:
-        if os.path.exists(GROUPS_FILE) and os.path.getsize(GROUPS_FILE) > 0:
-            with open(GROUPS_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                print(f"✅ Загружено {len(data.get('groups', {}))} групп")
-                return data
-        else:
-            print("📭 Файл групп пуст или не существует")
-            return {"groups": {}}
-    except Exception as e:
-        print(f"❌ Ошибка загрузки групп: {e}")
-        return {"groups": {}}
+    """Загружает группы из базы данных"""
+    print("📂 Загрузка групп из базы данных...")
+    return db.load_groups()
 
 def get_user_accessible_groups(user_id):
     """Возвращает группы доступные пользователю"""
@@ -216,27 +66,21 @@ def create_template(template_data):
     """Создает новый шаблон"""
     print("🔧 === НАЧАЛО СОЗДАНИЯ ШАБЛОНА ===")
     
-    # Гарантируем что файлы существуют
+    # Гарантируем что база данных инициализирована
     if not init_files():
-        print("❌ Не удалось инициализировать файлы для создания шаблона")
+        print("❌ Не удалось инициализировать базу данных для создания шаблона")
         return False, None
     
-    templates_data = load_templates()
     template_id = str(uuid.uuid4())[:8]
     
     print(f"📝 Создание шаблона с ID: {template_id}")
-    print(f"📋 Данные шаблона: {json.dumps(template_data, ensure_ascii=False, default=str)}")
     
     # Добавляем системные поля
     template_data['id'] = template_id
     template_data['created_at'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     template_data['subgroup'] = None
     
-    templates_data[template_id] = template_data
-    
-    print(f"💾 Сохраняем {len(templates_data)} шаблонов в файл...")
-    
-    if save_templates(templates_data):
+    if db.save_template(template_data):
         print(f"✅ Шаблон '{template_data['name']}' успешно создан (ID: {template_id})")
         return True, template_id
     else:
@@ -256,20 +100,23 @@ def get_templates_by_group(group_id):
     return templates
 
 def save_image(file_content, filename):
-    """Сохраняет изображение и возвращает путь"""
+    """Сохраняет изображение - в Render это временное хранилище"""
     try:
-        # Гарантируем что директория существует
-        if not ensure_data_directory():
-            return None
-            
+        # В Render файловая система ephemeral, поэтому просто возвращаем путь
         file_ext = os.path.splitext(filename)[1]
         new_filename = f"{uuid.uuid4().hex}{file_ext}"
-        filepath = os.path.join(IMAGES_DIR, new_filename)
+        
+        # Сохраняем во временную директорию
+        temp_dir = '/tmp/images'
+        if not os.path.exists(temp_dir):
+            os.makedirs(temp_dir)
+        
+        filepath = os.path.join(temp_dir, new_filename)
         
         with open(filepath, 'wb') as f:
             f.write(file_content)
         
-        print(f"✅ Изображение сохранено: {filepath}")
+        print(f"✅ Изображение сохранено во временное хранилище: {filepath}")
         return filepath
     except Exception as e:
         print(f"❌ Ошибка сохранения изображения: {e}")
@@ -298,51 +145,13 @@ def format_template_info(template):
     
     return info
 
-def format_template_list_info(template):
-    """Форматирует краткую информацию о шаблоне для списка"""
-    days_names = []
-    if template.get('days'):
-        days_names = [DAYS_OF_WEEK[day] for day in template.get('days', [])]
-    
-    frequency_map = {
-        "weekly": "1 в неделю",
-        "2_per_month": "2 в месяц", 
-        "monthly": "1 в месяц"
-    }
-    frequency = frequency_map.get(template.get('frequency'), template.get('frequency', 'Не указана'))
-    
-    info = f"📝 **{template['name']}**\n"
-    info += f"⏰ Время: {template.get('time', 'Не указано')} | "
-    info += f"📅 Дни: {len(days_names)} | "
-    info += f"🔄 {frequency} | "
-    info += f"🖼️ {'✅' if template.get('image') else '❌'}\n"
-    info += f"📄 {template.get('text', '')[:80]}...\n"
-    
-    return info
-
 def get_all_templates():
     """Возвращает все шаблоны"""
     return load_templates()
 
 def delete_template_by_id(template_id):
     """Удаляет шаблон по ID"""
-    templates_data = load_templates()
-    
-    if template_id not in templates_data:
-        return False, "Шаблон не найден"
-    
-    # Удаляем изображение если есть
-    template = templates_data[template_id]
-    if template.get('image') and os.path.exists(template['image']):
-        try:
-            os.remove(template['image'])
-            print(f"✅ Изображение шаблона {template_id} удалено")
-        except Exception as e:
-            print(f"⚠️ Ошибка удаления изображения: {e}")
-    
-    del templates_data[template_id]
-    
-    if save_templates(templates_data):
+    if db.delete_template(template_id):
         print(f"✅ Шаблон {template_id} удален")
         return True, "Шаблон удален"
     
@@ -361,22 +170,6 @@ def get_template_by_id(template_id):
     
     return template
 
-def update_template_field(template_id, field, value):
-    """Обновляет конкретное поле шаблона"""
-    templates_data = load_templates()
-    
-    if template_id not in templates_data:
-        return False, "Шаблон не найден"
-    
-    templates_data[template_id][field] = value
-    
-    if save_templates(templates_data):
-        print(f"✅ Поле {field} шаблона {template_id} обновлено")
-        return True, f"Поле {field} обновлено"
-    
-    print(f"❌ Ошибка обновления поля {field} шаблона {template_id}")
-    return False, "Ошибка обновления"
-
 def update_template(template_id, updated_data):
     """Полностью обновляет шаблон"""
     templates_data = load_templates()
@@ -388,9 +181,7 @@ def update_template(template_id, updated_data):
     updated_data['id'] = template_id
     updated_data['created_at'] = templates_data[template_id].get('created_at', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     
-    templates_data[template_id] = updated_data
-    
-    if save_templates(templates_data):
+    if db.save_template(updated_data):
         print(f"✅ Шаблон {template_id} полностью обновлен")
         return True, "Шаблон обновлен"
     
