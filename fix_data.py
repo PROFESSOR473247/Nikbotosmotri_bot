@@ -37,42 +37,9 @@ def fix_users_data():
         return False
 
 def init_required_files():
-    """Инициализирует необходимые файлы"""
-    required_files = ['template_groups.json', 'templates_data.json']
-    
-    for file in required_files:
-        if not os.path.exists(file):
-            print(f"📁 Создаем файл: {file}")
-            
-            if file == 'template_groups.json':
-                default_data = {
-                    "groups": {
-                        "hongqi": {
-                            "name": "🚗 Hongqi",
-                            "subgroups": {
-                                "inspection": "🔍 Осмотры",
-                                "reminders": "⏰ Напоминания"
-                            },
-                            "allowed_users": ["812934047"]
-                        },
-                        "turbomatiz": {
-                            "name": "🚙 TurboMatiz",
-                            "subgroups": {
-                                "payments": "💳 Оплаты", 
-                                "inspections": "🔍 Осмотры",
-                                "cleaning": "🧼 Чистка"
-                            },
-                            "allowed_users": ["812934047"]
-                        }
-                    }
-                }
-            elif file == 'templates_data.json':
-                default_data = {"templates": {}}
-            
-            with open(file, 'w', encoding='utf-8') as f:
-                json.dump(default_data, f, ensure_ascii=False, indent=4)
-            
-            print(f"✅ Файл {file} создан")
+    """Инициализирует необходимые файлы для совместимости"""
+    # Эта функция теперь не нужна, так как template_manager сам создает файлы
+    print("✅ Файлы создаются автоматически через template_manager")
 
 if __name__ == '__main__':
     print("🛠️ Исправление структуры данных...")
