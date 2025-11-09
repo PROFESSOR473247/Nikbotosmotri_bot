@@ -122,8 +122,8 @@ def save_image(file_content, filename):
         print(f"❌ Ошибка сохранения изображения: {e}")
         return None
 
-def format_template_info(template):
-    """Форматирует информацию о шаблоне для отображения"""
+def format_template_list_info(template):
+    """Форматирует краткую информацию о шаблоне для списка"""
     days_names = []
     if template.get('days'):
         days_names = [DAYS_OF_WEEK[day] for day in template.get('days', [])]
@@ -135,13 +135,12 @@ def format_template_info(template):
     }
     frequency = frequency_map.get(template.get('frequency'), template.get('frequency', 'Не указана'))
     
-    info = f"📝 **{template['name']}**\n\n"
-    info += f"🏷️ **Группа:** {template.get('group', 'Не указана')}\n"
-    info += f"⏰ **Время:** {template.get('time', 'Не указано')} (МСК)\n"
-    info += f"📅 **Дни:** {', '.join(days_names) if days_names else 'Не указаны'}\n"
-    info += f"🔄 **Периодичность:** {frequency}\n"
-    info += f"📄 **Текст:** {template.get('text', '')[:100]}...\n"
-    info += f"🖼️ **Изображение:** {'✅ Есть' if template.get('image') else '❌ Нет'}\n"
+    info = f"📝 **{template['name']}**\n"
+    info += f"⏰ Время: {template.get('time', 'Не указано')} | "
+    info += f"📅 Дни: {len(days_names)} | "
+    info += f"🔄 {frequency} | "
+    info += f"🖼️ {'✅' if template.get('image') else '❌'}\n"
+    info += f"📄 {template.get('text', '')[:80]}...\n"
     
     return info
 
