@@ -9,14 +9,17 @@ class DatabaseManager:
         self.connection_string = os.environ.get('DATABASE_URL')
         if not self.connection_string:
             logging.error("❌ DATABASE_URL не найден в переменных окружения")
+            print("❌ DATABASE_URL не найден в переменных окружения")
         
     def get_connection(self):
         """Возвращает соединение с базой данных"""
         try:
             conn = psycopg2.connect(self.connection_string)
+            print("✅ Успешное подключение к базе данных")
             return conn
         except Exception as e:
             logging.error(f"❌ Ошибка подключения к базе данных: {e}")
+            print(f"❌ Ошибка подключения к базе данных: {e}")
             return None
     
     def init_database(self):
@@ -25,7 +28,7 @@ class DatabaseManager:
         
         conn = self.get_connection()
         if not conn:
-            print("❌ Не удалось подключиться к базе данных")
+            print("❌ Не удалось подключиться к базе данных для инициализации")
             return False
         
         try:
@@ -83,12 +86,29 @@ class DatabaseManager:
     
     def save_template(self, template_data):
         """Сохраняет шаблон в базу данных"""
+        print(f"💾 Попытка сохранения шаблона в базу данных: {template_data.get('name')}")
+        
         conn = self.get_connection()
         if not conn:
+            print("❌ Не удалось подключиться к базе данных для сохранения шаблона")
             return False
             
         try:
             cursor = conn.cursor()
+            
+            # Подготавливаем данные
+            template_id = template_data.get('id')
+            name = template_data.get('name', '')
+            group_name = template_data.get('group', '')
+            text = template_data.get('text', '')
+            image_path = template_data.get('image')
+            time_str = template_data.get('time', '')
+            days = json.dumps(template_data.get('days', []))
+            frequency = template_data.get('frequency', '')
+            created_by = template_data.get('created_by')
+            subgroup = template_data.get('subgroup')
+            
+            print(f"📊 Данные для сохранения: ID={template_id}, Name={name}, Group={group_name}")
             
             cursor.execute('''
                 INSERT INTO templates (id, name, group_name, text, image_path, time, days, frequency, created_by, subgroup)
@@ -103,28 +123,29 @@ class DatabaseManager:
                     frequency = EXCLUDED.frequency,
                     subgroup = EXCLUDED.subgroup
             ''', (
-                template_data['id'],
-                template_data['name'],
-                template_data['group'],
-                template_data.get('text'),
-                template_data.get('image'),
-                template_data.get('time'),
-                json.dumps(template_data.get('days', [])),
-                template_data.get('frequency'),
-                template_data.get('created_by'),
-                template_data.get('subgroup')
+                template_id,
+                name,
+                group_name,
+                text,
+                image_path,
+                time_str,
+                days,
+                frequency,
+                created_by,
+                subgroup
             ))
             
             conn.commit()
             cursor.close()
             conn.close()
             
-            print(f"✅ Шаблон {template_data['id']} сохранен в базе данных")
+            print(f"✅ Шаблон {template_id} успешно сохранен в базе данных")
             return True
             
         except Exception as e:
             print(f"❌ Ошибка сохранения шаблона: {e}")
             try:
+                conn.rollback()
                 conn.close()
             except:
                 pass
@@ -132,8 +153,11 @@ class DatabaseManager:
     
     def load_templates(self):
         """Загружает все шаблоны из базы данных"""
+        print("📂 Загрузка шаблонов из базы данных...")
+        
         conn = self.get_connection()
         if not conn:
+            print("❌ Не удалось подключиться к базе данных для загрузки шаблонов")
             return {}
             
         try:
@@ -175,6 +199,8 @@ class DatabaseManager:
     
     def delete_template(self, template_id):
         """Удаляет шаблон из базы данных"""
+        print(f"🗑️ Попытка удаления шаблона {template_id}")
+        
         conn = self.get_connection()
         if not conn:
             return False
@@ -194,6 +220,7 @@ class DatabaseManager:
         except Exception as e:
             print(f"❌ Ошибка удаления шаблона: {e}")
             try:
+                conn.rollback()
                 conn.close()
             except:
                 pass
@@ -201,8 +228,11 @@ class DatabaseManager:
     
     def load_groups(self):
         """Загружает группы из базы данных"""
+        print("📂 Загрузка групп из базы данных...")
+        
         conn = self.get_connection()
         if not conn:
+            print("❌ Не удалось подключиться к базе данных для загрузки групп")
             return {"groups": {}}
             
         try:
