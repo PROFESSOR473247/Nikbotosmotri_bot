@@ -45,7 +45,7 @@ def save_templates(templates_data):
 
 def load_groups():
     """Загружает группы из базы данных"""
-    print("📂 Загрузка групп из базы данных...")
+    print("📂 Загрузка групп из базе данных...")
     return db.load_groups()
 
 def get_user_accessible_groups(user_id):
@@ -121,6 +121,29 @@ def save_image(file_content, filename):
     except Exception as e:
         print(f"❌ Ошибка сохранения изображения: {e}")
         return None
+
+def format_template_info(template):
+    """Форматирует информацию о шаблоне для отображения"""
+    days_names = []
+    if template.get('days'):
+        days_names = [DAYS_OF_WEEK[day] for day in template.get('days', [])]
+    
+    frequency_map = {
+        "weekly": "1 в неделю",
+        "2_per_month": "2 в месяц", 
+        "monthly": "1 в месяц"
+    }
+    frequency = frequency_map.get(template.get('frequency'), template.get('frequency', 'Не указана'))
+    
+    info = f"📝 **{template['name']}**\n\n"
+    info += f"🏷️ **Группа:** {template.get('group', 'Не указана')}\n"
+    info += f"⏰ **Время:** {template.get('time', 'Не указано')} (МСК)\n"
+    info += f"📅 **Дни:** {', '.join(days_names) if days_names else 'Не указаны'}\n"
+    info += f"🔄 **Периодичность:** {frequency}\n"
+    info += f"📄 **Текст:** {template.get('text', '')[:100]}...\n"
+    info += f"🖼️ **Изображение:** {'✅ Есть' if template.get('image') else '❌ Нет'}\n"
+    
+    return info
 
 def format_template_list_info(template):
     """Форматирует краткую информацию о шаблоне для списка"""
