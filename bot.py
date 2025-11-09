@@ -253,93 +253,36 @@ async def debug_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(message, parse_mode='Markdown')
 
 def check_template_files():
-    """Проверяет состояние файлов шаблонов при запуске"""
+    """Проверяет состояние данных при запуске"""
     print("=" * 60)
-    print("🔍 ПРОВЕРКА ФАЙЛОВ ШАБЛОНОВ ПРИ ЗАПУСКЕ")
+    print("🔍 ПРОВЕРКА ДАННЫХ ПРИ ЗАПУСКЕ")
     print("=" * 60)
     
-    import json
-    import os
-    
-    # Используем абсолютные пути как в template_manager
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    DATA_DIR = os.path.join(BASE_DIR, 'data')
-    TEMPLATES_FILE = os.path.join(DATA_DIR, 'templates.json')
-    GROUPS_FILE = os.path.join(DATA_DIR, 'groups.json')
-    IMAGES_DIR = os.path.join(DATA_DIR, 'images')
-    
-    # Создаем директорию если не существует
-    if not os.path.exists(DATA_DIR):
-        print("📁 Создаем директорию data...")
-        os.makedirs(DATA_DIR, exist_ok=True)
-    
-    # Проверяем файл шаблонов
-    if os.path.exists(TEMPLATES_FILE):
-        try:
-            with open(TEMPLATES_FILE, 'r', encoding='utf-8') as f:
-                templates_data = json.load(f)
-            print(f"✅ Файл шаблонов: {len(templates_data)} записей")
+    try:
+        from template_manager import get_all_templates, load_groups
+        
+        # Инициализируем базу данных
+        from database import db
+        db.init_database()
+        
+        # Проверяем шаблоны
+        templates = get_all_templates()
+        print(f"✅ Шаблонов в базе данных: {len(templates)}")
+        
+        for template_id, template in templates.items():
+            print(f"   📝 {template_id}: {template.get('name', 'Без названия')} "
+                  f"(группа: {template.get('group', 'Не указана')})")
+        
+        # Проверяем группы
+        groups_data = load_groups()
+        groups_count = len(groups_data.get('groups', {}))
+        print(f"✅ Групп в базе данных: {groups_count}")
+        
+        for group_id, group_data in groups_data.get('groups', {}).items():
+            print(f"   👥 {group_id}: {group_data.get('name', 'Без названия')}")
             
-            for template_id, template in templates_data.items():
-                print(f"   📝 {template_id}: {template.get('name', 'Без названия')} "
-                      f"(группа: {template.get('group', 'Не указана')})")
-                      
-        except Exception as e:
-            print(f"❌ Ошибка чтения файла шаблонов: {e}")
-            # Пытаемся восстановить
-            try:
-                with open(TEMPLATES_FILE, 'w', encoding='utf-8') as f:
-                    json.dump({}, f, ensure_ascii=False, indent=4)
-                print("✅ Файл шаблонов восстановлен")
-            except:
-                print("❌ Не удалось восстановить файл шаблонов")
-    else:
-        print("📭 Файл шаблонов не существует")
-    
-    # Проверяем файл групп
-    if os.path.exists(GROUPS_FILE):
-        try:
-            with open(GROUPS_FILE, 'r', encoding='utf-8') as f:
-                groups_data = json.load(f)
-            groups_count = len(groups_data.get('groups', {}))
-            print(f"✅ Файл групп: {groups_count} групп")
-            
-            for group_id, group_data in groups_data.get('groups', {}).items():
-                print(f"   👥 {group_id}: {group_data.get('name', 'Без названия')}")
-                
-        except Exception as e:
-            print(f"❌ Ошибка чтения файла групп: {e}")
-            # Пытаемся восстановить
-            try:
-                default_groups = {
-                    "groups": {
-                        "hongqi": {
-                            "name": "🚗 Hongqi",
-                            "allowed_users": ["812934047"]
-                        },
-                        "turbomatiz": {
-                            "name": "🚙 TurboMatiz", 
-                            "allowed_users": ["812934047"]
-                        }
-                    }
-                }
-                with open(GROUPS_FILE, 'w', encoding='utf-8') as f:
-                    json.dump(default_groups, f, ensure_ascii=False, indent=4)
-                print("✅ Файл групп восстановлен")
-            except:
-                print("❌ Не удалось восстановить файл групп")
-    else:
-        print("📭 Файл групп не существует")
-    
-    # Проверяем директорию изображений
-    if os.path.exists(IMAGES_DIR):
-        try:
-            images_count = len([f for f in os.listdir(IMAGES_DIR) if os.path.isfile(os.path.join(IMAGES_DIR, f))])
-            print(f"✅ Директория изображений: {images_count} файлов")
-        except Exception as e:
-            print(f"❌ Ошибка чтения директории изображений: {e}")
-    else:
-        print("📭 Директория изображений не существует")
+    except Exception as e:
+        print(f"❌ Ошибка проверки данных: {e}")
     
     print("=" * 60)
 
