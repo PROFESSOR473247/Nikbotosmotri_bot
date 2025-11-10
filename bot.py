@@ -319,7 +319,9 @@ async def debug_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
             status = "✅" if group_id in user_groups else "❌"
             message += f"   {status} {group_data.get('name', 'Без названия')} (ID: {group_id})\n"
     
-    await update.message.reply_text(message, parse_mode='Markdown')
+    # Убираем Markdown разметку для избежания ошибок парсинга
+    plain_message = message.replace('**', '').replace('`', '')
+    await update.message.reply_text(plain_message)
 
 async def debug_create_test_template(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Создание тестового шаблона для отладки"""
