@@ -243,9 +243,20 @@ class DatabaseManager:
             
             groups = {"groups": {}}
             for row in rows:
+                # Исправляем обработку JSON данных
+                allowed_users = []
+                if row[2]:
+                    try:
+                        if isinstance(row[2], (str, bytes, bytearray)):
+                            allowed_users = json.loads(row[2])
+                        else:
+                            allowed_users = row[2]  # Уже список
+                    except:
+                        allowed_users = []
+                
                 groups["groups"][row[0]] = {
                     "name": row[1],
-                    "allowed_users": json.loads(row[2]) if row[2] else []
+                    "allowed_users": allowed_users
                 }
             
             cursor.close()
