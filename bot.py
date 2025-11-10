@@ -286,6 +286,41 @@ async def debug_database(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(message, parse_mode='Markdown')
 
+async def debug_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отладочная информация о доступе пользователя"""
+    user_id = update.effective_user.id
+    
+    from authorized_users import is_authorized, get_user_groups
+    from template_manager import get_user_accessible_groups, load_groups
+    
+    message = "🔐 **Информация о доступе**\n\n"
+    
+    message += f"👤 **Пользователь:** {user_id}\n"
+    message += f"✅ **Авторизован:** {'Да' if is_authorized(user_id) else 'Нет'}\n"
+    
+    if is_authorized(user_id):
+        user_groups = get_user_groups(user_id)
+        message += f"📋 **Группы в authorized_users.json:** {user_groups}\n\n"
+        
+        accessible_groups = get_user_accessible_groups(user_id)
+        message += f"🔓 **Доступные группы:** {len(accessible_groups)}\n"
+        
+        if accessible_groups:
+            for group_id, group_data in accessible_groups.items():
+                message += f"   - {group_data.get('name', 'Без названия')} (ID: {group_id})\n"
+        else:
+            message += "   ❌ Нет доступных групп\n"
+        
+        # Покажем все группы из базы для сравнения
+        groups_data = load_groups()
+        all_groups = groups_data.get('groups', {})
+        message += f"\n📊 **Все группы в базе:** {len(all_groups)}\n"
+        for group_id, group_data in all_groups.items():
+            status = "✅" if group_id in user_groups else "❌"
+            message += f"   {status} {group_data.get('name', 'Без названия')} (ID: {group_id})\n"
+    
+    await update.message.reply_text(message, parse_mode='Markdown')
+
 async def debug_create_test_template(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Создание тестового шаблона для отладки"""
     user_id = update.effective_user.id
@@ -324,6 +359,32 @@ async def debug_create_test_template(update: Update, context: ContextTypes.DEFAU
             f"Проверьте логи для подробной информации",
             parse_mode='Markdown'
         )
+
+async def fix_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Исправление доступа пользователя"""
+    user_id = update.effective_user.id
+    
+    try:
+        from authorized_users import get_user_groups, update_user_groups
+        
+        # Даем доступ ко всем группам
+        all_groups = ["hongqi", "turbomatiz"]
+        success, message = update_user_groups(user_id, all_groups)
+        
+        if success:
+            await update.message.reply_text(
+                f"✅ Доступ к группам предоставлен!\n\n"
+                f"User ID: {user_id}\n"
+                f"Группы: {', '.join(all_groups)}\n"
+                f"Теперь попробуйте создать шаблон снова.",
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text(
+                f"❌ Не удалось предоставить доступ: {message}"
+            )
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка: {e}")
 
 def check_template_files():
     """Проверяет состояние данных при запуске"""
@@ -443,7 +504,9 @@ def main():
     application.add_handler(CommandHandler("debug_system", debug_system))
     application.add_handler(CommandHandler("debug_bot", debug_bot))
     application.add_handler(CommandHandler("debug_database", debug_database))
+    application.add_handler(CommandHandler("debug_access", debug_access))
     application.add_handler(CommandHandler("debug_test_template", debug_create_test_template))
+    application.add_handler(CommandHandler("fix_access", fix_access))
 
     # Добавляем ConversationHandler для шаблонов
     application.add_handler(template_conv_handler)
@@ -460,7 +523,9 @@ def main():
     print("   /debug_system - системная информация") 
     print("   /debug_bot - информация о состоянии бота")
     print("   /debug_database - информация о базе данных")
+    print("   /debug_access - информация о доступе пользователя")
     print("   /debug_test_template - создать тестовый шаблон")
+    print("   /fix_access - исправить доступ к группам")
     
     try:
         application.run_polling(
