@@ -65,10 +65,11 @@ def get_user_accessible_groups(user_id):
     
     accessible_groups = {}
     for group_id, group_data in groups_data.get('groups', {}).items():
-        if group_id in user_groups or str(user_id) in group_data.get('allowed_users', []):
+        # Проверяем доступ через authorized_users.json
+        if group_id in user_groups:
             accessible_groups[group_id] = group_data
     
-    print(f"👤 Пользователь {user_id} имеет доступ к {len(accessible_groups)} группам")
+    print(f"👤 Пользователь {user_id} имеет доступ к {len(accessible_groups)} группам: {list(accessible_groups.keys())}")
     return accessible_groups
 
 def create_template(template_data):
