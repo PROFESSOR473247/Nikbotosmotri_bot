@@ -1,6 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
-from keyboards.main_keyboards import get_main_keyboard, get_unauthorized_keyboard
+from keyboards.main_keyboards import get_main_keyboard, get_simple_keyboard
+from config import REQUIRE_AUTHORIZATION
 from authorized_users import is_authorized, is_admin
 import datetime
 import pytz
@@ -10,100 +11,84 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     current_time = datetime.datetime.now(pytz.timezone('Europe/Moscow')).strftime("%H:%M:%S")
 
-    if not is_authorized(user_id):
-        welcome_text = (
-            f'🤖 БОТ С МНОГОУРОВНЕВЫМ МЕНЮ\n'
-            f'Текущее время: {current_time} (МСК)\n'
-            f'ID чата: {chat_id}\n'
-            f'Ваш ID: {user_id}\n\n'
-            '❌ У ВАС НЕДОСТАТОЧНО ПРАВ\n\n'
-            'Для доступа к функциям бота обратитесь к администратору\n\n'
-            '🎹 Доступные функции:\n'
-            '• 🆔 Получить ID - узнать ваш идентификатор\n'
-            '• /help - справка по командам'
-        )
-
-        await update.message.reply_text(
-            welcome_text,
-            reply_markup=get_unauthorized_keyboard()
-        )
-        print(f"🚫 Неавторизованный доступ от user_id: {user_id}")
-        return
-
+    # Все пользователи получают полный доступ
     welcome_text = (
-        f'🤖 БОТ С МНОГОУРОВНЕВЫМ МЕНЮ\n'
+        f'🤖 БОТ ОТЛОЖЕННЫХ СООБЩЕНИЙ\n'
         f'Текущее время: {current_time} (МСК)\n'
         f'ID чата: {chat_id}\n'
         f'Ваш ID: {user_id}\n\n'
-        '🎹 Используйте кнопки меню для навигации!\n\n'
-        '💡 Также доступны текстовые команды:\n'
-        '/help - справка по командам\n'
-        '/update_menu - обновить меню\n'
-        '/my_id - показать ваш ID'
+        '🎉 ДОБРО ПОЖАЛОВАТЬ!\n\n'
+        '🎹 Используйте кнопки меню для навигации:\n'
+        '• 📋 Шаблоны - создание и управление рассылками\n'
+        '• ℹ️ Помощь - справка по командам\n'
+        '• 🆔 Мой ID - ваш идентификатор\n\n'
+        '💡 Все данные сохраняются в базе и не теряются при перезапуске!'
     )
 
     await update.message.reply_text(
         welcome_text,
-        reply_markup=get_main_keyboard()
+        reply_markup=get_simple_keyboard()
     )
-    print(f"✅ Отправлено главное меню в чат {chat_id} для user_id: {user_id}")
+    print(f"✅ Новый пользователь: {user_id} в чате {chat_id}")
 
 async def update_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Принудительно обновляет меню"""
+    from telegram import ReplyKeyboardRemove
+    import asyncio
+    
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
-    print(f"🔄 Принудительное обновление на новое меню для чата {chat_id}, user_id: {user_id}")
+    print(f"🔄 Обновление меню для user_id: {user_id}")
 
     await update.message.reply_text(
-        "🔄 Удаляю старое меню...",
+        "🔄 Обновляю меню...",
         reply_markup=ReplyKeyboardRemove()
     )
 
     await asyncio.sleep(1)
 
     await update.message.reply_text(
-        "✅ Новое меню загружено!\n\n"
-        "🎹 Теперь у вас:\n"
-        "• 📋 Шаблоны - управление рассылками\n"
-        "• 🧪 Тестирование - тестовые отправки\n"
-        "• ⚙️ ЕЩЕ - дополнительные функции",
-        reply_markup=get_main_keyboard()
+        "✅ Меню обновлено!\n\n"
+        "Теперь у вас есть доступ ко всем функциям бота:",
+        reply_markup=get_simple_keyboard()
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать справку по командам"""
-    user_id = update.effective_user.id
-
     help_text = """
-🤖 СПРАВКА ПО КОМАНДАМ:
+🤖 СПРАВКА ПО КОМАНДАМ БОТА:
 
-🎹 ДОСТУПНЫЕ ВСЕМ:
+🎹 ОСНОВНЫЕ ФУНКЦИИ:
 /start - перезапустить бота
-/my_id - показать ваш ID (для получения доступа)
+📋 Шаблоны - управление отложенными сообщениями
+🆔 Мой ID - показать ваш идентификатор
+
+📋 РАБОТА С ШАБЛОНАМИ:
+• Создание шаблонов с текстом и изображениями
+• Настройка времени и дней отправки
+• Выбор периодичности (еженедельно, 2 в месяц, ежемесячно)
+• Все шаблоны сохраняются в базе данных
+
+💾 СОХРАНЕНИЕ ДАННЫХ:
+Все созданные шаблоны сохраняются в PostgreSQL
+и не теряются при перезапуске бота!
+
+🔧 ТЕХНИЧЕСКИЕ КОМАНДЫ:
 /help - эта справка
-
-🎹 ТОЛЬКО ДЛЯ АВТОРИЗОВАННЫХ:
-📋 Шаблоны - управление основными рассылками
-🧪 Тестирование - тестовые отправки
-⚙️ ЕЩЕ - дополнительные функции
-/update_menu - обновить меню
-/status - статус шаблонов
 /now - текущее время
+/update_menu - обновить меню
 
-🔐 Для получения доступа обратитесь к администратору
+📞 Поддержка: обратитесь к администратору
 """
 
-    if is_authorized(user_id):
-        await update.message.reply_text(help_text, reply_markup=get_main_keyboard())
-    else:
-        await update.message.reply_text(help_text, reply_markup=get_unauthorized_keyboard())
+    await update.message.reply_text(help_text, reply_markup=get_simple_keyboard())
 
 async def now(update: Update, _: ContextTypes.DEFAULT_TYPE):
     """Показывает текущее время"""
     current_time = datetime.datetime.now(pytz.timezone('Europe/Moscow')).strftime("%H:%M:%S")
     await update.message.reply_text(
         f'🕒 Текущее время: {current_time} (МСК)',
-        reply_markup=get_main_keyboard()
+        reply_markup=get_simple_keyboard()
     )
 
 async def my_id(update: Update, _: ContextTypes.DEFAULT_TYPE):
@@ -111,18 +96,12 @@ async def my_id(update: Update, _: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
 
-    if is_authorized(user_id):
-        reply_markup = get_main_keyboard()
-        additional_text = "✅ Вы авторизованы и имеете доступ ко всем функциям бота"
-    else:
-        reply_markup = get_unauthorized_keyboard()
-        additional_text = "❌ Вы не авторизованы. Обратитесь к администратору для получения доступа"
-
     await update.message.reply_text(
         f'🆔 Ваш ID: `{user_id}`\n'
         f'💬 ID чата: `{chat_id}`\n\n'
-        f'{additional_text}',
+        f'✅ Вы имеете доступ ко всем функциям бота!\n'
+        f'📋 Созданные шаблоны сохраняются в базе данных.',
         parse_mode='Markdown',
-        reply_markup=reply_markup
+        reply_markup=get_simple_keyboard()
     )
     print(f"📋 Показан ID для user_id: {user_id}")
