@@ -153,6 +153,42 @@ class TaskScheduler:
             save_active_tasks(tasks)
             logger.info(f"Время выполнения задачи {task_id} обновлено")
 
+async def execute_test_task(template_data, update, context):
+    """Немедленно выполняет тестовую задачу"""
+    try:
+        bot = context.bot
+        text = template_data.get('text', '')
+        image_path = template_data.get('image')
+        
+        # Отправляем в чат пользователя для тестирования
+        chat_id = update.effective_chat.id
+        
+        if image_path:
+            # Отправляем изображение с текстом
+            with open(image_path, 'rb') as photo:
+                await bot.send_photo(
+                    chat_id=chat_id,
+                    photo=photo,
+                    caption=f"🧪 **ТЕСТОВОЕ СООБЩЕНИЕ**\n\n{text}",
+                    parse_mode='Markdown'
+                )
+        else:
+            # Отправляем только текст
+            await bot.send_message(
+                chat_id=chat_id,
+                text=f"🧪 **ТЕСТОВОЕ СООБЩЕНИЕ**\n\n{text}",
+                parse_mode='Markdown'
+            )
+            
+        logger.info("Тестовая задача выполнена успешно")
+        
+    except Exception as e:
+        logger.error(f"Ошибка выполнения тестовой задачи: {e}")
+        await update.message.reply_text(
+            f"❌ Ошибка отправки тестового сообщения: {e}",
+            reply_markup=get_tasks_main_keyboard()
+        )
+
 # Глобальный экземпляр планировщика
 task_scheduler = None
 
