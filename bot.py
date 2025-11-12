@@ -15,7 +15,9 @@ from telegram.ext import (
 from config import BOT_TOKEN
 from handlers.start_handlers import start, help_command, my_id, now, update_menu
 from handlers.template_handlers import get_template_conversation_handler
+from handlers.task_handlers import get_task_conversation_handler
 from handlers.basic_handlers import handle_text, cancel
+from task_scheduler import init_scheduler, task_scheduler
 
 # Настройка логирования
 logging.basicConfig(
@@ -31,6 +33,11 @@ def signal_handler(signum, frame):
     global is_shutting_down
     print(f"🛑 Получен сигнал {signum}, завершаем работу...")
     is_shutting_down = True
+    
+    # Останавливаем планировщик задач
+    if task_scheduler:
+        task_scheduler.stop()
+    
     sys.exit(0)
 
 def keep_alive():
@@ -61,6 +68,7 @@ def check_database():
     try:
         from database import db
         from template_manager import get_all_templates, load_groups
+        from task_manager import get_all_active_tasks
         
         # Инициализируем базу данных
         print("🔄 Инициализация базы данных...")
@@ -82,6 +90,14 @@ def check_database():
         
         for group_id, group_data in groups_data.get('groups', {}).items():
             print(f"   👥 {group_id}: {group_data.get('name', 'Без названия')}")
+            
+        # Проверяем активные задачи
+        active_tasks = get_all_active_tasks()
+        print(f"✅ Активных задач: {len(active_tasks)}")
+        
+        for task_id, task in active_tasks.items():
+            print(f"   📋 {task_id}: {task.get('template_name', 'Без названия')} "
+                  f"(группа: {task.get('group', 'Не указана')})")
             
     except Exception as e:
         print(f"❌ Ошибка проверки базы данных: {e}")
@@ -111,13 +127,25 @@ def main():
     # Проверяем базу данных
     check_database()
     
-    # Инициализация файлов шаблонов
+    # Инициализируем файлы шаблонов и задач
     try:
         from template_manager import init_files
+        from task_manager import init_task_files
+        
         init_files()
-        print("✅ Менеджер шаблонов инициализирован")
+        init_task_files()
+        print("✅ Менеджер шаблонов и задач инициализирован")
     except Exception as e:
-        print(f"⚠️ Ошибка инициализации шаблонов: {e}")
+        print(f"⚠️ Ошибка инициализации: {e}")
+    
+    # Инициализируем планировщик задач
+    try:
+        init_scheduler(BOT_TOKEN)
+        if task_scheduler:
+            task_scheduler.start()
+            print("✅ Планировщик задач запущен")
+    except Exception as e:
+        print(f"⚠️ Ошибка инициализации планировщика: {e}")
     
     keep_alive()
 
@@ -127,8 +155,9 @@ def main():
     # Добавляем обработчик ошибок
     application.add_error_handler(error_handler)
 
-    # Получаем ConversationHandler для шаблонов
+    # Получаем ConversationHandler для шаблонов и задач
     template_conv_handler = get_template_conversation_handler()
+    task_conv_handler = get_task_conversation_handler()
 
     # Обработчики команд
     application.add_handler(CommandHandler("start", start))
@@ -137,16 +166,18 @@ def main():
     application.add_handler(CommandHandler("now", now))
     application.add_handler(CommandHandler("update_menu", update_menu))
 
-    # Добавляем ConversationHandler для шаблонов
+    # Добавляем ConversationHandler для шаблонов и задач
     application.add_handler(template_conv_handler)
+    application.add_handler(task_conv_handler)
 
     # Обработчик для всех текстовых сообщений (должен быть последним)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     print("✅ Бот запущен и готов к работе!")
     print("🎉 Режим: ОТКРЫТЫЙ ДОСТУП")
-    print("📝 Все пользователи имеют доступ к созданию шаблонов")
+    print("📝 Все пользователи имеют доступ к созданию шаблонов и задач")
     print("💾 Данные сохраняются в PostgreSQL")
+    print("⏰ Планировщик задач активен")
     
     try:
         application.run_polling(
