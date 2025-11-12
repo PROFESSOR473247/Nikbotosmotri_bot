@@ -126,6 +126,12 @@ def create_task_from_template(template_data, created_by, is_test=False):
             tasks_data[task_id] = task_data
             with open(TASKS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(tasks_data, f, ensure_ascii=False, indent=4)
+            
+            # Перепланируем задачи в планировщике
+            from task_scheduler import task_scheduler
+            if task_scheduler:
+                task_scheduler.schedule_existing_tasks()
+            
             return True, task_id
         return False, None
 
@@ -133,17 +139,23 @@ def calculate_next_execution(template_data):
     """Вычисляет следующее время выполнения задачи"""
     now = datetime.now()
     time_str = template_data.get('time', '00:00')
+    days = template_data.get('days', [])
     
     try:
         hours, minutes = map(int, time_str.split(':'))
-        # Базовое время на сегодня
-        base_time = now.replace(hour=hours, minute=minutes, second=0, microsecond=0)
         
-        # Если время уже прошло сегодня, планируем на завтра
-        if base_time < now:
-            base_time += timedelta(days=1)
+        # Находим следующий подходящий день
+        for days_ahead in range(1, 8):  # Проверяем следующие 7 дней
+            future_date = now + timedelta(days=days_ahead)
+            future_weekday = future_date.weekday()
+            
+            if future_weekday in days:
+                next_time = future_date.replace(hour=hours, minute=minutes, second=0, microsecond=0)
+                return next_time.strftime("%Y-%m-%d %H:%M:%S")
         
-        return base_time.strftime("%Y-%m-%d %H:%M:%S")
+        # Если не нашли подходящий день в ближайшую неделю
+        return "Не определено"
+        
     except:
         return now.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -174,6 +186,12 @@ def deactivate_task(task_id):
             tasks_data[task_id]['deactivated_at'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             with open(TASKS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(tasks_data, f, ensure_ascii=False, indent=4)
+        
+        # Перепланируем задачи в планировщике
+        from task_scheduler import task_scheduler
+        if task_scheduler:
+            task_scheduler.schedule_existing_tasks()
+            
         return True, "Задача деактивирована"
     
     return False, "Ошибка деактивации"
