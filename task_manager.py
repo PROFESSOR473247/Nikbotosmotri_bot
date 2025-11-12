@@ -19,15 +19,15 @@ def ensure_data_directory():
 def init_task_files():
     """Инициализирует файлы задач если их нет"""
     ensure_data_directory()
-    
+    
     # Инициализируем таблицу в базе данных
     task_db.init_tasks_table()
-    
+    
     # Файлы для обратной совместимости
     if not os.path.exists(TASKS_FILE):
         with open(TASKS_FILE, 'w', encoding='utf-8') as f:
             json.dump({}, f, ensure_ascii=False, indent=4)
-    
+    
     if not os.path.exists(TEST_TASKS_FILE):
         with open(TEST_TASKS_FILE, 'w', encoding='utf-8') as f:
             json.dump({}, f, ensure_ascii=False, indent=4)
@@ -65,7 +65,7 @@ def save_active_tasks(tasks_data):
         for task_id, task_data in tasks_data.items():
             if task_data.get('is_active', False):
                 task_db.save_task(task_data)
-        
+        
         # Также сохраняем в файл для обратной совместимости
         with open(TASKS_FILE, 'w', encoding='utf-8') as f:
             json.dump(tasks_data, f, ensure_ascii=False, indent=4)
@@ -88,7 +88,7 @@ def load_test_tasks():
 def create_task_from_template(template_data, created_by, is_test=False):
     """Создает задачу из шаблона"""
     task_id = str(uuid.uuid4())[:8]
-    
+    
     task_data = {
         'id': task_id,
         'template_id': template_data.get('id'),
@@ -106,7 +106,7 @@ def create_task_from_template(template_data, created_by, is_test=False):
         'last_executed': None,
         'next_execution': calculate_next_execution(template_data)
     }
-    
+    
     if is_test:
         # Для тестовых задач сохраняем только в файл
         try:
@@ -133,16 +133,16 @@ def calculate_next_execution(template_data):
     """Вычисляет следующее время выполнения задачи"""
     now = datetime.now()
     time_str = template_data.get('time', '00:00')
-    
+    
     try:
         hours, minutes = map(int, time_str.split(':'))
         # Базовое время на сегодня
         base_time = now.replace(hour=hours, minute=minutes, second=0, microsecond=0)
-        
+        
         # Если время уже прошло сегодня, планируем на завтра
         if base_time < now:
             base_time += timedelta(days=1)
-        
+        
         return base_time.strftime("%Y-%m-%d %H:%M:%S")
     except:
         return now.strftime("%Y-%m-%d %H:%M:%S")
@@ -151,11 +151,11 @@ def get_active_tasks_by_group(group_id):
     """Возвращает активные задачи по группе"""
     tasks_data = load_active_tasks()
     tasks = []
-    
+    
     for task_id, task in tasks_data.items():
         if task.get('group') == group_id and task.get('is_active', False):
             tasks.append((task_id, task))
-    
+    
     return tasks
 
 def get_task_by_id(task_id):
@@ -175,7 +175,7 @@ def deactivate_task(task_id):
             with open(TASKS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(tasks_data, f, ensure_ascii=False, indent=4)
         return True, "Задача деактивирована"
-    
+    
     return False, "Ошибка деактивации"
 
 def format_task_info(task_data):
@@ -184,14 +184,14 @@ def format_task_info(task_data):
     if task_data.get('days'):
         from template_manager import DAYS_OF_WEEK
         days_names = [DAYS_OF_WEEK[day] for day in task_data['days']]
-    
+    
     frequency_map = {
         "weekly": "1 в неделю",
         "2_per_month": "2 в месяц",
         "monthly": "1 в месяц"
     }
     frequency = frequency_map.get(task_data.get('frequency'), task_data.get('frequency', 'Не указана'))
-    
+    
     info = f"📋 **Задача: {task_data['template_name']}**\n\n"
     info += f"🏷️ **Группа:** {task_data.get('group', 'Не указана')}\n"
     info += f"⏰ **Время:** {task_data.get('time', 'Не указано')} (МСК)\n"
@@ -201,10 +201,10 @@ def format_task_info(task_data):
     info += f"🖼️ **Изображение:** {'✅ Есть' if task_data.get('template_image') else '❌ Нет'}\n"
     info += f"🔧 **Тип:** {'🧪 Тестовая' if task_data.get('is_test') else '📅 Регулярная'}\n"
     info += f"📊 **Статус:** {'✅ Активна' if task_data.get('is_active') else '❌ Неактивна'}\n"
-    
+    
     if task_data.get('next_execution'):
         info += f"⏱️ **Следующее выполнение:** {task_data['next_execution']}\n"
-    
+    
     return info
 
 def get_all_active_tasks():
