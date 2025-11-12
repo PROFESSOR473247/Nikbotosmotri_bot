@@ -1,8 +1,8 @@
 import json
 import os
+from config import REQUIRE_AUTHORIZATION, ADMIN_USER_ID
 
 USERS_FILE = 'authorized_users.json'
-GROUPS_FILE = 'template_groups.json'
 
 def load_users():
     """Загружает список пользователей из файла"""
@@ -10,19 +10,6 @@ def load_users():
         if os.path.exists(USERS_FILE):
             with open(USERS_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                # Конвертируем старый формат в новый
-                if 'users' in data and data['users']:
-                    first_user = next(iter(data['users'].values()))
-                    if isinstance(first_user, str):
-                        # Конвертируем старый формат в новый
-                        new_users = {}
-                        for user_id, username in data['users'].items():
-                            new_users[user_id] = {
-                                "name": username,
-                                "groups": ["hongqi", "turbomatiz"]  # Даем доступ ко всем группам по умолчанию
-                            }
-                        data['users'] = new_users
-                        save_users(data)  # Сохраняем в новом формате
                 return data
         else:
             # Создаем файл с администратором по умолчанию
@@ -53,6 +40,9 @@ def save_users(users_data):
 
 def is_authorized(user_id):
     """Проверяет, авторизован ли пользователь"""
+    if not REQUIRE_AUTHORIZATION:
+        return True  # Все пользователи авторизованы
+    
     users_data = load_users()
     return str(user_id) in users_data.get('users', {})
 
@@ -70,7 +60,7 @@ def add_user(user_id, username, groups=None):
     
     users_data['users'][str(user_id)] = {
         "name": username,
-        "groups": groups or ["hongqi", "turbomatiz"]  # По умолчанию доступ ко всем группам
+        "groups": groups or ["hongqi", "turbomatiz"]
     }
     success, message = save_users(users_data)
     
@@ -112,6 +102,10 @@ def get_admin_id():
 
 def get_user_groups(user_id):
     """Возвращает группы пользователя"""
+    if not REQUIRE_AUTHORIZATION:
+        # Все пользователи имеют доступ ко всем группам
+        return ["hongqi", "turbomatiz"]
+    
     users_data = load_users()
     user_data = users_data.get('users', {}).get(str(user_id), {})
     
@@ -146,3 +140,8 @@ def update_user_groups(user_id, groups):
         return True, f"Группы пользователя обновлены"
     else:
         return False, message
+
+def add_user_to_all_groups(user_id):
+    """Добавляет пользователя ко всем группам"""
+    all_groups = ["hongqi", "turbomatiz"]
+    return update_user_groups(user_id, all_groups)
