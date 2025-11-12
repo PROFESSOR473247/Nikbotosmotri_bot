@@ -400,6 +400,9 @@ async def deactivate_task_select_group(update: Update, context: ContextTypes.DEF
         )
         return DEACTIVATE_TASK_GROUP
     
+    # Сохраняем ID группы в контекст для использования в следующем шаге
+    context.user_data['deactivate_group'] = group_id
+    
     # Получаем активные задачи этой группы
     tasks = get_active_tasks_by_group(group_id)
     
@@ -570,7 +573,69 @@ async def test_task_select_template(update: Update, context: ContextTypes.DEFAUL
 
 async def test_task_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Подтверждение тестирования"""
-    return await create_task_confirm(update, context)
+    user_choice = update.message.text
+    task_data = context.user_data['task_creation']
+    template = task_data['template']
+    
+    if user_choice == "✅ Подтвердить":
+        success, task_id = create_task_from_template(
+            template, 
+            task_data['created_by'],
+            is_test=task_data.get('is_test', True)
+        )
+        
+        if success:
+            # Для тестовых задач сразу выполняем отправку
+            from task_scheduler import execute_test_task
+            await execute_test_task(template, update, context)
+            
+            await update.message.reply_text(
+                f"✅ Тестовая задача успешно создана и отправлена!\n\n"
+                f"ID задачи: `{task_id}`",
+                parse_mode='Markdown',
+                reply_markup=get_tasks_main_keyboard()
+            )
+        else:
+            await update.message.reply_text(
+                "❌ Ошибка при создании тестовой задачи",
+                reply_markup=get_tasks_main_keyboard()
+            )
+        
+        # Очищаем временные данные
+        context.user_data.clear()
+        return TASKS_MAIN
+    
+    elif user_choice == "✏️ Изменить":
+        await update.message.reply_text(
+            "🔧 **Что вы хотите изменить?**",
+            reply_markup=get_task_edit_keyboard()
+        )
+        return CREATE_TASK_EDIT
+    
+    elif user_choice == "🔙 Назад":
+        # Возвращаемся к выбору шаблона
+        group_id = context.user_data['task_creation']['group']
+        templates = get_templates_by_group(group_id)
+        
+        # Создаем клавиатуру с шаблонами
+        keyboard = []
+        for template_id, template in templates:
+            keyboard.append([f"📝 {template['name']}"])
+        
+        keyboard.append(["🔙 Назад"])
+        
+        await update.message.reply_text(
+            "🔄 **Выберите шаблон:**",
+            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        )
+        return TEST_TASK_SELECT
+    
+    else:
+        await update.message.reply_text(
+            "❌ Неверный выбор",
+            reply_markup=get_task_confirmation_keyboard()
+        )
+        return TEST_TASK_CONFIRM
 
 # ===== СТАТУС ЗАДАЧ =====
 
