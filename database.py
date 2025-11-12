@@ -15,7 +15,6 @@ class DatabaseManager:
         """Возвращает соединение с базой данных"""
         try:
             conn = psycopg2.connect(self.connection_string)
-            print("✅ Успешное подключение к базе данных")
             return conn
         except Exception as e:
             logging.error(f"❌ Ошибка подключения к базе данных: {e}")
@@ -103,12 +102,27 @@ class DatabaseManager:
             text = template_data.get('text', '')
             image_path = template_data.get('image')
             time_str = template_data.get('time', '')
-            days = json.dumps(template_data.get('days', []))
+            
+            # Обрабатываем дни - гарантируем что это JSON строка
+            days_data = template_data.get('days', [])
+            if isinstance(days_data, list):
+                days_json = json.dumps(days_data, ensure_ascii=False)
+            else:
+                days_json = '[]'
+                
             frequency = template_data.get('frequency', '')
             created_by = template_data.get('created_by')
             subgroup = template_data.get('subgroup')
             
-            print(f"📊 Данные для сохранения: ID={template_id}, Name={name}, Group={group_name}")
+            print(f"📊 Данные для сохранения:")
+            print(f"   ID: {template_id}")
+            print(f"   Name: {name}")
+            print(f"   Group: {group_name}")
+            print(f"   Text: {text[:50]}...")
+            print(f"   Time: {time_str}")
+            print(f"   Days: {days_data}")
+            print(f"   Frequency: {frequency}")
+            print(f"   Created_by: {created_by}")
             
             cursor.execute('''
                 INSERT INTO templates (id, name, group_name, text, image_path, time, days, frequency, created_by, subgroup)
@@ -129,21 +143,32 @@ class DatabaseManager:
                 text,
                 image_path,
                 time_str,
-                days,
+                days_json,
                 frequency,
                 created_by,
                 subgroup
             ))
             
             conn.commit()
+            
+            # Проверим что действительно сохранилось
+            cursor.execute('SELECT COUNT(*) FROM templates WHERE id = %s', (template_id,))
+            count = cursor.fetchone()[0]
+            
             cursor.close()
             conn.close()
             
-            print(f"✅ Шаблон {template_id} успешно сохранен в базе данных")
-            return True
+            if count > 0:
+                print(f"✅ Шаблон {template_id} успешно сохранен в базе данных (проверено: {count} записей)")
+                return True
+            else:
+                print(f"❌ Шаблон {template_id} не был сохранен в базу данных")
+                return False
             
         except Exception as e:
             print(f"❌ Ошибка сохранения шаблона: {e}")
+            import traceback
+            traceback.print_exc()
             try:
                 conn.rollback()
                 conn.close()
@@ -168,20 +193,38 @@ class DatabaseManager:
             
             templates = {}
             for row in rows:
-                template = {
-                    'id': row[0],
-                    'name': row[1],
-                    'group': row[2],
-                    'text': row[3],
-                    'image': row[4],
-                    'time': row[5],
-                    'days': json.loads(row[6]) if row[6] else [],
-                    'frequency': row[7],
-                    'created_by': row[8],
-                    'created_at': row[9].strftime("%Y-%m-%d %H:%M:%S") if row[9] else None,
-                    'subgroup': row[10]
-                }
-                templates[template['id']] = template
+                try:
+                    # Обрабатываем дни
+                    days_data = []
+                    if row[6]:  # days field
+                        try:
+                            if isinstance(row[6], (str, bytes, bytearray)):
+                                days_data = json.loads(row[6])
+                            else:
+                                days_data = row[6]
+                        except Exception as e:
+                            print(f"⚠️ Ошибка парсинга дней для шаблона {row[0]}: {e}")
+                            days_data = []
+                    
+                    template = {
+                        'id': row[0],
+                        'name': row[1],
+                        'group': row[2],
+                        'text': row[3],
+                        'image': row[4],
+                        'time': row[5],
+                        'days': days_data,
+                        'frequency': row[7],
+                        'created_by': row[8],
+                        'created_at': row[9].strftime("%Y-%m-%d %H:%M:%S") if row[9] else None,
+                        'subgroup': row[10]
+                    }
+                    templates[template['id']] = template
+                    print(f"📥 Загружен шаблон: {template['name']} (ID: {template['id']})")
+                    
+                except Exception as e:
+                    print(f"❌ Ошибка обработки строки шаблона: {e}")
+                    continue
             
             cursor.close()
             conn.close()
@@ -191,6 +234,8 @@ class DatabaseManager:
             
         except Exception as e:
             print(f"❌ Ошибка загрузки шаблонов: {e}")
+            import traceback
+            traceback.print_exc()
             try:
                 conn.close()
             except:
@@ -258,6 +303,7 @@ class DatabaseManager:
                     "name": row[1],
                     "allowed_users": allowed_users
                 }
+                print(f"📥 Загружена группа: {row[1]} (ID: {row[0]})")
             
             cursor.close()
             conn.close()
