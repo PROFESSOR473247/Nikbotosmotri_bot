@@ -15,6 +15,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from handlers.template_handlers import templates_main
         return await templates_main(update, context)
 
+    elif text == "📋 Задачи":  # Добавили обработку кнопки Задач
+        from handlers.task_handlers import tasks_main
+        return await tasks_main(update, context)
+
     elif text == "ℹ️ Помощь":
         from handlers.start_handlers import help_command
         await help_command(update, context)
