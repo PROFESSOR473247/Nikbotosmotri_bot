@@ -1,60 +1,36 @@
 from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler
-from keyboards.main_keyboards import get_main_keyboard, get_unauthorized_keyboard
-from authorized_users import is_authorized, is_admin
+from keyboards.main_keyboards import get_simple_keyboard
+from config import REQUIRE_AUTHORIZATION
+from authorized_users import is_admin
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает текстовые сообщения для навигации по меню"""
     text = update.message.text
     user_id = update.effective_user.id
 
-    if text == "📋 Задачи":
-        from handlers.task_handlers import tasks_main
-        return await tasks_main(update, context)
+    print(f"🔤 Обработка текста: '{text}' от user_id: {user_id}")
 
-    elif text == "📋 Шаблоны":
+    if text == "📋 Шаблоны":
         from handlers.template_handlers import templates_main
         return await templates_main(update, context)
 
-    elif text == "🧪 Тестирование":
-        from keyboards.testing_keyboards import get_testing_keyboard
-        await update.message.reply_text(
-            "🧪 ТЕСТИРОВАНИЕ ШАБЛОНОВ\n\n"
-            "Тестовые отправки работают так же как основные,\n"
-            "но отправляются через 10 секунд после активации\n"
-            "и выполняются только один раз",
-            reply_markup=get_testing_keyboard()
-        )
-
-    elif text == "⚙️ ЕЩЕ":
-        from keyboards.more_keyboards import get_more_keyboard
-        await update.message.reply_text(
-            "⚙️ ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ",
-            reply_markup=get_more_keyboard(user_id)
-        )
-
-    elif text == "🔙 Главное меню":
-        await update.message.reply_text(
-            "🔙 Возврат в главное меню",
-            reply_markup=get_main_keyboard()
-        )
-        return ConversationHandler.END
-
-    elif text == "📊 Статус команд":
-        await update.message.reply_text(
-            "⚠️ Статус временно недоступен",
-            reply_markup=get_main_keyboard()
-        )
-
-    elif text == "🕒 Текущее время":
-        from handlers.start_handlers import now
-        await now(update, context)
+    elif text == "ℹ️ Помощь":
+        from handlers.start_handlers import help_command
+        await help_command(update, context)
 
     elif text == "🆔 Мой ID":
         from handlers.start_handlers import my_id
         await my_id(update, context)
 
-    elif text == "👥 Управление пользователями" and is_admin(user_id):
+    elif text == "🔙 Главное меню":
+        await update.message.reply_text(
+            "🔙 Возврат в главное меню",
+            reply_markup=get_simple_keyboard()
+        )
+        return ConversationHandler.END
+
+    elif text == "👥 Пользователи" and is_admin(user_id):
         from keyboards.user_management_keyboards import get_user_management_keyboard
         await update.message.reply_text(
             "👥 Управление пользователями\n\n"
@@ -62,11 +38,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_user_management_keyboard()
         )
 
-    elif text == "🔙 Назад к ЕЩЕ":
-        from keyboards.more_keyboards import get_more_keyboard
+    elif text == "⚙️ Настройки" and is_admin(user_id):
         await update.message.reply_text(
-            "🔙 Возврат к дополнительным функциям",
-            reply_markup=get_more_keyboard(user_id)
+            "⚙️ Настройки системы\n\n"
+            "Административные функции:",
+            reply_markup=get_simple_keyboard()
         )
 
     elif text == "🆔 Получить ID":
@@ -81,7 +57,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "❌ Неизвестная команда\n"
             "Используйте кнопки меню или /help для справки",
-            reply_markup=get_main_keyboard() if is_authorized(user_id) else get_unauthorized_keyboard()
+            reply_markup=get_simple_keyboard()
         )
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -93,6 +69,6 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         "❌ Действие отменено",
-        reply_markup=get_main_keyboard()
+        reply_markup=get_simple_keyboard()
     )
     return ConversationHandler.END
