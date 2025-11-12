@@ -13,7 +13,7 @@ def get_templates_main_keyboard():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def get_groups_keyboard(user_id, action="list"):
-    """Клавиатура с группами пользователя"""
+    """Клавиатура с группами - все пользователи имеют доступ ко всем группам"""
     accessible_groups = get_user_accessible_groups(user_id)
     keyboard = []
     
@@ -22,25 +22,6 @@ def get_groups_keyboard(user_id, action="list"):
     
     if action == "list":
         keyboard.append(["🔙 К шаблонам"])
-    else:
-        keyboard.append(["🔙 Назад"])
-        
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
-def get_subgroups_keyboard(group_id, action="list"):
-    """Клавиатура с подгруппами группы"""
-    groups_data = load_groups()
-    group_data = groups_data['groups'].get(group_id, {})
-    subgroups = group_data.get('subgroups', {})
-    
-    keyboard = []
-    for subgroup_id, subgroup_name in subgroups.items():
-        keyboard.append([f"{subgroup_name}"])
-    
-    keyboard.append(["📁 Без подгруппы"])
-    
-    if action == "list":
-        keyboard.append(["🔙 К группам"])
     else:
         keyboard.append(["🔙 Назад"])
         
