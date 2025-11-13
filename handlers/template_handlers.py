@@ -1083,148 +1083,86 @@ def get_template_conversation_handler():
     return ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("^📋 Шаблоны$"), templates_main)],
         states={
-            TEMPLATES_MAIN: [
+            TEMPLATE_MAIN: [  # ИСПРАВЛЕНО: было TEMPLATES_MAIN
+                MessageHandler(filters.Regex("^➕ Создать шаблон$"), create_template_start),
                 MessageHandler(filters.Regex("^📋 Список шаблонов$"), template_list_start),
-                MessageHandler(filters.Regex("^➕ Добавить новый$"), add_template_start),
-                MessageHandler(filters.Regex("^✏️ Редактировать$"), edit_template_start),
-                MessageHandler(filters.Regex("^🗑️ Удалить$"), delete_template_start),
+                MessageHandler(filters.Regex("^✏️ Редактировать шаблон$"), edit_template_start),
+                MessageHandler(filters.Regex("^🗑️ Удалить шаблон$"), delete_template_start),
                 MessageHandler(filters.Regex("^🔙 Главное меню$"), cancel_template)
             ],
             
-            # === СПИСОК ШАБЛОНОВ ===
-            TEMPLATE_LIST_GROUPS: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, template_list_choose_group),
-                MessageHandler(filters.Regex("^🚗 Hongqi$"), template_list_choose_group),
-                MessageHandler(filters.Regex("^🚙 TurboMatiz$"), template_list_choose_group),
+            CREATE_TEMPLATE_GROUP: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, create_template_choose_group),
+                MessageHandler(filters.Regex("^🔙 Назад$"), templates_main)
+            ],
+            
+            CREATE_TEMPLATE_NAME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, create_template_enter_name),
+                MessageHandler(filters.Regex("^🔙 Назад$"), create_template_start)
+            ],
+            
+            CREATE_TEMPLATE_TEXT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, create_template_enter_text),
+                MessageHandler(filters.Regex("^🔙 Назад$"), create_template_enter_name)
+            ],
+            
+            CREATE_TEMPLATE_IMAGE: [
+                MessageHandler(filters.PHOTO, create_template_handle_image),
+                MessageHandler(filters.Regex("^🖼️ Добавить изображение$"), create_template_ask_image),
+                MessageHandler(filters.Regex("^⏭️ Пропустить$"), create_template_skip_image),
+                MessageHandler(filters.Regex("^🔙 Назад$"), create_template_enter_text)
+            ],
+            
+            CREATE_TEMPLATE_TIME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, create_template_enter_time),
+                MessageHandler(filters.Regex("^⏭️ Пропустить$"), create_template_skip_time),
+                MessageHandler(filters.Regex("^🔙 Назад$"), create_template_handle_image)
+            ],
+            
+            CREATE_TEMPLATE_DAYS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, create_template_choose_days),
+                MessageHandler(filters.Regex("^✅ Завершить выбор$"), create_template_finish_days),
+                MessageHandler(filters.Regex("^🔙 Назад$"), create_template_enter_time)
+            ],
+            
+            CREATE_TEMPLATE_FREQUENCY: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, create_template_choose_frequency),
+                MessageHandler(filters.Regex("^🔙 Назад$"), create_template_finish_days)
+            ],
+            
+            CREATE_TEMPLATE_CONFIRM: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, create_template_confirm),
+                MessageHandler(filters.Regex("^✅ Подтвердить$"), create_template_confirm),
+                MessageHandler(filters.Regex("^✏️ Изменить$"), create_template_edit_choice),
+                MessageHandler(filters.Regex("^🔙 Назад$"), create_template_choose_frequency)
+            ],
+            
+            TEMPLATE_LIST: [  # ИСПРАВЛЕНО: было TEMPLATES_LIST если есть
+                MessageHandler(filters.TEXT & ~filters.COMMAND, template_list_handle),
                 MessageHandler(filters.Regex("^🔙 К шаблонам$"), templates_main)
             ],
             
-            # === СОЗДАНИЕ ШАБЛОНОВ ===
-            ADD_TEMPLATE_GROUP: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_choose_group),
-                MessageHandler(filters.Regex("^🚗 Hongqi$"), add_template_choose_group),
-                MessageHandler(filters.Regex("^🚙 TurboMatiz$"), add_template_choose_group),
-                MessageHandler(filters.Regex("^🔙 Назад$"), templates_main)
-            ],
-            ADD_TEMPLATE_NAME: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_name),
-                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_start)
-            ],
-            ADD_TEMPLATE_TEXT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_text),
-                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_choose_group)
-            ],
-            ADD_TEMPLATE_IMAGE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_image),
-                MessageHandler(filters.PHOTO, add_template_image),
-                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_text)
-            ],
-            ADD_TEMPLATE_TIME: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_time),
-                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_image)
-            ],
-            ADD_TEMPLATE_DAYS: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_days),
-                MessageHandler(filters.Regex("^📅 Понедельник$"), add_template_days),
-                MessageHandler(filters.Regex("^📅 Вторник$"), add_template_days),
-                MessageHandler(filters.Regex("^📅 Среда$"), add_template_days),
-                MessageHandler(filters.Regex("^📅 Четверг$"), add_template_days),
-                MessageHandler(filters.Regex("^📅 Пятница$"), add_template_days),
-                MessageHandler(filters.Regex("^📅 Суббота$"), add_template_days),
-                MessageHandler(filters.Regex("^📅 Воскресенье$"), add_template_days),
-                MessageHandler(filters.Regex("^➕ Выбрать еще день$"), add_template_days),
-                MessageHandler(filters.Regex("^➡️ Перейти к следующему шагу$"), add_template_days),
-                MessageHandler(filters.Regex("^✅ Завершить выбор дней$"), add_template_days),
-                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_time)
-            ],
-            ADD_TEMPLATE_FREQUENCY: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_frequency),
-                MessageHandler(filters.Regex("^📅 1 в неделю$"), add_template_frequency),
-                MessageHandler(filters.Regex("^🗓️ 2 в месяц$"), add_template_frequency),
-                MessageHandler(filters.Regex("^📆 1 в месяц$"), add_template_frequency),
-                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_days)
-            ],
-            ADD_TEMPLATE_CONFIRM: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_template_confirm),
-                MessageHandler(filters.Regex("^✅ Подтвердить создание$"), add_template_confirm),
-                MessageHandler(filters.Regex("^✏️ Внести изменения$"), add_template_confirm),
-                MessageHandler(filters.Regex("^🔙 Назад$"), add_template_frequency)
+            TEMPLATE_LIST_CHOOSE_GROUP: [  # ИСПРАВЛЕНО: было TEMPLATES_LIST_CHOOSE_GROUP если есть
+                MessageHandler(filters.TEXT & ~filters.COMMAND, template_list_choose_group),
+                MessageHandler(filters.Regex("^🔙 Назад$"), template_list_start)
             ],
             
-            # === РЕДАКТИРОВАНИЕ ШАБЛОНОВ ===
-            EDIT_TEMPLATE_SELECT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_select_group),
-                MessageHandler(filters.Regex("^🚗 Hongqi$"), edit_template_select_group),
-                MessageHandler(filters.Regex("^🚙 TurboMatiz$"), edit_template_select_group),
-                MessageHandler(filters.Regex("^📝 .*"), edit_template_select_template),
-                MessageHandler(filters.Regex("^🔙 Назад$"), templates_main)
-            ],
-            EDIT_TEMPLATE_FIELD: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_choose_field),
-                MessageHandler(filters.Regex("^🏷️ Название$"), edit_template_choose_field),
-                MessageHandler(filters.Regex("^📝 Текст$"), edit_template_choose_field),
-                MessageHandler(filters.Regex("^🖼️ Изображение$"), edit_template_choose_field),
-                MessageHandler(filters.Regex("^⏰ Время$"), edit_template_choose_field),
-                MessageHandler(filters.Regex("^📅 Дни отправки$"), edit_template_choose_field),
-                MessageHandler(filters.Regex("^🔄 Периодичность$"), edit_template_choose_field),
-                MessageHandler(filters.Regex("^✅ Завершить редактирование$"), edit_template_choose_field),
-                MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_start)
-            ],
-            EDIT_TEMPLATE_NAME: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_name),
-                MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_choose_field)
-            ],
-            EDIT_TEMPLATE_TEXT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_text),
-                MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_choose_field)
-            ],
-            EDIT_TEMPLATE_IMAGE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_image),
-                MessageHandler(filters.PHOTO, edit_template_image),
-                MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_choose_field)
-            ],
-            EDIT_TEMPLATE_TIME: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_time),
-                MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_choose_field)
-            ],
-            EDIT_TEMPLATE_DAYS: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_days),
-                MessageHandler(filters.Regex("^📅 Понедельник$"), edit_template_days),
-                MessageHandler(filters.Regex("^📅 Вторник$"), edit_template_days),
-                MessageHandler(filters.Regex("^📅 Среда$"), edit_template_days),
-                MessageHandler(filters.Regex("^📅 Четверг$"), edit_template_days),
-                MessageHandler(filters.Regex("^📅 Пятница$"), edit_template_days),
-                MessageHandler(filters.Regex("^📅 Суббота$"), edit_template_days),
-                MessageHandler(filters.Regex("^📅 Воскресенье$"), edit_template_days),
-                MessageHandler(filters.Regex("^✅ Завершить выбор дней$"), edit_template_days),
-                MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_choose_field)
-            ],
-            EDIT_TEMPLATE_FREQUENCY: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_frequency),
-                MessageHandler(filters.Regex("^📅 1 в неделю$"), edit_template_frequency),
-                MessageHandler(filters.Regex("^🗓️ 2 в месяц$"), edit_template_frequency),
-                MessageHandler(filters.Regex("^📆 1 в месяц$"), edit_template_frequency),
-                MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_choose_field)
+            TEMPLATE_DETAILS: [  # ИСПРАВЛЕНО: было TEMPLATES_DETAILS если есть
+                MessageHandler(filters.TEXT & ~filters.COMMAND, template_details_handle),
+                MessageHandler(filters.Regex("^🔙 К списку$"), template_list_start)
             ],
             
-            # === УДАЛЕНИЕ ШАБЛОНОВ ===
             DELETE_TEMPLATE_SELECT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, delete_template_select_group),
-                MessageHandler(filters.Regex("^🚗 Hongqi$"), delete_template_select_group),
-                MessageHandler(filters.Regex("^🚙 TurboMatiz$"), delete_template_select_group),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, delete_template_select),
                 MessageHandler(filters.Regex("^🔙 Назад$"), templates_main)
             ],
+            
             DELETE_TEMPLATE_CONFIRM: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, delete_template_confirm),
-                MessageHandler(filters.Regex("^🗑️ .* \\(ID: .*\\)$"), delete_template_confirm),
-                MessageHandler(filters.Regex("^🔙 Назад$"), delete_template_start)
-            ],
-            DELETE_TEMPLATE_FINAL: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, delete_template_final),
-                MessageHandler(filters.Regex("^✅ Да, удалить шаблон$"), delete_template_final),
-                MessageHandler(filters.Regex("^❌ Нет, отменить удаление$"), delete_template_final),
-                MessageHandler(filters.Regex("^🔙 Назад$"), delete_template_select_group)
-            ],
+                MessageHandler(filters.Regex("^✅ Да, удалить$"), delete_template_confirm),
+                MessageHandler(filters.Regex("^❌ Нет, отменить$"), delete_template_confirm),
+                MessageHandler(filters.Regex("^🔙 Назад$"), delete_template_select)
+            ]
         },
         fallbacks=[CommandHandler("cancel", cancel_template)]
     )
