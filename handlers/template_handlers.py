@@ -59,73 +59,33 @@ async def template_list_start(update: Update, context: ContextTypes.DEFAULT_TYPE
     return TEMPLATE_LIST_GROUPS
 
 async def template_list_choose_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка выбора группы для просмотра"""
-    user_text = update.message.text
-    
-    # Если нажата кнопка "Назад"
-    if user_text == "🔙 К шаблонам":
-        await templates_main(update, context)
-        return TEMPLATES_MAIN
-    
-    group_name = user_text
-    user_id = update.effective_user.id
-    
-    # Находим ID группы по имени
-    accessible_groups = get_user_accessible_groups(user_id)
-    group_id = None
-    for gid, gdata in accessible_groups.items():
-        if gdata['name'] == group_name:
-            group_id = gid
-            break
-    
-    if not group_id:
-        await update.message.reply_text(
-            "❌ Группа не найдена",
-            reply_markup=get_groups_keyboard(user_id, "list")
-        )
-        return TEMPLATE_LIST_GROUPS
-    
-    templates = get_templates_by_group(group_id)
-    
-    if not templates:
-        await update.message.reply_text(
-            f"📭 В группе '{group_name}' пока нет шаблонов",
-            reply_markup=get_templates_main_keyboard()
-        )
-        return TEMPLATES_MAIN
-    
-    # Формируем подробный список всех шаблонов
-    message_text = f"📋 **Шаблоны в группе '{group_name}':**\n\n"
-    
-    for i, (template_id, template) in enumerate(templates, 1):
-        message_text += f"**{i}. {template['name']}**\n"
-        message_text += f"   📄 Текст: {template.get('text', '')[:80]}...\n"
-        message_text += f"   ⏰ Время: {template.get('time', 'Не указано')}\n"
+    """Показывает шаблоны выбранной группы"""
+    try:
+        group_id = context.user_data['selected_group']
+        templates = get_templates_by_group(group_id)
         
-        # Дни недели
-        days_names = []
-        if template.get('days'):
-            days_names = [DAYS_OF_WEEK[day] for day in template['days']]
-        message_text += f"   📅 Дни: {', '.join(days_names) if days_names else 'Не указаны'}\n"
+        if not templates:
+            await update.message.reply_text(
+                "📭 В этой группе нет шаблонов",
+                reply_markup=get_template_list_keyboard()
+            )
+            return TEMPLATE_LIST
         
-        # Периодичность
-        frequency_map = {
-            "weekly": "1 в неделю",
-            "2_per_month": "2 в месяц", 
-            "monthly": "1 в месяц"
-        }
-        frequency = frequency_map.get(template.get('frequency'), template.get('frequency', 'Не указана'))
-        message_text += f"   🔄 Периодичность: {frequency}\n"
-        message_text += f"   🖼️ Изображение: {'✅ Есть' if template.get('image') else '❌ Нет'}\n\n"
-    
-    message_text += f"Всего шаблонов: {len(templates)}"
-    
-    await update.message.reply_text(
-        message_text,
-        parse_mode='Markdown',
-        reply_markup=get_templates_main_keyboard()
-    )
-    return TEMPLATES_MAIN
+        message = format_group_templates_info(group_id)
+        
+        await update.message.reply_text(
+            message,
+            parse_mode='Markdown',
+            reply_markup=get_template_list_keyboard()
+        )
+        return TEMPLATE_LIST
+    except Exception as e:
+        print(f"❌ Ошибка в template_list_choose_group: {e}")
+        await update.message.reply_text(
+            "❌ Произошла ошибка при загрузке шаблонов",
+            reply_markup=get_template_list_keyboard()
+        )
+        return TEMPLATE_LIST
 
 # ===== СОЗДАНИЕ ШАБЛОНА =====
 
