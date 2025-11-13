@@ -899,7 +899,7 @@ async def cancel_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     await update.message.reply_text(
         "🔙 Возврат в главное меню",
-        reply_markup=get_main_keyboard(user_id)
+        reply_markup=get_main_keyboard(user_id)  # Должно быть с user_id
     )
     return ConversationHandler.END
 
