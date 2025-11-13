@@ -19,6 +19,7 @@ from handlers.task_handlers import get_task_conversation_handler
 from handlers.admin_handlers import get_admin_conversation_handler, admin_stats, check_access
 from handlers.basic_handlers import handle_text, cancel
 from task_scheduler import init_scheduler, task_scheduler
+from chat_middleware import check_chat_context
 
 # Настройка логирования
 logging.basicConfig(
@@ -71,9 +72,13 @@ def check_database():
         from template_manager import get_all_templates, load_groups
         from task_manager import get_all_active_tasks
         from user_chat_manager import user_chat_manager
+        from auth_manager import auth_manager
         
-        # НЕ инициализируем базу данных здесь - она уже инициализирована
-        # Просто проверяем состояние
+        # Инициализируем базу данных
+        print("📊 Инициализация базы данных...")
+        db.init_database()
+        
+        # Проверяем состояние
         print("📊 Проверка состояния базы данных...")
         
         # Проверяем шаблоны
@@ -105,6 +110,11 @@ def check_database():
         chats = user_chat_manager.get_all_chats()
         print(f"✅ Пользователей в системе: {len(users)}")
         print(f"✅ Telegram чатов в системе: {len(chats)}")
+        
+        # Гарантируем права суперадмина
+        from config import ADMIN_USER_ID
+        auth_manager.update_user_role_if_needed(ADMIN_USER_ID)
+        print(f"✅ Права суперадмина проверены: {ADMIN_USER_ID}")
             
     except Exception as e:
         print(f"❌ Ошибка проверки базы данных: {e}")
@@ -124,8 +134,34 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         import traceback
         traceback.print_exc()
 
+# Обернутые обработчики для middleware
+async def wrapped_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await check_chat_context(update, context, start)
+
+async def wrapped_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await check_chat_context(update, context, help_command)
+
+async def wrapped_my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await check_chat_context(update, context, my_id)
+
+async def wrapped_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await check_chat_context(update, context, now)
+
+async def wrapped_update_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await check_chat_context(update, context, update_menu)
+
+async def wrapped_admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await check_chat_context(update, context, admin_stats)
+
+async def wrapped_check_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await check_chat_context(update, context, check_access)
+
+async def wrapped_handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await check_chat_context(update, context, handle_text)
+
 def main():
     print("🚀 Запуск бота с системой администрирования...")
+    print("🆕 ВЕРСИЯ: 2.0 - Разделение личных сообщений и групповых чатов")
     
     # Регистрируем обработчики сигналов
     signal.signal(signal.SIGINT, signal_handler)
@@ -151,6 +187,10 @@ def main():
         if task_scheduler:
             task_scheduler.start()
             print("✅ Планировщик задач запущен")
+            
+            # Планируем существующие задачи
+            from task_scheduler import schedule_existing_tasks
+            schedule_existing_tasks()
     except Exception as e:
         print(f"⚠️ Ошибка инициализации планировщика: {e}")
     
@@ -167,16 +207,16 @@ def main():
     task_conv_handler = get_task_conversation_handler()
     admin_conv_handler = get_admin_conversation_handler()
 
-    # Обработчики команд
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("my_id", my_id))
-    application.add_handler(CommandHandler("now", now))
-    application.add_handler(CommandHandler("update_menu", update_menu))
+    # Обработчики команд (обернутые в middleware)
+    application.add_handler(CommandHandler("start", wrapped_start))
+    application.add_handler(CommandHandler("help", wrapped_help_command))
+    application.add_handler(CommandHandler("my_id", wrapped_my_id))
+    application.add_handler(CommandHandler("now", wrapped_now))
+    application.add_handler(CommandHandler("update_menu", wrapped_update_menu))
     
     # Админские команды
-    application.add_handler(CommandHandler("admin_stats", admin_stats))
-    application.add_handler(CommandHandler("check_access", check_access))
+    application.add_handler(CommandHandler("admin_stats", wrapped_admin_stats))
+    application.add_handler(CommandHandler("check_access", wrapped_check_access))
 
     # Добавляем ConversationHandler
     application.add_handler(template_conv_handler)
@@ -184,14 +224,25 @@ def main():
     application.add_handler(admin_conv_handler)
 
     # Обработчик для всех текстовых сообщений (должен быть последним)
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, wrapped_handle_text))
 
     print("✅ Бот запущен и готов к работе!")
     print("🎉 Режим: СИСТЕМА АДМИНИСТРИРОВАНИЯ")
-    print("📝 Администратор имеет доступ ко всем функциям")
+    print("💬 Контекст: РАЗДЕЛЕНИЕ ЛИЧНЫХ СООБЩЕНИЙ И ГРУПП")
+    print("👑 Суперадмин: АВТОМАТИЧЕСКОЕ ВОССТАНОВЛЕНИЕ ПРАВ")
     print("💾 Все данные сохраняются в PostgreSQL")
     print("⏰ Планировщик задач активен")
     print("👥 Система управления пользователями и чатами готова")
+    
+    # Информация о новых функциях
+    print("\n" + "="*50)
+    print("🆕 НОВЫЕ ВОЗМОЖНОСТИ:")
+    print("• ✅ Автоматическое восстановление прав администратора")
+    print("• 💬 Разделение личных сообщений и групповых чатов")
+    print("• 🎯 Выбор конкретного чата для отправки сообщений")
+    print("• 🔒 Проверка дубликатов пользователей")
+    print("• 📱 Вся настройка только в личных сообщениях")
+    print("="*50)
     
     try:
         application.run_polling(
