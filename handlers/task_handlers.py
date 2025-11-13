@@ -286,6 +286,47 @@ def format_task_confirmation(template, chat_name=None):
     info += "**Всё верно?**"
     
     return info
+    
+    def format_task_info(task):
+    """Форматирует информацию о задаче для отображения"""
+    # Безопасно обрабатываем дни недели
+    days_names = []
+    if task.get('days'):
+        DAYS_OF_WEEK = {
+            '0': 'Понедельник', '1': 'Вторник', '2': 'Среда',
+            '3': 'Четверг', '4': 'Пятница', '5': 'Суббота', '6': 'Воскресенье'
+        }
+        # Преобразуем дни в строки для безопасного доступа
+        days_names = [DAYS_OF_WEEK.get(str(day), f"День {day}") for day in task['days']]
+    
+    frequency_map = {
+        "weekly": "1 в неделю",
+        "2_per_month": "2 в месяц", 
+        "monthly": "1 в месяц"
+    }
+    frequency = frequency_map.get(task.get('frequency'), task.get('frequency', 'Не указана'))
+    
+    task_type = "🧪 Тестовая" if task.get('is_test') else "📅 Регулярная"
+    status = "✅ Активна" if task.get('is_active', True) else "❌ Неактивна"
+    
+    info = f"**{task['template_name']}** ({task_type})\n"
+    info += f"🏷️ Группа: {task.get('group_name', 'Не указана')}\n"
+    info += f"📄 Текст: {task.get('template_text', '')[:100]}...\n"
+    info += f"🖼️ Изображение: {'✅ Есть' if task.get('template_image') else '❌ Нет'}\n"
+    info += f"⏰ Время: {task.get('time', 'Не указано')} (МСК)\n"
+    info += f"📅 Дни: {', '.join(days_names) if days_names else 'Не указаны'}\n"
+    info += f"🔄 Периодичность: {frequency}\n"
+    
+    # Добавляем информацию о целевом чате
+    if task.get('target_chat_id'):
+        info += f"💬 Чат отправки: {task.get('target_chat_id')}\n"
+    
+    if task.get('next_execution'):
+        info += f"⏱️ Следующее выполнение: {task['next_execution']}\n"
+    
+    info += f"📊 Статус: {status}\n"
+    
+    return info
 
 async def create_task_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Подтверждение создания задачи"""
