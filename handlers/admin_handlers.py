@@ -74,6 +74,17 @@ async def add_user_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         user_id = int(user_id_text)
+        
+        # ПРОВЕРКА ДУБЛИКАТА - НОВЫЙ КОД
+        from authorized_users import check_duplicate_user
+        if check_duplicate_user(user_id):
+            await update.message.reply_text(
+                f"❌ Пользователь с ID {user_id} уже существует в системе!\n"
+                f"Введите другой ID пользователя:",
+                reply_markup=get_back_keyboard()
+            )
+            return ADD_USER_ID
+        
         context.user_data['new_user']['user_id'] = user_id
         
         await update.message.reply_text(
