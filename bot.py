@@ -159,6 +159,9 @@ async def wrapped_check_access(update: Update, context: ContextTypes.DEFAULT_TYP
 async def wrapped_handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return await check_chat_context(update, context, handle_text)
 
+async def wrapped_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await check_chat_context(update, context, cancel)
+
 def main():
     print("🚀 Запуск бота с системой администрирования...")
     print("🆕 ВЕРСИЯ: 2.0 - Разделение личных сообщений и групповых чатов")
@@ -222,6 +225,9 @@ def main():
     application.add_handler(template_conv_handler)
     application.add_handler(task_conv_handler)
     application.add_handler(admin_conv_handler)
+
+    # Обработчик отмены
+    application.add_handler(CommandHandler("cancel", wrapped_cancel))
 
     # Обработчик для всех текстовых сообщений (должен быть последним)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, wrapped_handle_text))
