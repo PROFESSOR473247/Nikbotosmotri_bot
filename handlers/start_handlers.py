@@ -28,7 +28,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         welcome_text,
-        reply_markup=get_simple_keyboard()
+        reply_markup=get_simple_keyboard(user_id)  # Добавили user_id
     )
     print(f"✅ Новый пользователь: {user_id} в чате {chat_id}")
 
@@ -51,11 +51,12 @@ async def update_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "✅ Меню обновлено!\n\n"
         "Теперь у вас есть доступ ко всем функциям бота:",
-        reply_markup=get_simple_keyboard()
+        reply_markup=get_simple_keyboard(user_id)  # Добавили user_id
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать справку по командам"""
+    user_id = update.effective_user.id
     help_text = """
 🤖 СПРАВКА ПО КОМАНДАМ БОТА:
 
@@ -89,14 +90,15 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📞 Поддержка: обратитесь к администратору
 """
 
-    await update.message.reply_text(help_text, reply_markup=get_simple_keyboard())
+    await update.message.reply_text(help_text, reply_markup=get_simple_keyboard(user_id))  # Добавили user_id
 
 async def now(update: Update, _: ContextTypes.DEFAULT_TYPE):
     """Показывает текущее время"""
+    user_id = update.effective_user.id
     current_time = datetime.datetime.now(pytz.timezone('Europe/Moscow')).strftime("%H:%M:%S")
     await update.message.reply_text(
         f'🕒 Текущее время: {current_time} (МСК)',
-        reply_markup=get_simple_keyboard()
+        reply_markup=get_simple_keyboard(user_id)  # Добавили user_id
     )
 
 async def my_id(update: Update, _: ContextTypes.DEFAULT_TYPE):
@@ -110,6 +112,6 @@ async def my_id(update: Update, _: ContextTypes.DEFAULT_TYPE):
         f'✅ Вы имеете доступ ко всем функциям бота!\n'
         f'📋 Созданные шаблоны и задачи сохраняются в базе данных.',
         parse_mode='Markdown',
-        reply_markup=get_simple_keyboard()
+        reply_markup=get_simple_keyboard(user_id)  # Добавили user_id
     )
     print(f"📋 Показан ID для user_id: {user_id}")
