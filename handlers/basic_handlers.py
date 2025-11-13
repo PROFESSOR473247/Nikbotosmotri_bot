@@ -34,7 +34,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "🔙 Главное меню":
         await update.message.reply_text(
             "🔙 Возврат в главное меню",
-            reply_markup=get_simple_keyboard(user_id)
+            reply_markup=get_simple_keyboard(user_id)  # Добавили user_id
         )
         return ConversationHandler.END
 
@@ -42,7 +42,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "❌ Неизвестная команда\n"
             "Используйте кнопки меню или /help для справки",
-            reply_markup=get_simple_keyboard(user_id)
+            reply_markup=get_simple_keyboard(user_id)  # Добавили user_id
         )
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -54,6 +54,6 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         "❌ Действие отменено",
-        reply_markup=get_simple_keyboard(user_id)
+        reply_markup=get_simple_keyboard(user_id)  # Добавили user_id
     )
     return ConversationHandler.END
