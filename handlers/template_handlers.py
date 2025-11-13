@@ -1091,9 +1091,10 @@ async def cancel_template(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Очищаем временные данные
     context.user_data.clear()
     
+    user_id = update.effective_user.id
     await update.message.reply_text(
         "🔙 Возврат в главное меню",
-        reply_markup=get_main_keyboard()
+        reply_markup=get_main_keyboard(user_id)  # Добавили user_id
     )
     return ConversationHandler.END
 
