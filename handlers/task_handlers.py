@@ -23,6 +23,47 @@ from auth_manager import auth_manager
     TEST_TASK_GROUP, TEST_TASK_SELECT, TEST_TASK_CHAT_SELECT, TEST_TASK_CONFIRM
 ) = range(13)  # Добавили состояния для выбора чата
 
+# ===== ЗАЩИТНЫЕ ФУНКЦИИ =====
+
+def safe_format_days_list(days):
+    """Безопасно форматирует список дней"""
+    try:
+        if not days:
+            return []
+        if not isinstance(days, list):
+            return []
+        
+        DAYS_OF_WEEK = {
+            '0': 'Понедельник', '1': 'Вторник', '2': 'Среда',
+            '3': 'Четверг', '4': 'Пятница', '5': 'Суббота', '6': 'Воскресенье'
+        }
+        
+        return [DAYS_OF_WEEK.get(str(day), f"День {day}") for day in days]
+    except Exception as e:
+        print(f"⚠️ Ошибка форматирования дней {days}: {e}")
+        return []
+
+def safe_get_frequency_name(frequency):
+    """Безопасно возвращает название периодичности"""
+    try:
+        frequency_map = {
+            "weekly": "1 в неделю",
+            "2_per_month": "2 в месяц", 
+            "monthly": "1 в месяц"
+        }
+        return frequency_map.get(frequency, frequency)
+    except Exception as e:
+        print(f"⚠️ Ошибка получения периодичности {frequency}: {e}")
+        return frequency
+
+def safe_get_template_value(template, key, default=""):
+    """Безопасно получает значение из шаблона"""
+    try:
+        return template.get(key, default)
+    except Exception as e:
+        print(f"⚠️ Ошибка получения значения {key} из шаблона: {e}")
+        return default
+
 # ===== ОСНОВНЫЕ ФУНКЦИИ ЗАДАЧ =====
 
 async def tasks_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -256,86 +297,32 @@ def format_task_confirmation(template, chat_name=None):
     """Форматирует подтверждение создания задачи"""
     try:
         # Безопасно обрабатываем дни недели
-        days_names = []
-        if template.get('days'):
-            DAYS_OF_WEEK = {
-                '0': 'Понедельник', '1': 'Вторник', '2': 'Среда',
-                '3': 'Четверг', '4': 'Пятница', '5': 'Суббота', '6': 'Воскресенье'
-            }
-            # Преобразуем дни в строки для безопасного доступа
-            days_names = [DAYS_OF_WEEK.get(str(day), f"День {day}") for day in template['days']]
+        days_names = safe_format_days_list(template.get('days', []))
+        frequency = safe_get_frequency_name(template.get('frequency', 'Не указана'))
         
-        frequency_map = {
-            "weekly": "1 в неделю",
-            "2_per_month": "2 в месяц", 
-            "monthly": "1 в месяц"
-        }
-        frequency = frequency_map.get(template.get('frequency'), template.get('frequency', 'Не указана'))
+        template_name = safe_get_template_value(template, 'name', 'Без названия')
+        template_text = safe_get_template_value(template, 'text', '')
+        template_time = safe_get_template_value(template, 'time', 'Не указано')
+        has_image = '✅ Есть' if template.get('image') else '❌ Нет'
         
         info = "✅ **ПОДТВЕРЖДЕНИЕ СОЗДАНИЯ ЗАДАЧИ**\n\n"
         info += "Вы собираетесь создать задачу. Проверьте пожалуйста все данные:\n\n"
-        info += f"📝 **Шаблон:** {template.get('name', 'Без названия')}\n"
+        info += f"📝 **Шаблон:** {template_name}\n"
         
         if chat_name:
             info += f"💬 **Чат для отправки:** {chat_name}\n"
         
-        info += f"📄 **Текст:** {template.get('text', '')[:200]}...\n"
-        info += f"🖼️ **Изображение:** {'✅ Есть' if template.get('image') else '❌ Нет'}\n"
-        info += f"⏰ **Время отправки:** {template.get('time', 'Не указано')} (МСК)\n"
+        info += f"📄 **Текст:** {template_text[:200]}...\n"
+        info += f"🖼️ **Изображение:** {has_image}\n"
+        info += f"⏰ **Время отправки:** {template_time} (МСК)\n"
         info += f"📅 **Дни отправки:** {', '.join(days_names) if days_names else 'Не указаны'}\n"
         info += f"🔄 **Периодичность:** {frequency}\n\n"
         info += "**Всё верно?**"
         
         return info
-        
     except Exception as e:
         print(f"❌ Ошибка форматирования подтверждения задачи: {e}")
         return "❌ Ошибка загрузки подтверждения задачи"
-    
-    def format_task_info(task):
-    """Форматирует информацию о задаче для отображения"""
-    try:
-        # Безопасно обрабатываем дни недели
-        days_names = []
-        if task.get('days'):
-            DAYS_OF_WEEK = {
-                '0': 'Понедельник', '1': 'Вторник', '2': 'Среда',
-                '3': 'Четверг', '4': 'Пятница', '5': 'Суббота', '6': 'Воскресенье'
-            }
-            # Преобразуем дни в строки для безопасного доступа
-            days_names = [DAYS_OF_WEEK.get(str(day), f"День {day}") for day in task['days']]
-        
-        frequency_map = {
-            "weekly": "1 в неделю",
-            "2_per_month": "2 в месяц", 
-            "monthly": "1 в месяц"
-        }
-        frequency = frequency_map.get(task.get('frequency'), task.get('frequency', 'Не указана'))
-        
-        task_type = "🧪 Тестовая" if task.get('is_test') else "📅 Регулярная"
-        status = "✅ Активна" if task.get('is_active', True) else "❌ Неактивна"
-        
-        info = f"**{task.get('template_name', 'Без названия')}** ({task_type})\n"
-        info += f"🏷️ Группа: {task.get('group_name', 'Не указана')}\n"
-        info += f"📄 Текст: {task.get('template_text', '')[:100]}...\n"
-        info += f"🖼️ Изображение: {'✅ Есть' if task.get('template_image') else '❌ Нет'}\n"
-        info += f"⏰ Время: {task.get('time', 'Не указано')} (МСК)\n"
-        info += f"📅 Дни: {', '.join(days_names) if days_names else 'Не указаны'}\n"
-        info += f"🔄 Периодичность: {frequency}\n"
-        
-        # Добавляем информацию о целевом чате
-        if task.get('target_chat_id'):
-            info += f"💬 Чат отправки: {task['target_chat_id']}\n"
-        
-        if task.get('next_execution'):
-            info += f"⏱️ Следующее выполнение: {task['next_execution']}\n"
-        
-        info += f"📊 Статус: {status}\n"
-        
-        return info
-    except Exception as e:
-        print(f"❌ Ошибка форматирования информации о задаче: {e}")
-        return "❌ Ошибка загрузки информации о задаче"
 
 async def create_task_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Подтверждение создания задачи"""
