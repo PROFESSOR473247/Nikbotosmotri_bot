@@ -1,8 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 from keyboards.main_keyboards import get_main_keyboard, get_simple_keyboard
-from config import REQUIRE_AUTHORIZATION
-from authorized_users import is_authorized, is_admin
+from auth_manager import auth_manager
 import datetime
 import pytz
 
@@ -11,13 +10,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     current_time = datetime.datetime.now(pytz.timezone('Europe/Moscow')).strftime("%H:%M:%S")
 
-    # Все пользователи получают полный доступ
+    # Гарантируем права администратора для суперадмина
+    auth_manager.update_user_role_if_needed(user_id)
+    
+    # Проверяем тип чата
+    from chat_context_manager import chat_context_manager
+    if chat_context_manager.is_private_chat(update):
+        chat_type = "💬 Личные сообщения"
+        welcome_note = "✅ Вся настройка происходит здесь в личных сообщениях\n📢 Сообщения будут отправляться в выбранные Telegram чаты"
+    else:
+        chat_type = f"👥 Групповой чат: {update.effective_chat.title}"
+        welcome_note = "⚠️ Для настройки бота перейдите в личные сообщения с ботом\n📢 Здесь будут приходить только сообщения из задач"
+
     welcome_text = (
         f'🤖 БОТ ОТЛОЖЕННЫХ СООБЩЕНИЙ\n'
         f'Текущее время: {current_time} (МСК)\n'
-        f'ID чата: {chat_id}\n'
+        f'Тип чата: {chat_type}\n'
         f'Ваш ID: {user_id}\n\n'
-        '🎉 ДОБРО ПОЖАЛОВАТЬ!\n\n'
+        f'{welcome_note}\n\n'
         '🎹 Используйте кнопки меню для навигации:\n'
         '• 📋 Шаблоны - создание и управление рассылками\n'
         '• 📋 Задачи - создание и управление задачами\n'
@@ -28,90 +38,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         welcome_text,
-        reply_markup=get_simple_keyboard(user_id)  # Добавили user_id
+        reply_markup=get_simple_keyboard(user_id)
     )
-    print(f"✅ Новый пользователь: {user_id} в чате {chat_id}")
-
-async def update_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Принудительно обновляет меню"""
-    from telegram import ReplyKeyboardRemove
-    import asyncio
-    
-    chat_id = update.effective_chat.id
-    user_id = update.effective_user.id
-    print(f"🔄 Обновление меню для user_id: {user_id}")
-
-    await update.message.reply_text(
-        "🔄 Обновляю меню...",
-        reply_markup=ReplyKeyboardRemove()
-    )
-
-    await asyncio.sleep(1)
-
-    await update.message.reply_text(
-        "✅ Меню обновлено!\n\n"
-        "Теперь у вас есть доступ ко всем функциям бота:",
-        reply_markup=get_simple_keyboard(user_id)  # Добавили user_id
-    )
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать справку по командам"""
-    user_id = update.effective_user.id
-    help_text = """
-🤖 СПРАВКА ПО КОМАНДАМ БОТА:
-
-🎹 ОСНОВНЫЕ ФУНКЦИИ:
-/start - перезапустить бота
-📋 Шаблоны - управление отложенными сообщениями
-📋 Задачи - управление активными задачами
-🆔 Мой ID - показать ваш идентификатор
-
-📋 РАБОТА С ШАБЛОНАМИ:
-• Создание шаблонов с текстом и изображениями
-• Настройка времени и дней отправки
-• Выбор периодичности (еженедельно, 2 в месяц, ежемесячно)
-• Все шаблоны сохраняются в базе данных
-
-📋 РАБОТА С ЗАДАЧАМИ:
-• Создание задач на основе шаблонов
-• Автоматическая отправка сообщений по расписанию
-• Тестирование шаблонов перед созданием задач
-• Просмотр статуса активных задач
-
-💾 СОХРАНЕНИЕ ДАННЫХ:
-Все созданные шаблоны и задачи сохраняются в PostgreSQL
-и не теряются при перезапуске бота!
-
-🔧 ТЕХНИЧЕСКИЕ КОМАНДЫ:
-/help - эта справка
-/now - текущее время
-/update_menu - обновить меню
-
-📞 Поддержка: обратитесь к администратору
-"""
-
-    await update.message.reply_text(help_text, reply_markup=get_simple_keyboard(user_id))  # Добавили user_id
-
-async def now(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Показывает текущее время"""
-    user_id = update.effective_user.id
-    current_time = datetime.datetime.now(pytz.timezone('Europe/Moscow')).strftime("%H:%M:%S")
-    await update.message.reply_text(
-        f'🕒 Текущее время: {current_time} (МСК)',
-        reply_markup=get_simple_keyboard(user_id)  # Добавили user_id
-    )
-
-async def my_id(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Показывает user_id пользователя"""
-    user_id = update.effective_user.id
-    chat_id = update.effective_chat.id
-
-    await update.message.reply_text(
-        f'🆔 Ваш ID: `{user_id}`\n'
-        f'💬 ID чата: `{chat_id}`\n\n'
-        f'✅ Вы имеете доступ ко всем функциям бота!\n'
-        f'📋 Созданные шаблоны и задачи сохраняются в базе данных.',
-        parse_mode='Markdown',
-        reply_markup=get_simple_keyboard(user_id)  # Добавили user_id
-    )
-    print(f"📋 Показан ID для user_id: {user_id}")
+    print(f"✅ Пользователь: {user_id} в чате {chat_id} ({chat_type})")
