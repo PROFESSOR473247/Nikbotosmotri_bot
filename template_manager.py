@@ -126,6 +126,53 @@ def format_template_info(template):
     
     return info
 
+def format_template_list_info(templates):
+    """Форматирует список шаблонов для отображения"""
+    if not templates:
+        return "📭 Шаблонов нет"
+    
+    message = "📋 **Список шаблонов:**\n\n"
+    
+    for i, (template_id, template) in enumerate(templates.items(), 1):
+        days_count = len(template.get('days', []))
+        has_image = "🖼️" if template.get('image') else "❌"
+        
+        message += f"{i}. **{template['name']}** {has_image}\n"
+        message += f"   🏷️ Группа: {template.get('group', 'Не указана')}\n"
+        message += f"   ⏰ Время: {template.get('time', 'Не указано')}\n"
+        message += f"   📅 Дней: {days_count}\n"
+        message += f"   📄 Текст: {template.get('text', '')[:50]}...\n\n"
+    
+    return message
+
+def format_template_preview(template):
+    """Форматирует превью шаблона"""
+    days_names = []
+    if template.get('days'):
+        days_names = [DAYS_OF_WEEK[day] for day in template['days']]
+    
+    preview = f"📝 **{template['name']}**\n\n"
+    preview += f"📄 {template.get('text', '')}\n\n"
+    
+    if template.get('image'):
+        preview += "🖼️ *Есть изображение*\n"
+    
+    if template.get('time'):
+        preview += f"⏰ Время отправки: {template['time']} (МСК)\n"
+    
+    if days_names:
+        preview += f"📅 Дни: {', '.join(days_names)}\n"
+    
+    frequency_map = {
+        "weekly": "1 в неделю",
+        "2_per_month": "2 в месяц", 
+        "monthly": "1 в месяц"
+    }
+    frequency = frequency_map.get(template.get('frequency'), template.get('frequency', 'Не указана'))
+    preview += f"🔄 Периодичность: {frequency}"
+    
+    return preview
+
 def create_template_id():
     """Создает уникальный ID для шаблона"""
     return str(uuid.uuid4())[:8]
@@ -203,34 +250,6 @@ def validate_template_data(template_data):
     
     return True, "OK"
 
-def format_template_preview(template):
-    """Форматирует превью шаблона"""
-    days_names = []
-    if template.get('days'):
-        days_names = [DAYS_OF_WEEK[day] for day in template['days']]
-    
-    preview = f"📝 **{template['name']}**\n\n"
-    preview += f"📄 {template.get('text', '')}\n\n"
-    
-    if template.get('image'):
-        preview += "🖼️ *Есть изображение*\n"
-    
-    if template.get('time'):
-        preview += f"⏰ Время отправки: {template['time']} (МСК)\n"
-    
-    if days_names:
-        preview += f"📅 Дни: {', '.join(days_names)}\n"
-    
-    frequency_map = {
-        "weekly": "1 в неделю",
-        "2_per_month": "2 в месяц", 
-        "monthly": "1 в месяц"
-    }
-    frequency = frequency_map.get(template.get('frequency'), template.get('frequency', 'Не указана'))
-    preview += f"🔄 Периодичность: {frequency}"
-    
-    return preview
-
 def get_template_by_name(template_name):
     """Возвращает шаблон по имени"""
     templates = load_templates()
@@ -267,6 +286,28 @@ def get_template_subgroups(group_id):
     """Возвращает подгруппы для группы (для обратной совместимости)"""
     # В текущей реализации подгрупп нет, возвращаем пустой список
     return []
+
+def format_group_templates_info(group_id):
+    """Форматирует информацию о шаблонах группы"""
+    templates = get_templates_by_group(group_id)
+    
+    if not templates:
+        return f"📭 В этой группе нет шаблонов"
+    
+    groups_data = load_groups()
+    group_name = groups_data['groups'].get(group_id, {}).get('name', group_id)
+    
+    message = f"📋 **Шаблоны группы '{group_name}':**\n\n"
+    
+    for i, (template_id, template) in enumerate(templates, 1):
+        days_count = len(template.get('days', []))
+        has_image = "🖼️" if template.get('image') else "❌"
+        
+        message += f"{i}. **{template['name']}** {has_image}\n"
+        message += f"   ⏰ {template.get('time', 'Не указано')} | 📅 {days_count} дней\n"
+        message += f"   📄 {template.get('text', '')[:60]}...\n\n"
+    
+    return message
 
 # Инициализация при импорте
 print("📥 Template_manager загружен")
