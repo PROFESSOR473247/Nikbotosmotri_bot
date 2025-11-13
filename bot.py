@@ -16,6 +16,7 @@ from config import BOT_TOKEN
 from handlers.start_handlers import start, help_command, my_id, now, update_menu
 from handlers.template_handlers import get_template_conversation_handler
 from handlers.task_handlers import get_task_conversation_handler
+from handlers.admin_handlers import get_admin_conversation_handler, admin_stats, check_access
 from handlers.basic_handlers import handle_text, cancel
 from task_scheduler import init_scheduler, task_scheduler
 
@@ -69,6 +70,7 @@ def check_database():
         from database import db
         from template_manager import get_all_templates, load_groups
         from task_manager import get_all_active_tasks
+        from user_chat_manager import user_chat_manager
         
         # Инициализируем базу данных
         print("🔄 Инициализация базы данных...")
@@ -98,6 +100,12 @@ def check_database():
         for task_id, task in active_tasks.items():
             print(f"   📋 {task_id}: {task.get('template_name', 'Без названия')} "
                   f"(группа: {task.get('group', 'Не указана')})")
+        
+        # Проверяем пользователей и чаты
+        users = user_chat_manager.get_all_users()
+        chats = user_chat_manager.get_all_chats()
+        print(f"✅ Пользователей в системе: {len(users)}")
+        print(f"✅ Telegram чатов в системе: {len(chats)}")
             
     except Exception as e:
         print(f"❌ Ошибка проверки базы данных: {e}")
@@ -118,7 +126,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         traceback.print_exc()
 
 def main():
-    print("🚀 Запуск бота с открытым доступом...")
+    print("🚀 Запуск бота с системой администрирования...")
     
     # Регистрируем обработчики сигналов
     signal.signal(signal.SIGINT, signal_handler)
@@ -155,9 +163,10 @@ def main():
     # Добавляем обработчик ошибок
     application.add_error_handler(error_handler)
 
-    # Получаем ConversationHandler для шаблонов и задач
+    # Получаем ConversationHandler для всех модулей
     template_conv_handler = get_template_conversation_handler()
     task_conv_handler = get_task_conversation_handler()
+    admin_conv_handler = get_admin_conversation_handler()
 
     # Обработчики команд
     application.add_handler(CommandHandler("start", start))
@@ -165,19 +174,25 @@ def main():
     application.add_handler(CommandHandler("my_id", my_id))
     application.add_handler(CommandHandler("now", now))
     application.add_handler(CommandHandler("update_menu", update_menu))
+    
+    # Админские команды
+    application.add_handler(CommandHandler("admin_stats", admin_stats))
+    application.add_handler(CommandHandler("check_access", check_access))
 
-    # Добавляем ConversationHandler для шаблонов и задач
+    # Добавляем ConversationHandler
     application.add_handler(template_conv_handler)
     application.add_handler(task_conv_handler)
+    application.add_handler(admin_conv_handler)
 
     # Обработчик для всех текстовых сообщений (должен быть последним)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     print("✅ Бот запущен и готов к работе!")
-    print("🎉 Режим: ОТКРЫТЫЙ ДОСТУП")
-    print("📝 Все пользователи имеют доступ к созданию шаблонов и задач")
-    print("💾 Данные сохраняются в PostgreSQL")
+    print("🎉 Режим: СИСТЕМА АДМИНИСТРИРОВАНИЯ")
+    print("📝 Администратор имеет доступ ко всем функциям")
+    print("💾 Все данные сохраняются в PostgreSQL")
     print("⏰ Планировщик задач активен")
+    print("👥 Система управления пользователями и чатами готова")
     
     try:
         application.run_polling(
