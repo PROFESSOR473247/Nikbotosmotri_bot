@@ -15,9 +15,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from handlers.template_handlers import templates_main
         return await templates_main(update, context)
 
-    elif text == "📋 Задачи":  # Добавили обработку кнопки Задач
+    elif text == "📋 Задачи":
         from handlers.task_handlers import tasks_main
         return await tasks_main(update, context)
+
+    elif text == "⚙️ Администрирование":
+        from handlers.admin_handlers import admin_main
+        return await admin_main(update, context)
 
     elif text == "ℹ️ Помощь":
         from handlers.start_handlers import help_command
@@ -30,38 +34,15 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "🔙 Главное меню":
         await update.message.reply_text(
             "🔙 Возврат в главное меню",
-            reply_markup=get_simple_keyboard()
+            reply_markup=get_simple_keyboard(user_id)
         )
         return ConversationHandler.END
-
-    elif text == "👥 Пользователи" and is_admin(user_id):
-        from keyboards.user_management_keyboards import get_user_management_keyboard
-        await update.message.reply_text(
-            "👥 Управление пользователями\n\n"
-            "Выберите действие:",
-            reply_markup=get_user_management_keyboard()
-        )
-
-    elif text == "⚙️ Настройки" and is_admin(user_id):
-        await update.message.reply_text(
-            "⚙️ Настройки системы\n\n"
-            "Административные функции:",
-            reply_markup=get_simple_keyboard()
-        )
-
-    elif text == "🆔 Получить ID":
-        from handlers.start_handlers import my_id
-        await my_id(update, context)
-
-    elif text == "📋 Справка":
-        from handlers.start_handlers import help_command
-        await help_command(update, context)
 
     else:
         await update.message.reply_text(
             "❌ Неизвестная команда\n"
             "Используйте кнопки меню или /help для справки",
-            reply_markup=get_simple_keyboard()
+            reply_markup=get_simple_keyboard(user_id)
         )
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -73,6 +54,6 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         "❌ Действие отменено",
-        reply_markup=get_simple_keyboard()
+        reply_markup=get_simple_keyboard(user_id)
     )
     return ConversationHandler.END
