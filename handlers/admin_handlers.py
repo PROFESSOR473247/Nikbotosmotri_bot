@@ -17,9 +17,8 @@ from template_manager import load_groups
     DELETE_USER_SELECT, DELETE_USER_CONFIRM,
     ADD_CHAT_ID, ADD_CHAT_NAME, ADD_CHAT_USERS,
     EDIT_CHAT_SELECT, EDIT_CHAT_MAIN, EDIT_CHAT_ADD_USER, EDIT_CHAT_REMOVE_USER,
-    DELETE_CHAT_SELECT, DELETE_CHAT_CONFIRM,
-    TEST_PERMISSIONS
-) = range(24)
+    DELETE_CHAT_SELECT, DELETE_CHAT_CONFIRM
+) = range(24)  # Убрали TEST_PERMISSIONS, теперь 24 состояния
 
 # ===== ОСНОВНЫЕ ФУНКЦИИ АДМИНИСТРИРОВАНИЯ =====
 
