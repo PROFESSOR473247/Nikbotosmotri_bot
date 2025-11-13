@@ -1,8 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler
 from keyboards.main_keyboards import get_simple_keyboard
-from config import REQUIRE_AUTHORIZATION
-from authorized_users import is_admin
+from auth_manager import auth_manager
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает текстовые сообщения для навигации по меню"""
@@ -10,6 +9,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
     print(f"🔤 Обработка текста: '{text}' от user_id: {user_id}")
+
+    # Гарантируем права администратора для суперадмина при каждом действии
+    auth_manager.update_user_role_if_needed(user_id)
 
     if text == "📋 Шаблоны":
         from handlers.template_handlers import templates_main
@@ -34,7 +36,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "🔙 Главное меню":
         await update.message.reply_text(
             "🔙 Возврат в главное меню",
-            reply_markup=get_simple_keyboard(user_id)  # Добавили user_id
+            reply_markup=get_simple_keyboard(user_id)
         )
         return ConversationHandler.END
 
@@ -42,18 +44,21 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "❌ Неизвестная команда\n"
             "Используйте кнопки меню или /help для справки",
-            reply_markup=get_simple_keyboard(user_id)  # Добавили user_id
+            reply_markup=get_simple_keyboard(user_id)
         )
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Отмена любого действия"""
     user_id = update.effective_user.id
     
+    # Гарантируем права администратора для суперадмина
+    auth_manager.update_user_role_if_needed(user_id)
+    
     # Очищаем временные данные
     context.user_data.clear()
     
     await update.message.reply_text(
         "❌ Действие отменено",
-        reply_markup=get_simple_keyboard(user_id)  # Добавили user_id
+        reply_markup=get_simple_keyboard(user_id)
     )
     return ConversationHandler.END
