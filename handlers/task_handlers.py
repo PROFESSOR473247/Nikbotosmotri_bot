@@ -827,7 +827,7 @@ def get_task_conversation_handler():
                 MessageHandler(filters.Regex("^🔙 Назад$"), test_task_start)
             ],
             TEST_TASK_CHAT_SELECT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, create_task_select_chat),  # Используем ту же функцию
+                MessageHandler(filters.TEXT & ~filters.COMMAND, create_task_select_chat),  # Используем ту же функцию что и для обычных задач
                 MessageHandler(filters.Regex("^🔙 Назад$"), test_task_select_template)
             ],
             TEST_TASK_CONFIRM: [
