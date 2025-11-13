@@ -2,29 +2,47 @@ from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, filters
 from keyboards.template_keyboards import (
     get_templates_main_keyboard, get_groups_keyboard,
-    get_back_keyboard, get_skip_keyboard, get_days_keyboard,
-    get_days_continue_keyboard, get_frequency_keyboard, get_confirmation_keyboard
+    get_template_confirmation_keyboard, get_template_edit_keyboard,
+    get_back_keyboard, get_days_keyboard, get_frequency_keyboard
 )
 from keyboards.main_keyboards import get_main_keyboard
 from template_manager import (
-    get_user_accessible_groups, create_template, get_templates_by_group,
-    save_image, format_template_info, format_template_list_info, DAYS_OF_WEEK, FREQUENCY_TYPES, load_groups,
-    get_template_by_id, update_template_field, update_template, delete_template_by_id
+    get_user_accessible_groups, get_templates_by_group,
+    get_template_by_id, format_template_info, create_template,
+    save_image, delete_template_by_id, format_template_list_info,
+    get_template_groups, update_template_field, format_template_preview,
+    get_frequency_types, get_week_days, validate_template_data,
+    delete_template_and_image, format_group_templates_info
 )
+from auth_manager import auth_manager
 
-# Состояния для ConversationHandler
-(
-    TEMPLATES_MAIN, TEMPLATE_LIST_GROUPS, TEMPLATE_LIST_DETAILS,
-    ADD_TEMPLATE_GROUP, ADD_TEMPLATE_NAME, ADD_TEMPLATE_TEXT,
-    ADD_TEMPLATE_IMAGE, ADD_TEMPLATE_TIME, ADD_TEMPLATE_DAYS, ADD_TEMPLATE_FREQUENCY,
-    ADD_TEMPLATE_CONFIRM,
-    EDIT_TEMPLATE_SELECT, EDIT_TEMPLATE_FIELD, EDIT_TEMPLATE_NAME, EDIT_TEMPLATE_TEXT,
-    EDIT_TEMPLATE_IMAGE, EDIT_TEMPLATE_TIME, EDIT_TEMPLATE_DAYS, EDIT_TEMPLATE_FREQUENCY,
-    DELETE_TEMPLATE_SELECT, DELETE_TEMPLATE_CONFIRM, DELETE_TEMPLATE_FINAL
-) = range(22)
+# === ЗАЩИТНЫЕ ФУНКЦИИ ===
 
-# ===== ОСНОВНЫЕ ФУНКЦИИ ШАБЛОНОВ =====
+def safe_format_template_days(template):
+    """Безопасно форматирует дни шаблона"""
+    try:
+        days = template.get('days', [])
+        if not days:
+            return []
+        
+        DAYS_OF_WEEK = {
+            '0': 'Понедельник', '1': 'Вторник', '2': 'Среда',
+            '3': 'Четверг', '4': 'Пятница', '5': 'Суббота', '6': 'Воскресенье'
+        }
+        
+        return [DAYS_OF_WEEK.get(str(day), f"День {day}") for day in days]
+    except Exception as e:
+        print(f"⚠️ Ошибка форматирования дней шаблона: {e}")
+        return []
 
+# === СОСТОЯНИЯ CONVERSATION HANDLER ===
+(TEMPLATE_MAIN, CREATE_TEMPLATE_GROUP, CREATE_TEMPLATE_NAME, 
+ CREATE_TEMPLATE_TEXT, CREATE_TEMPLATE_IMAGE, CREATE_TEMPLATE_TIME,
+ CREATE_TEMPLATE_DAYS, CREATE_TEMPLATE_FREQUENCY, CREATE_TEMPLATE_CONFIRM,
+ TEMPLATE_LIST, TEMPLATE_LIST_CHOOSE_GROUP, TEMPLATE_DETAILS,
+ DELETE_TEMPLATE_SELECT, DELETE_TEMPLATE_CONFIRM) = range(14)
+
+# === ОСНОВНЫЕ ФУНКЦИИ (начинаются отсюда) ===
 async def templates_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Главное меню шаблонов"""
     await update.message.reply_text(
