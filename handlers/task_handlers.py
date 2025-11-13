@@ -834,7 +834,7 @@ def get_task_conversation_handler():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, test_task_confirm),
                 MessageHandler(filters.Regex("^✅ Подтвердить$"), test_task_confirm),
                 MessageHandler(filters.Regex("^✏️ Изменить$"), test_task_confirm),
-                MessageHandler(filters.Regex("^🔙 Назад$"), test_task_select_chat)
+                MessageHandler(filters.Regex("^🔙 Назад$"), test_task_select_template)
             ],
         },
         fallbacks=[CommandHandler("cancel", cancel_task)]
