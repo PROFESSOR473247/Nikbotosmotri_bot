@@ -30,3 +30,6 @@ def get_user_access_groups(user_id):
 def get_user_access_chats(user_id):
     """Возвращает Telegram чаты, к которым у пользователя есть доступ"""
     return user_chat_manager.get_user_chat_access(user_id)
+
+# Добавляем алиас для обратной совместимости
+get_user_groups = get_user_access_groups
