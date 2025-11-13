@@ -45,6 +45,19 @@ def safe_format_template_days(template):
 # === ОСНОВНЫЕ ФУНКЦИИ (начинаются отсюда) ===
 async def templates_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Главное меню шаблонов"""
+    user_id = update.effective_user.id
+    auth_manager.update_user_role_if_needed(user_id)
+    
+    await update.message.reply_text(
+        "📋 **Управление шаблонами**\n\n"
+        "Выберите действие:",
+        parse_mode='Markdown',
+        reply_markup=get_templates_main_keyboard()
+    )
+    return TEMPLATE_MAIN
+
+async def templates_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Главное меню шаблонов"""
     await update.message.reply_text(
         "🎯 **Управление шаблонами**\n\n"
         "Выберите действие:",
