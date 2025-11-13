@@ -26,7 +26,7 @@ WEEK_DAYS = {
     '3': 'Четверг',
     '4': 'Пятница',
     '5': 'Суббота',
-    '6': 'Воскресенье'
+    '6': 'Воскресеньe'
 }
 
 # Директория для изображений
@@ -77,7 +77,7 @@ def create_template(template_data):
         return False, None
 
 def load_templates():
-    """Загружает все шаблоны из базу данных"""
+    """Загружает все шаблоны из базы данных"""
     return db.load_templates()
 
 def get_all_templates():
@@ -96,6 +96,10 @@ def get_template_by_id(template_id):
 def delete_template(template_id):
     """Удаляет шаблон"""
     return db.delete_template(template_id)
+
+def delete_template_by_id(template_id):
+    """Удаляет шаблон по ID (алиас для delete_template)"""
+    return delete_template(template_id)
 
 def get_user_accessible_groups(user_id):
     """Возвращает группы, доступные пользователю"""
@@ -379,6 +383,25 @@ def search_templates(search_term):
             results[template_id] = template
     
     return results
+
+def delete_template_and_image(template_id):
+    """Удаляет шаблон и связанное с ним изображение"""
+    # Получаем информацию о шаблоне
+    template = get_template_by_id(template_id)
+    if not template:
+        return False, "Шаблон не найден"
+    
+    # Удаляем изображение если есть
+    if template.get('image'):
+        delete_image(template['image'])
+    
+    # Удаляем шаблон из базы данных
+    success = delete_template(template_id)
+    
+    if success:
+        return True, f"Шаблон '{template['name']}' успешно удален"
+    else:
+        return False, "Ошибка при удалении шаблона"
 
 # Инициализация при импорте
 print("📥 Template_manager загружен")
