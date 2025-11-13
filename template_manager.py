@@ -58,18 +58,34 @@ def load_groups():
     return groups
 
 def get_user_accessible_groups(user_id):
-    """Возвращает группы доступные пользователю"""
-    from authorized_users import get_user_groups
-    user_groups = get_user_groups(user_id)
-    groups_data = load_groups()
+    """Возвращает группы, доступные пользователю"""
+    from authorized_users import get_user_access_groups
     
+    # Если отключена авторизация - все группы доступны
+    from config import REQUIRE_AUTHORIZATION
+    if not REQUIRE_AUTHORIZATION:
+        groups_data = load_groups()
+        return groups_data.get('groups', {})
+    
+    # Получаем группы пользователя
+    user_groups = get_user_access_groups(user_id)
+    all_groups = load_groups().get('groups', {})
+    
+    # Фильтруем группы по доступу
     accessible_groups = {}
-    for group_id, group_data in groups_data.get('groups', {}).items():
-        # Проверяем доступ через authorized_users.json
-        if group_id in user_groups:
+    for group_id, group_data in all_groups.items():
+        # Проверяем доступ через систему прав
+        user_has_access = any(ug['id'] == group_id for ug in user_groups)
+        
+        # Для обратной совместимости проверяем старую систему allowed_users
+        old_system_access = False
+        allowed_users = group_data.get('allowed_users', [])
+        if isinstance(allowed_users, list) and user_id in allowed_users:
+            old_system_access = True
+        
+        if user_has_access or old_system_access:
             accessible_groups[group_id] = group_data
     
-    print(f"👤 Пользователь {user_id} имеет доступ к {len(accessible_groups)} группам: {list(accessible_groups.keys())}")
     return accessible_groups
 
 def create_template(template_data):
