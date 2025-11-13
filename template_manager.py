@@ -77,7 +77,7 @@ def create_template(template_data):
         return False, None
 
 def load_templates():
-    """Загружает все шаблоны из базы данных"""
+    """Загружает все шаблоны из базу данных"""
     return db.load_templates()
 
 def get_all_templates():
@@ -204,6 +204,15 @@ def update_template(template_id, template_data):
     """Обновляет шаблон"""
     template_data['id'] = template_id
     return save_template(template_data)
+
+def update_template_field(template_id, field_name, field_value):
+    """Обновляет конкретное поле шаблона"""
+    template = get_template_by_id(template_id)
+    if not template:
+        return False, "Шаблон не найден"
+    
+    template[field_name] = field_value
+    return update_template(template_id, template)
 
 # ===== ФУНКЦИИ ДЛЯ РАБОТЫ С ИЗОБРАЖЕНИЯМИ =====
 
@@ -334,6 +343,42 @@ def get_frequency_types():
 def get_week_days():
     """Возвращает дни недели для выбора"""
     return WEEK_DAYS
+
+def get_template_stats():
+    """Возвращает статистику по шаблонам"""
+    templates = load_templates()
+    groups = get_template_groups()
+    
+    stats = {
+        'total_templates': len(templates),
+        'groups_count': len(groups),
+        'templates_with_images': 0,
+        'templates_with_schedule': 0
+    }
+    
+    for template in templates.values():
+        if template.get('image'):
+            stats['templates_with_images'] += 1
+        if template.get('time') and template.get('days'):
+            stats['templates_with_schedule'] += 1
+    
+    return stats
+
+def search_templates(search_term):
+    """Ищет шаблоны по названию или тексту"""
+    templates = load_templates()
+    results = {}
+    
+    search_term_lower = search_term.lower()
+    
+    for template_id, template in templates.items():
+        name_match = search_term_lower in template.get('name', '').lower()
+        text_match = search_term_lower in template.get('text', '').lower()
+        
+        if name_match or text_match:
+            results[template_id] = template
+    
+    return results
 
 # Инициализация при импорте
 print("📥 Template_manager загружен")
