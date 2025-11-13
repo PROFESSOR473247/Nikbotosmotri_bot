@@ -34,6 +34,22 @@ def save_template(template_data):
     """Сохраняет шаблон в базу данных"""
     return db.save_template(template_data)
 
+def create_template(template_data):
+    """Создает новый шаблон"""
+    # Генерируем ID для шаблона
+    template_id = create_template_id()
+    template_data['id'] = template_id
+    
+    # Сохраняем в базу данных
+    success = save_template(template_data)
+    
+    if success:
+        print(f"✅ Шаблон создан: {template_data['name']} (ID: {template_id})")
+        return True, template_id
+    else:
+        print(f"❌ Ошибка создания шаблона: {template_data['name']}")
+        return False, None
+
 def load_templates():
     """Загружает все шаблоны из базы данных"""
     return db.load_templates()
@@ -105,6 +121,16 @@ def format_template_info(template):
 def create_template_id():
     """Создает уникальный ID для шаблона"""
     return str(uuid.uuid4())[:8]
+
+def get_template_groups():
+    """Возвращает все группы шаблонов"""
+    groups_data = load_groups()
+    return groups_data.get('groups', {})
+
+def update_template(template_id, template_data):
+    """Обновляет шаблон"""
+    template_data['id'] = template_id
+    return save_template(template_data)
 
 # Инициализация при импорте
 print("📥 Template_manager загружен")
