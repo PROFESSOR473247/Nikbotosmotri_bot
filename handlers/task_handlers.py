@@ -1,4 +1,4 @@
-from telegram import Update, ReplyKeyboardMarkup
+fromtelegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, filters
 from keyboards.task_keyboards import (
     get_tasks_main_keyboard, get_groups_keyboard,
