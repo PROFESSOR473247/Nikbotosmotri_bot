@@ -173,6 +173,14 @@ def main():
     # Проверяем базу данных
     check_database()
     
+    # ОБНОВЛЯЕМ СТРУКТУРУ БАЗЫ ДАННЫХ
+    try:
+        from database_updater import update_database_structure
+        update_database_structure()
+        print("✅ Структура базы данных проверена и обновлена")
+    except Exception as e:
+        print(f"⚠️ Ошибка обновления структуры базы данных: {e}")
+    
     # Инициализируем файлы шаблонов и задач
     try:
         from template_manager import init_files
@@ -184,18 +192,7 @@ def main():
     except Exception as e:
         print(f"⚠️ Ошибка инициализации: {e}")
     
-    # Инициализируем планировщик задач
-    try:
-        init_scheduler(BOT_TOKEN)
-        if task_scheduler:
-            task_scheduler.start()
-            print("✅ Планировщик задач запущен")
-            
-            # Планируем существующие задачи
-            from task_scheduler import schedule_existing_tasks
-            schedule_existing_tasks()
-    except Exception as e:
-        print(f"⚠️ Ошибка инициализации планировщика: {e}")
+    # ... остальной код
     
     keep_alive()
 
