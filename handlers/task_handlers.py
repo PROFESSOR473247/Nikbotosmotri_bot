@@ -254,10 +254,15 @@ async def create_task_select_chat(update: Update, context: ContextTypes.DEFAULT_
 
 def format_task_confirmation(template, chat_name=None):
     """Форматирует подтверждение создания задачи"""
+    # Безопасно обрабатываем дни недели
     days_names = []
     if template.get('days'):
-        from template_manager import DAYS_OF_WEEK
-        days_names = [DAYS_OF_WEEK[day] for day in template['days']]
+        DAYS_OF_WEEK = {
+            '0': 'Понедельник', '1': 'Вторник', '2': 'Среда',
+            '3': 'Четверг', '4': 'Пятница', '5': 'Суббота', '6': 'Воскресенье'
+        }
+        # Преобразуем дни в строки для безопасного доступа
+        days_names = [DAYS_OF_WEEK.get(str(day), f"День {day}") for day in template['days']]
     
     frequency_map = {
         "weekly": "1 в неделю",
