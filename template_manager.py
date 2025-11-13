@@ -1,6 +1,7 @@
 import json
 import os
 import uuid
+import shutil
 from datetime import datetime
 from database import db
 
@@ -10,11 +11,18 @@ DAYS_OF_WEEK = {
     '3': 'Четверг', '4': 'Пятница', '5': 'Суббота', '6': 'Воскресенье'
 }
 
+# Директория для изображений
+IMAGES_DIR = "images"
+
 def init_files():
-    """Инициализирует файлы шаблонов (для обратной совместимости)"""
+    """Инициализирует файлы шаблонов и директории"""
     data_dir = "data"
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
+    
+    # Создаем директорию для изображений
+    if not os.path.exists(IMAGES_DIR):
+        os.makedirs(IMAGES_DIR)
     
     template_files = ['templates.json']
     for file in template_files:
@@ -23,7 +31,7 @@ def init_files():
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump({}, f, ensure_ascii=False, indent=2)
     
-    print("✅ Файлы шаблонов инициализированы")
+    print("✅ Файлы шаблонов и директории инициализированы")
 
 def init_database():
     """Инициализирует базу данных для шаблонов"""
@@ -131,6 +139,134 @@ def update_template(template_id, template_data):
     """Обновляет шаблон"""
     template_data['id'] = template_id
     return save_template(template_data)
+
+# ===== ФУНКЦИИ ДЛЯ РАБОТЫ С ИЗОБРАЖЕНИЯМИ =====
+
+def save_image(image_file, template_id):
+    """Сохраняет изображение для шаблона"""
+    try:
+        # Создаем уникальное имя файла
+        file_extension = os.path.splitext(image_file.filename)[1]
+        image_filename = f"{template_id}{file_extension}"
+        image_path = os.path.join(IMAGES_DIR, image_filename)
+        
+        # Сохраняем файл
+        with open(image_path, 'wb') as f:
+            f.write(image_file.getvalue())
+        
+        print(f"✅ Изображение сохранено: {image_path}")
+        return image_path
+        
+    except Exception as e:
+        print(f"❌ Ошибка сохранения изображения: {e}")
+        return None
+
+def delete_image(image_path):
+    """Удаляет изображение"""
+    try:
+        if image_path and os.path.exists(image_path):
+            os.remove(image_path)
+            print(f"✅ Изображение удалено: {image_path}")
+            return True
+        return False
+    except Exception as e:
+        print(f"❌ Ошибка удаления изображения: {e}")
+        return False
+
+def get_image_path(template_id):
+    """Возвращает путь к изображению шаблона"""
+    # Ищем файл с любым расширением
+    if not os.path.exists(IMAGES_DIR):
+        return None
+    
+    for filename in os.listdir(IMAGES_DIR):
+        if filename.startswith(template_id):
+            return os.path.join(IMAGES_DIR, filename)
+    
+    return None
+
+def validate_template_data(template_data):
+    """Проверяет данные шаблона на валидность"""
+    required_fields = ['name', 'group', 'text']
+    for field in required_fields:
+        if not template_data.get(field):
+            return False, f"Отсутствует обязательное поле: {field}"
+    
+    # Проверяем время
+    if template_data.get('time'):
+        try:
+            hour, minute = map(int, template_data['time'].split(':'))
+            if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                return False, "Неверный формат времени"
+        except ValueError:
+            return False, "Неверный формат времени"
+    
+    return True, "OK"
+
+def format_template_preview(template):
+    """Форматирует превью шаблона"""
+    days_names = []
+    if template.get('days'):
+        days_names = [DAYS_OF_WEEK[day] for day in template['days']]
+    
+    preview = f"📝 **{template['name']}**\n\n"
+    preview += f"📄 {template.get('text', '')}\n\n"
+    
+    if template.get('image'):
+        preview += "🖼️ *Есть изображение*\n"
+    
+    if template.get('time'):
+        preview += f"⏰ Время отправки: {template['time']} (МСК)\n"
+    
+    if days_names:
+        preview += f"📅 Дни: {', '.join(days_names)}\n"
+    
+    frequency_map = {
+        "weekly": "1 в неделю",
+        "2_per_month": "2 в месяц", 
+        "monthly": "1 в месяц"
+    }
+    frequency = frequency_map.get(template.get('frequency'), template.get('frequency', 'Не указана'))
+    preview += f"🔄 Периодичность: {frequency}"
+    
+    return preview
+
+def get_template_by_name(template_name):
+    """Возвращает шаблон по имени"""
+    templates = load_templates()
+    for template_id, template in templates.items():
+        if template.get('name') == template_name:
+            return template
+    return None
+
+def template_exists(template_name, group_id):
+    """Проверяет, существует ли шаблон с таким именем в группе"""
+    templates = get_templates_by_group(group_id)
+    for template_id, template in templates:
+        if template.get('name') == template_name:
+            return True
+    return False
+
+def get_templates_count():
+    """Возвращает количество шаблонов"""
+    templates = load_templates()
+    return len(templates)
+
+def get_templates_by_user(user_id):
+    """Возвращает шаблоны, созданные пользователем"""
+    templates = load_templates()
+    user_templates = {}
+    
+    for template_id, template in templates.items():
+        if template.get('created_by') == user_id:
+            user_templates[template_id] = template
+    
+    return user_templates
+
+def get_template_subgroups(group_id):
+    """Возвращает подгруппы для группы (для обратной совместимости)"""
+    # В текущей реализации подгрупп нет, возвращаем пустой список
+    return []
 
 # Инициализация при импорте
 print("📥 Template_manager загружен")
