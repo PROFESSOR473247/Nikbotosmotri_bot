@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import os
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 import pytz
@@ -8,7 +9,6 @@ from telegram import Bot
 from telegram.error import TelegramError
 
 from task_manager import get_all_active_tasks, update_task_execution_time, calculate_next_execution
-from template_manager import get_template_by_id
 
 # Глобальный планировщик
 task_scheduler = None
@@ -115,6 +115,9 @@ async def execute_test_task(template, update, context):
             )
             print(f"✅ Тест: отправлен текст в чат {target_chat_id}")
         
+        # Импортируем здесь чтобы избежать циклического импорта
+        from keyboards.task_keyboards import get_tasks_main_keyboard
+        
         await update.message.reply_text(
             f"✅ Тестовое сообщение отправлено в этот чат!\n\n"
             f"📝 Шаблон: {template['name']}",
@@ -210,10 +213,3 @@ def stop_scheduler():
     if task_scheduler and task_scheduler.running:
         task_scheduler.shutdown()
         print("✅ Планировщик задач остановлен")
-
-# Импортируем здесь чтобы избежать циклического импорта
-def get_tasks_main_keyboard():
-    from keyboards.task_keyboards import get_tasks_main_keyboard
-    return get_tasks_main_keyboard()
-
-import os
