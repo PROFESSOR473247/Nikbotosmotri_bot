@@ -103,3 +103,4 @@ async def update_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🔄 Меню обновлено",
         reply_markup=get_main_key
+    )
