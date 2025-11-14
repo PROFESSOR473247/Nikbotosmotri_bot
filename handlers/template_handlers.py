@@ -1564,6 +1564,70 @@ async def create_template_skip_time(update: Update, context: ContextTypes.DEFAUL
     )
     return CREATE_TEMPLATE_DAYS
     
+    # Добавьте эти функции в файл template_handlers.py (можно в конец файла перед ConversationHandler)
+
+def get_template_list_keyboard():
+    """Клавиатура для списка шаблонов"""
+    keyboard = [
+        ["📋 Показать все шаблоны", "🏷️ По группам"],
+        ["🔍 Поиск шаблона", "🔙 К шаблонам"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_template_details_keyboard():
+    """Клавиатура для деталей шаблона"""
+    keyboard = [
+        ["✏️ Редактировать", "🗑️ Удалить"],
+        ["🔙 К списку"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_confirmation_keyboard():
+    """Клавиатура подтверждения"""
+    keyboard = [
+        ["✅ Подтвердить создание", "✏️ Внести изменения"],
+        ["🔙 Назад"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_skip_keyboard():
+    """Клавиатура для пропуска"""
+    keyboard = [
+        ["⏭️ Пропустить"],
+        ["🔙 Назад"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_days_continue_keyboard(selected_days_text):
+    """Клавиатура для продолжения выбора дней"""
+    keyboard = []
+    
+    if len(selected_days_text) == 1:
+        keyboard.append(["➕ Выбрать еще день"])
+        keyboard.append(["➡️ Перейти к следующему шагу"])
+    else:
+        keyboard.append(["➕ Выбрать еще день"])
+        keyboard.append(["✅ Завершить выбор дней"])
+    
+    keyboard.append(["🔙 Назад"])
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_image_choice_keyboard():
+    """Клавиатура выбора изображения"""
+    keyboard = [
+        ["🖼️ Добавить изображение", "⏭️ Пропустить"],
+        ["🔙 Назад"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_time_input_keyboard():
+    """Клавиатура для ввода времени"""
+    keyboard = [
+        ["⏭️ Пропустить"],
+        ["🔙 Назад"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
 # ===== CONVERSATION HANDLER =====
 
 def get_template_conversation_handler():
