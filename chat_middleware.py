@@ -17,7 +17,7 @@ async def check_chat_context(update: Update, context: ContextTypes.DEFAULT_TYPE,
     if chat_context_manager.is_group_chat(update):
         user_id = update.effective_user.id
         
-        # Разрешаем только команды /start, /help, /my_id в группах
+        # Разрешаем только базовые команды в группах
         allowed_commands = ['/start', '/help', '/my_id', '/now']
         
         if update.message.text and any(update.message.text.startswith(cmd) for cmd in allowed_commands):
