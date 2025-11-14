@@ -1,36 +1,42 @@
 from telegram import ReplyKeyboardMarkup
-from config import REQUIRE_AUTHORIZATION
-from authorized_users import is_authorized, is_admin
+from auth_manager import auth_manager
 
 def get_main_keyboard(user_id):
-    """Главное меню с учетом прав пользователя"""
+    """Главное меню бота с проверкой прав"""
+    # Проверяем права пользователя
+    user_role = auth_manager.get_user_role(user_id)
+    
+    # Базовые кнопки для всех пользователей
     keyboard = [
         ["📋 Шаблоны", "📋 Задачи"],
         ["ℹ️ Помощь", "🆔 Мой ID"]
     ]
     
-    # Добавляем админские функции только для админа
-    if is_admin(user_id):
+    # Добавляем кнопку администрирования для администраторов
+    if user_role in ['admin', 'superadmin']:
         keyboard.insert(1, ["⚙️ Администрирование"])
     
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-def get_unauthorized_keyboard():
-    """Меню для неавторизованных пользователей"""
-    keyboard = [
-        ["🆔 Получить ID"],
-        ["📋 Справка"]
-    ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, input_field_placeholder="Для доступа обратитесь к администратору")
-
 def get_simple_keyboard(user_id):
-    """Простое меню с проверкой админских прав"""
+    """Упрощенная клавиатура для отмены действий"""
     keyboard = [
-        ["📋 Шаблоны", "📋 Задачи"],
-        ["ℹ️ Помощь", "🆔 Мой ID"]
+        ["🔙 Главное меню"]
     ]
-    
-    if is_admin(user_id):
-        keyboard.insert(1, ["⚙️ Администрирование"])
-    
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_admin_keyboard():
+    """Клавиатура для администраторов"""
+    keyboard = [
+        ["👥 Пользователи", "💬 Тг чаты"],
+        ["📊 Статистика", "⚙️ Настройки"],
+        ["🔙 Главное меню"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_back_only_keyboard():
+    """Простая кнопка назад"""
+    keyboard = [
+        ["🔙 Назад"]
+    ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
