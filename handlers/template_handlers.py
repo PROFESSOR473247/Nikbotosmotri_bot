@@ -36,25 +36,35 @@ def safe_format_template_days(template):
         return []
 
 # === СОСТОЯНИЯ CONVERSATION HANDLER ===
-(TEMPLATE_MAIN, CREATE_TEMPLATE_GROUP, CREATE_TEMPLATE_NAME, 
+# ИСПРАВЛЕНО: правильные названия состояний
+(TEMPLATES_MAIN, CREATE_TEMPLATE_GROUP, CREATE_TEMPLATE_NAME, 
  CREATE_TEMPLATE_TEXT, CREATE_TEMPLATE_IMAGE, CREATE_TEMPLATE_TIME,
  CREATE_TEMPLATE_DAYS, CREATE_TEMPLATE_FREQUENCY, CREATE_TEMPLATE_CONFIRM,
  TEMPLATE_LIST, TEMPLATE_LIST_CHOOSE_GROUP, TEMPLATE_DETAILS,
- DELETE_TEMPLATE_SELECT, DELETE_TEMPLATE_CONFIRM) = range(14)
+ DELETE_TEMPLATE_SELECT, DELETE_TEMPLATE_CONFIRM, EDIT_TEMPLATE_SELECT,
+ EDIT_TEMPLATE_FIELD, EDIT_TEMPLATE_NAME, EDIT_TEMPLATE_TEXT,
+ EDIT_TEMPLATE_IMAGE, EDIT_TEMPLATE_TIME, EDIT_TEMPLATE_DAYS,
+ EDIT_TEMPLATE_FREQUENCY, DELETE_TEMPLATE_FINAL) = range(23)
 
-# === ОСНОВНЫЕ ФУНКЦИИ (начинаются отсюда) ===
+# Дни недели для отображения
+DAYS_OF_WEEK = {
+    '0': 'Понедельник', '1': 'Вторник', '2': 'Среда',
+    '3': 'Четверг', '4': 'Пятница', '5': 'Суббота', '6': 'Воскресенье'
+}
+
+# === ОСНОВНЫЕ ФУНКЦИИ ===
 async def templates_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Главное меню шаблонов"""
     user_id = update.effective_user.id
     auth_manager.update_user_role_if_needed(user_id)
     
     await update.message.reply_text(
-        "📋 **Управление шаблонами**\n\n"
+        "📋 **Управление шаблонов**\n\n"
         "Выберите действие:",
         parse_mode='Markdown',
         reply_markup=get_templates_main_keyboard()
     )
-    return TEMPLATE_MAIN
+    return TEMPLATES_MAIN
 
 # ===== СПИСОК ШАБЛОНОВ =====
 
