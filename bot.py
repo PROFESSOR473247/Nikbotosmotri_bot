@@ -192,8 +192,6 @@ def main():
     except Exception as e:
         print(f"⚠️ Ошибка инициализации: {e}")
     
-    # ... остальной код
-    
     keep_alive()
 
     # Создаем приложение
@@ -202,12 +200,9 @@ def main():
     # Добавляем обработчик ошибок
     application.add_error_handler(error_handler)
 
-    # Получаем ConversationHandler для всех модулей
-    template_conv_handler = get_template_conversation_handler()
-    task_conv_handler = get_task_conversation_handler()
-    admin_conv_handler = get_admin_conversation_handler()
-
-    # Обработчики команд (обернутые в middleware)
+    # ===== ВАЖНО: ПРАВИЛЬНЫЙ ПОРЯДОК ОБРАБОТЧИКОВ =====
+    
+    # 1. Сначала команды
     application.add_handler(CommandHandler("start", wrapped_start))
     application.add_handler(CommandHandler("help", wrapped_help_command))
     application.add_handler(CommandHandler("my_id", wrapped_my_id))
@@ -218,16 +213,38 @@ def main():
     application.add_handler(CommandHandler("admin_stats", wrapped_admin_stats))
     application.add_handler(CommandHandler("check_access", wrapped_check_access))
 
+    # 2. Затем ConversationHandler (они должны быть перед общим текстовым обработчиком)
+    print("🔄 Регистрация ConversationHandler...")
+    
+    # Получаем ConversationHandler для всех модулей
+    template_conv_handler = get_template_conversation_handler()
+    task_conv_handler = get_task_conversation_handler()
+    admin_conv_handler = get_admin_conversation_handler()
+
     # Добавляем ConversationHandler
     application.add_handler(template_conv_handler)
     application.add_handler(task_conv_handler)
     application.add_handler(admin_conv_handler)
 
-    # Обработчик отмены
+    print(f"✅ ConversationHandler зарегистрированы:")
+    print(f"   • Шаблоны: {len(template_conv_handler.states)} состояний")
+    print(f"   • Задачи: {len(task_conv_handler.states)} состояний") 
+    print(f"   • Администрирование: {len(admin_conv_handler.states)} состояний")
+
+    # 3. Обработчик отмены (должен быть после ConversationHandler)
     application.add_handler(CommandHandler("cancel", wrapped_cancel))
 
-    # Обработчик для всех текстовых сообщений (должен быть последним)
+    # 4. Общий текстовый обработчик (ДОЛЖЕН БЫТЬ ПОСЛЕДНИМ)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, wrapped_handle_text))
+
+    print("✅ Все обработчики зарегистрированы в правильном порядке")
+
+    # Инициализируем планировщик задач
+    try:
+        init_scheduler(application)
+        print("✅ Планировщик задач инициализирован")
+    except Exception as e:
+        print(f"⚠️ Ошибка инициализации планировщика: {e}")
 
     print("✅ Бот запущен и готов к работе!")
     print("🎉 Режим: СИСТЕМА АДМИНИСТРИРОВАНИЯ")
@@ -248,10 +265,12 @@ def main():
     print("="*50)
     
     try:
+        print("🔄 Запуск бота...")
         application.run_polling(
             drop_pending_updates=True,
             allowed_updates=Update.ALL_TYPES,
-            close_loop=False
+            close_loop=False,
+            timeout=60
         )
     except Exception as e:
         print(f"❌ Критическая ошибка при запуске бота: {e}")
@@ -286,4 +305,12 @@ if __name__ == '__main__':
     http_thread.daemon = True
     http_thread.start()
     
-    main()
+    # Запускаем бота
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("🛑 Бот остановлен пользователем")
+    except Exception as e:
+        print(f"❌ Неожиданная ошибка: {e}")
+        import traceback
+        traceback.print_exc()
