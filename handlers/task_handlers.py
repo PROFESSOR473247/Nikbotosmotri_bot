@@ -15,13 +15,14 @@ from task_manager import (
     deactivate_task, format_task_info, get_all_active_tasks
 )
 from auth_manager import auth_manager
+from chat_selection_manager import chat_selection_manager
 
-# Обновленные состояния для ConversationHandler задач
+# Состояния для ConversationHandler задач
 (
     TASKS_MAIN, CREATE_TASK_GROUP, CREATE_TASK_SELECT, CREATE_TASK_CHAT_SELECT, CREATE_TASK_CONFIRM,
     CREATE_TASK_EDIT, DEACTIVATE_TASK_GROUP, DEACTIVATE_TASK_SELECT, DEACTIVATE_TASK_CONFIRM,
     TEST_TASK_GROUP, TEST_TASK_SELECT, TEST_TASK_CHAT_SELECT, TEST_TASK_CONFIRM
-) = range(13)  # Добавили состояния для выбора чата
+) = range(13)
 
 # ===== ЗАЩИТНЫЕ ФУНКЦИИ =====
 
@@ -93,6 +94,7 @@ async def create_task_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return TASKS_MAIN
     
+    # Инициализируем данные для создания задачи
     context.user_data['task_creation'] = {
         'created_by': user_id,
         'is_test': False
@@ -111,10 +113,10 @@ async def create_task_select_group(update: Update, context: ContextTypes.DEFAULT
     user_text = update.message.text
     user_id = update.effective_user.id
     
-    print(f"🔍 Пользователь выбрал: {user_text}")
+    print(f"🔍 Пользователь выбрал группу: {user_text}")
     
     # Если нажата кнопка "Назад"
-    if user_text == "🔙 Назад":
+    if user_text == "🔙 К задачам":
         await tasks_main(update, context)
         return TASKS_MAIN
     
@@ -146,6 +148,7 @@ async def create_task_select_group(update: Update, context: ContextTypes.DEFAULT
         )
         return CREATE_TASK_GROUP
     
+    # Сохраняем данные группы
     context.user_data['task_creation']['group'] = group_id
     context.user_data['current_group'] = group_id
     
@@ -223,8 +226,7 @@ async def create_task_select_template(update: Update, context: ContextTypes.DEFA
     context.user_data['task_creation']['template_id'] = template_id
     
     # ПЕРЕХОДИМ К ВЫБОРУ ЧАТА
-    from chat_context_manager import chat_context_manager
-    accessible_chats, message = chat_context_manager.format_chats_for_selection(user_id)
+    accessible_chats, message = chat_selection_manager.get_user_accessible_chats_for_selection(user_id)
 
     if not accessible_chats:
         await update.message.reply_text(
@@ -238,60 +240,13 @@ async def create_task_select_template(update: Update, context: ContextTypes.DEFA
     await update.message.reply_text(
         message,
         parse_mode='Markdown',
-        reply_markup=get_back_keyboard()
+        reply_markup=chat_selection_manager.get_back_keyboard()
     )
     return CREATE_TASK_CHAT_SELECT
 
 async def create_task_select_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Выбор чата для отправки задачи"""
-    user_id = update.effective_user.id
-    user_text = update.message.text
-    
-    # Если нажата кнопка "Назад"
-    if user_text == "🔙 Назад":
-        group_id = context.user_data['task_creation']['group']
-        templates = get_templates_by_group(group_id)
-        
-        keyboard = []
-        for template_id, template in templates:
-            keyboard.append([f"📝 {template['name']}"])
-        keyboard.append(["🔙 Назад"])
-        
-        await update.message.reply_text(
-            "🔄 **Выберите шаблон:**",
-            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-        )
-        return CREATE_TASK_SELECT
-    
-    try:
-        chat_number = int(user_text)
-        accessible_chats = context.user_data['accessible_chats']
-        
-        if 1 <= chat_number <= len(accessible_chats):
-            selected_chat = accessible_chats[chat_number - 1]
-            context.user_data['task_creation']['target_chat_id'] = selected_chat['chat_id']
-            context.user_data['task_creation']['target_chat_name'] = selected_chat['chat_name']
-            
-            # Переходим к подтверждению
-            task_data = context.user_data['task_creation']
-            template = task_data['template']
-            info = format_task_confirmation(template, selected_chat['chat_name'])
-            
-            await update.message.reply_text(
-                info,
-                parse_mode='Markdown',
-                reply_markup=get_task_confirmation_keyboard()
-            )
-            return CREATE_TASK_CONFIRM
-        else:
-            raise ValueError
-            
-    except ValueError:
-        await update.message.reply_text(
-            "❌ Неверный номер чата. Введите номер из списка:",
-            reply_markup=get_back_keyboard()
-        )
-        return CREATE_TASK_CHAT_SELECT
+    """Обработка выбора чата для задачи"""
+    return await chat_selection_manager.handle_chat_selection(update, context, CREATE_TASK_CONFIRM)
 
 def format_task_confirmation(template, chat_name=None):
     """Форматирует подтверждение создания задачи"""
@@ -368,18 +323,7 @@ async def create_task_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     elif user_choice == "🔙 Назад":
         # Возвращаемся к выбору чата
-        accessible_chats = context.user_data['accessible_chats']
-        message = "💬 **Выберите Telegram чат для отправки:**\n\n"
-        for i, chat in enumerate(accessible_chats, 1):
-            message += f"{i}. {chat['chat_name']} (ID: {chat['chat_id']})\n"
-        message += "\nВведите номер чата:"
-        
-        await update.message.reply_text(
-            message,
-            parse_mode='Markdown',
-            reply_markup=get_back_keyboard()
-        )
-        return CREATE_TASK_CHAT_SELECT
+        return await chat_selection_manager.go_back_to_template_selection(update, context)
     
     else:
         await update.message.reply_text(
@@ -473,7 +417,7 @@ async def deactivate_task_select_group(update: Update, context: ContextTypes.DEF
     user_id = update.effective_user.id
     
     # Если нажата кнопка "Назад"
-    if user_text == "🔙 Назад":
+    if user_text == "🔙 К задачам":
         await tasks_main(update, context)
         return TASKS_MAIN
     
@@ -675,26 +619,34 @@ async def test_task_select_template(update: Update, context: ContextTypes.DEFAUL
     """Выбор шаблона для тестирования"""
     return await create_task_select_template(update, context)
 
+async def test_task_select_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка выбора чата для тестовой задачи"""
+    return await chat_selection_manager.handle_chat_selection(update, context, TEST_TASK_CONFIRM)
+
 async def test_task_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Подтверждение тестирования"""
     user_choice = update.message.text
     task_data = context.user_data['task_creation']
     template = task_data['template']
+    target_chat_id = task_data.get('target_chat_id')
     
     if user_choice == "✅ Подтвердить":
         success, task_id = create_task_from_template(
             template, 
             task_data['created_by'],
-            is_test=task_data.get('is_test', True)
+            is_test=task_data.get('is_test', True),
+            target_chat_id=target_chat_id
         )
         
         if success:
             # Для тестовых задач сразу выполняем отправку
             from task_scheduler import execute_test_task
-            await execute_test_task(template, update, context)
+            await execute_test_task(template, update, context, target_chat_id)
+            
+            chat_info = f" в чате '{task_data.get('target_chat_name', 'Не указан')}'" if target_chat_id else ""
             
             await update.message.reply_text(
-                f"✅ Тестовая задача успешно создана и отправлена!\n\n"
+                f"✅ Тестовая задача успешно создана и отправлена{chat_info}!\n\n"
                 f"ID задачи: `{task_id}`",
                 parse_mode='Markdown',
                 reply_markup=get_tasks_main_keyboard()
@@ -717,22 +669,8 @@ async def test_task_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return CREATE_TASK_EDIT
     
     elif user_choice == "🔙 Назад":
-        # Возвращаемся к выбору шаблона
-        group_id = context.user_data['task_creation']['group']
-        templates = get_templates_by_group(group_id)
-        
-        # Создаем клавиатуру с шаблонами
-        keyboard = []
-        for template_id, template in templates:
-            keyboard.append([f"📝 {template['name']}"])
-        
-        keyboard.append(["🔙 Назад"])
-        
-        await update.message.reply_text(
-            "🔄 **Выберите шаблон:**",
-            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-        )
-        return TEST_TASK_SELECT
+        # Возвращаемся к выбору чата
+        return await chat_selection_manager.go_back_to_template_selection(update, context)
     
     else:
         await update.message.reply_text(
@@ -760,8 +698,10 @@ async def show_tasks_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     for i, (task_id, task) in enumerate(active_tasks.items(), 1):
         task_type = "🧪 Тест" if task.get('is_test') else "📅 Регулярная"
-        message_text += f"{i}. **{task['template_name']}** ({task_type})\n"
-        message_text += f"   🏷️ Группа: {task.get('group', 'Не указана')}\n"
+        chat_info = f" (💬 {task.get('target_chat_id', 'Не указан')})" if task.get('target_chat_id') else ""
+        
+        message_text += f"{i}. **{task['template_name']}** ({task_type}){chat_info}\n"
+        message_text += f"   🏷️ Группа: {task.get('group_name', 'Не указана')}\n"
         message_text += f"   ⏰ Время: {task.get('time', 'Не указано')}\n"
         
         if task.get('next_execution'):
@@ -812,7 +752,7 @@ def get_task_conversation_handler():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, create_task_select_group),
                 MessageHandler(filters.Regex("^🚗 Hongqi$"), create_task_select_group),
                 MessageHandler(filters.Regex("^🚙 TurboMatiz$"), create_task_select_group),
-                MessageHandler(filters.Regex("^🔙 Назад$"), tasks_main)
+                MessageHandler(filters.Regex("^🔙 К задачам$"), tasks_main)
             ],
             CREATE_TASK_SELECT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, create_task_select_template),
@@ -842,7 +782,7 @@ def get_task_conversation_handler():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, deactivate_task_select_group),
                 MessageHandler(filters.Regex("^🚗 Hongqi$"), deactivate_task_select_group),
                 MessageHandler(filters.Regex("^🚙 TurboMatiz$"), deactivate_task_select_group),
-                MessageHandler(filters.Regex("^🔙 Назад$"), tasks_main)
+                MessageHandler(filters.Regex("^🔙 К задачам$"), tasks_main)
             ],
             DEACTIVATE_TASK_SELECT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, deactivate_task_select_task),
@@ -861,7 +801,7 @@ def get_task_conversation_handler():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, test_task_select_group),
                 MessageHandler(filters.Regex("^🚗 Hongqi$"), test_task_select_group),
                 MessageHandler(filters.Regex("^🚙 TurboMatiz$"), test_task_select_group),
-                MessageHandler(filters.Regex("^🔙 Назад$"), tasks_main)
+                MessageHandler(filters.Regex("^🔙 К задачам$"), tasks_main)
             ],
             TEST_TASK_SELECT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, test_task_select_template),
@@ -869,14 +809,14 @@ def get_task_conversation_handler():
                 MessageHandler(filters.Regex("^🔙 Назад$"), test_task_start)
             ],
             TEST_TASK_CHAT_SELECT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, create_task_select_chat),  # Используем ту же функцию что и для обычных задач
+                MessageHandler(filters.TEXT & ~filters.COMMAND, test_task_select_chat),
                 MessageHandler(filters.Regex("^🔙 Назад$"), test_task_select_template)
             ],
             TEST_TASK_CONFIRM: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, test_task_confirm),
                 MessageHandler(filters.Regex("^✅ Подтвердить$"), test_task_confirm),
                 MessageHandler(filters.Regex("^✏️ Изменить$"), test_task_confirm),
-                MessageHandler(filters.Regex("^🔙 Назад$"), test_task_select_template)
+                MessageHandler(filters.Regex("^🔙 Назад$"), test_task_select_chat)
             ],
         },
         fallbacks=[CommandHandler("cancel", cancel_task)]
