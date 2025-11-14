@@ -1,6 +1,6 @@
 from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler
-from keyboards.main_keyboards import get_simple_keyboard
+from keyboards.main_keyboards import get_main_keyboard, get_simple_keyboard
 from auth_manager import auth_manager
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -28,15 +28,20 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "ℹ️ Помощь":
         from handlers.start_handlers import help_command
         await help_command(update, context)
+        return ConversationHandler.END
 
     elif text == "🆔 Мой ID":
         from handlers.start_handlers import my_id
         await my_id(update, context)
+        return ConversationHandler.END
 
     elif text == "🔙 Главное меню":
+        # Очищаем временные данные
+        context.user_data.clear()
+        
         await update.message.reply_text(
             "🔙 Возврат в главное меню",
-            reply_markup=get_simple_keyboard(user_id)
+            reply_markup=get_main_keyboard(user_id)
         )
         return ConversationHandler.END
 
@@ -44,8 +49,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "❌ Неизвестная команда\n"
             "Используйте кнопки меню или /help для справки",
-            reply_markup=get_simple_keyboard(user_id)
+            reply_markup=get_main_keyboard(user_id)
         )
+        return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Отмена любого действия"""
@@ -59,6 +65,6 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         "❌ Действие отменено",
-        reply_markup=get_simple_keyboard(user_id)
+        reply_markup=get_main_keyboard(user_id)
     )
     return ConversationHandler.END
