@@ -1,6 +1,6 @@
 from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler
-from keyboards.main_keyboards import get_main_keyboard, get_simple_keyboard
+from keyboards.main_keyboards import get_main_keyboard
 from auth_manager import auth_manager
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -29,7 +29,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from handlers.start_handlers import help_command
         await help_command(update, context)
         return ConversationHandler.END
-
+        
     elif text == "🆔 Мой ID":
         from handlers.start_handlers import my_id
         await my_id(update, context)
