@@ -56,16 +56,6 @@ async def templates_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return TEMPLATE_MAIN
 
-async def templates_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Главное меню шаблонов"""
-    await update.message.reply_text(
-        "🎯 **Управление шаблонами**\n\n"
-        "Выберите действие:",
-        parse_mode='Markdown',
-        reply_markup=get_templates_main_keyboard()
-    )
-    return TEMPLATES_MAIN
-
 # ===== СПИСОК ШАБЛОНОВ =====
 
 async def template_list_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
