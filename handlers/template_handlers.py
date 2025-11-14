@@ -1561,7 +1561,7 @@ def get_template_conversation_handler():
     return ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("^📋 Шаблоны$"), templates_main)],
         states={
-            TEMPLATE_MAIN: [  # ИСПРАВЛЕНО: было TEMPLATES_MAIN
+            TEMPLATES_MAIN: [  # ИСПРАВЛЕНО: было TEMPLATES_MAIN
                 MessageHandler(filters.Regex("^➕ Создать шаблон$"), create_template_start),
                 MessageHandler(filters.Regex("^📋 Список шаблонов$"), template_list_start),
                 MessageHandler(filters.Regex("^✏️ Редактировать шаблон$"), edit_template_start),
