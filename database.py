@@ -10,7 +10,7 @@ class DatabaseManager:
         if not self.connection_string:
             logging.error("❌ DATABASE_URL не найден в переменных окружения")
             print("❌ DATABASE_URL не найден в переменных окружения")
-        
+    
     def get_connection(self):
         """Возвращает соединение с базой данных"""
         try:
@@ -22,154 +22,143 @@ class DatabaseManager:
             return None
     
     def init_database(self):
-    """Инициализирует все таблицы в базе данных"""
-    print("🔄 Инициализация базы данных...")
-    
-    conn = self.get_connection()
-    if not conn:
-        print("❌ Не удалось подключиться к базе данных для инициализации")
-        return False
-    
-    try:
-        cursor = conn.cursor()
+        """Инициализирует все таблицы в базе данных"""
+        print("🔄 Инициализация базы данных...")
         
-        # ===== ТАБЛИЦА ШАБЛОНОВ =====
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS templates (
-                id VARCHAR(20) PRIMARY KEY,
-                name TEXT NOT NULL,
-                group_name TEXT NOT NULL,
-                text TEXT,
-                image_path TEXT,
-                time TEXT,
-                days JSONB,
-                frequency TEXT,
-                created_by BIGINT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                subgroup TEXT
-            )
-        ''')
-        print("✅ Таблица 'templates' создана/проверена")
+        conn = self.get_connection()
+        if not conn:
+            print("❌ Не удалось подключиться к базе данных для инициализации")
+            return False
         
-        # ===== ТАБЛИЦА ГРУПП ШАБЛОНОВ =====
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS template_groups (
-                id VARCHAR(50) PRIMARY KEY,
-                name TEXT NOT NULL,
-                allowed_users JSONB DEFAULT '[]'::jsonb
-            )
-        ''')
-        print("✅ Таблица 'template_groups' создана/проверена")
-        
-        # ===== ТАБЛИЦА ПОЛЬЗОВАТЕЛЕЙ =====
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                user_id BIGINT PRIMARY KEY,
-                username TEXT,
-                full_name TEXT NOT NULL,
-                role TEXT DEFAULT 'guest',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                is_active BOOLEAN DEFAULT TRUE
-            )
-        ''')
-        print("✅ Таблица 'users' создана/проверена")
-        
-        # ===== ТАБЛИЦА TELEGRAM ЧАТОВ =====
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS telegram_chats (
-                chat_id BIGINT PRIMARY KEY,
-                chat_name TEXT NOT NULL,
-                original_name TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                is_active BOOLEAN DEFAULT TRUE
-            )
-        ''')
-        print("✅ Таблица 'telegram_chats' создана/проверена")
-        
-        # ===== ТАБЛИЦА СВЯЗИ ПОЛЬЗОВАТЕЛЕЙ И TELEGRAM ЧАТОВ =====
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS user_chat_access (
-                id SERIAL PRIMARY KEY,
-                user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
-                chat_id BIGINT REFERENCES telegram_chats(chat_id) ON DELETE CASCADE,
-                granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(user_id, chat_id)
-            )
-        ''')
-        print("✅ Таблица 'user_chat_access' создана/проверена")
-        
-        # ===== ТАБЛИЦА СВЯЗИ ПОЛЬЗОВАТЕЛЕЙ И ГРУПП ШАБЛОНОВ =====
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS user_template_group_access (
-                id SERIAL PRIMARY KEY,
-                user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
-                group_id VARCHAR(50) REFERENCES template_groups(id) ON DELETE CASCADE,
-                granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(user_id, group_id)
-            )
-        ''')
-        print("✅ Таблица 'user_template_group_access' создана/проверена")
-        
-        # ===== ТАБЛИЦА ЗАДАЧ =====
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS tasks (
-                id VARCHAR(20) PRIMARY KEY,
-                template_id VARCHAR(20),
-                template_name TEXT NOT NULL,
-                template_text TEXT,
-                template_image TEXT,
-                group_name TEXT NOT NULL,
-                time TEXT,
-                days JSONB,
-                frequency TEXT,
-                created_by BIGINT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                is_active BOOLEAN DEFAULT TRUE,
-                is_test BOOLEAN DEFAULT FALSE,
-                last_executed TIMESTAMP,
-                next_execution TIMESTAMP,
-                target_chat_id BIGINT  -- НОВЫЙ СТОЛБЕЦ ДЛЯ ЦЕЛЕВОГО ЧАТА
-            )
-        ''')
-        print("✅ Таблица 'tasks' создана/проверена")
-        
-        # ===== ДАННЫЕ ПО УМОЛЧАНИЮ =====
-        
-        # Группы шаблонов по умолчанию
-        cursor.execute('''
-            INSERT INTO template_groups (id, name, allowed_users) 
-            VALUES 
-            ('hongqi', '🚗 Hongqi', '[]'::jsonb),
-            ('turbomatiz', '🚙 TurboMatiz', '[]'::jsonb)
-            ON CONFLICT (id) DO NOTHING
-        ''')
-        print("✅ Группы шаблонов по умолчанию добавлены")
-        
-        # Администратор по умолчанию
-        cursor.execute('''
-            INSERT INTO users (user_id, username, full_name, role) 
-            VALUES (812934047, 'admin', 'Administrator', 'admin')
-            ON CONFLICT (user_id) DO NOTHING
-        ''')
-        print("✅ Администратор по умолчанию добавлен")
-        
-        conn.commit()
-        cursor.close()
-        conn.close()
-        
-        print("✅ База данных полностью инициализирована")
-        return True
-        
-    except Exception as e:
-        print(f"❌ Ошибка инициализации базы данных: {e}")
-        import traceback
-        traceback.print_exc()
         try:
-            conn.rollback()
+            cursor = conn.cursor()
+            
+            # ===== ТАБЛИЦА ШАБЛОНОВ =====
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS templates (
+                    id VARCHAR(20) PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    group_name TEXT NOT NULL,
+                    text TEXT,
+                    image_path TEXT,
+                    time TEXT,
+                    days JSONB,
+                    frequency TEXT,
+                    created_by BIGINT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    subgroup TEXT
+                )
+            ''')
+            print("✅ Таблица 'templates' создана/проверена")
+            
+            # ===== ТАБЛИЦА ГРУПП ШАБЛОНОВ =====
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS template_groups (
+                    id VARCHAR(50) PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    allowed_users JSONB DEFAULT '[]'::jsonb
+                )
+            ''')
+            print("✅ Таблица 'template_groups' создана/проверена")
+            
+            # ===== ТАБЛИЦА ПОЛЬЗОВАТЕЛЕЙ =====
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id BIGINT PRIMARY KEY,
+                    username TEXT,
+                    full_name TEXT NOT NULL,
+                    role TEXT DEFAULT 'guest',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_active BOOLEAN DEFAULT TRUE
+                )
+            ''')
+            print("✅ Таблица 'users' создана/проверена")
+            
+            # ===== ТАБЛИЦА TELEGRAM ЧАТОВ =====
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS telegram_chats (
+                    chat_id BIGINT PRIMARY KEY,
+                    chat_name TEXT NOT NULL,
+                    original_name TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_active BOOLEAN DEFAULT TRUE
+                )
+            ''')
+            print("✅ Таблица 'telegram_chats' создана/проверена")
+            
+            # ===== ТАБЛИЦА СВЯЗИ ПОЛЬЗОВАТЕЛЕЙ И TELEGRAM ЧАТОВ =====
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_chat_access (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
+                    chat_id BIGINT REFERENCES telegram_chats(chat_id) ON DELETE CASCADE,
+                    granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id, chat_id)
+                )
+            ''')
+            print("✅ Таблица 'user_chat_access' создана/проверена")
+            
+            # ===== ТАБЛИЦА СВЯЗИ ПОЛЬЗОВАТЕЛЕЙ И ГРУПП ШАБЛОНОВ =====
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_template_group_access (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
+                    group_id VARCHAR(50) REFERENCES template_groups(id) ON DELETE CASCADE,
+                    granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id, group_id)
+                )
+            ''')
+            print("✅ Таблица 'user_template_group_access' создана/проверена")
+            
+            # ===== ТАБЛИЦА ЗАДАЧ =====
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS tasks (
+                    id VARCHAR(20) PRIMARY KEY,
+                    template_id VARCHAR(20),
+                    template_name TEXT NOT NULL,
+                    template_text TEXT,
+                    template_image TEXT,
+                    group_name TEXT NOT NULL,
+                    time TEXT,
+                    days JSONB,
+                    frequency TEXT,
+                    created_by BIGINT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    is_test BOOLEAN DEFAULT FALSE,
+                    last_executed TIMESTAMP,
+                    next_execution TIMESTAMP,
+                    target_chat_id BIGINT  -- НОВЫЙ СТОЛБЕЦ ДЛЯ ЦЕЛЕВОГО ЧАТА
+                )
+            ''')
+            print("✅ Таблица 'tasks' создана/проверена")
+            
+            # ===== ДАННЫЕ ПО УМОЛЧАНИЮ =====
+            
+            # Группы шаблонов по умолчанию
+            cursor.execute('''
+                INSERT INTO template_groups (id, name, allowed_users) 
+                VALUES 
+                ('hongqi', '🚗 Hongqi', '[]'::jsonb),
+                ('turbomatiz', '🚙 TurboMatiz', '[]'::jsonb)
+                ON CONFLICT (id) DO NOTHING
+            ''')
+            print("✅ Группы шаблонов по умолчанию добавлены")
+            
+            # Администратор по умолчанию
+            cursor.execute('''
+                INSERT INTO users (user_id, username, full_name, role) 
+                VALUES (812934047, 'admin', 'Administrator', 'admin')
+                ON CONFLICT (user_id) DO NOTHING
+            ''')
+            print("✅ Администратор по умолчанию добавлен")
+            
+            conn.commit()
+            cursor.close()
             conn.close()
-        except:
-            pass
-        return False
+            
+            print("✅ База данных полностью инициализирована")
+            return True
             
         except Exception as e:
             print(f"❌ Ошибка инициализации базы данных: {e}")
@@ -181,6 +170,8 @@ class DatabaseManager:
             except:
                 pass
             return False
+
+    # ... остальные методы остаются без изменений
     
     # ===== МЕТОДЫ ДЛЯ ШАБЛОНОВ =====
     
