@@ -1571,7 +1571,7 @@ def get_template_conversation_handler():
     return ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("^📋 Шаблоны$"), templates_main)],
         states={
-            TEMPLATES_MAIN: [  # ИСПРАВЛЕНО: было TEMPLATES_MAIN
+            TEMPLATES_MAIN: [
                 MessageHandler(filters.Regex("^➕ Создать шаблон$"), create_template_start),
                 MessageHandler(filters.Regex("^📋 Список шаблонов$"), template_list_start),
                 MessageHandler(filters.Regex("^✏️ Редактировать шаблон$"), edit_template_start),
@@ -1579,6 +1579,7 @@ def get_template_conversation_handler():
                 MessageHandler(filters.Regex("^🔙 Главное меню$"), cancel_template)
             ],
             
+            # === СОЗДАНИЕ ШАБЛОНА ===
             CREATE_TEMPLATE_GROUP: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, create_template_choose_group),
                 MessageHandler(filters.Regex("^🔙 Назад$"), templates_main)
@@ -1625,21 +1626,18 @@ def get_template_conversation_handler():
                 MessageHandler(filters.Regex("^🔙 Назад$"), create_template_choose_frequency)
             ],
             
-            TEMPLATE_LIST: [  # ИСПРАВЛЕНО: было TEMPLATES_LIST если есть
+            # === ПРОСМОТР ШАБЛОНОВ ===
+            TEMPLATE_LIST: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, template_list_handle),
                 MessageHandler(filters.Regex("^🔙 К шаблонам$"), templates_main)
             ],
             
-            TEMPLATE_LIST_CHOOSE_GROUP: [  # ИСПРАВЛЕНО: было TEMPLATES_LIST_CHOOSE_GROUP если есть
+            TEMPLATE_LIST_CHOOSE_GROUP: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, template_list_choose_group),
                 MessageHandler(filters.Regex("^🔙 Назад$"), template_list_start)
             ],
             
-            TEMPLATE_DETAILS: [  # ИСПРАВЛЕНО: было TEMPLATES_DETAILS если есть
-                MessageHandler(filters.TEXT & ~filters.COMMAND, template_details_handle),
-                MessageHandler(filters.Regex("^🔙 К списку$"), template_list_start)
-            ],
-            
+            # === УДАЛЕНИЕ ШАБЛОНОВ ===
             DELETE_TEMPLATE_SELECT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, delete_template_select),
                 MessageHandler(filters.Regex("^🔙 Назад$"), templates_main)
