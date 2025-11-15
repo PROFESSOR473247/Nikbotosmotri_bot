@@ -269,7 +269,9 @@ class AuthManager:
         """Инициализирует суперадминистратора при запуске"""
         try:
             # Гарантируем, что суперадмин существует и имеет правильную роль
-            from handlers.start_handlers import get_user_display_name
+    def get_user_display_name(user_id):
+        """Простая заглушка для получения имени пользователя"""
+            return f"User {user_id}"
             
             full_name = get_user_display_name(self.superadmin_id)
             success, message = self.register_user(
