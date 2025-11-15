@@ -557,6 +557,35 @@ def update_task_execution_time(task_id):
         print(f"❌ Ошибка обновления времени выполнения задачи {task_id}: {e}")
         return False
         
+        def calculate_next_execution(task):
+    """Рассчитывает следующее время выполнения задачи"""
+    try:
+        from datetime import datetime, timedelta
+        
+        if not task.get('days') or not task.get('time'):
+            return None
+            
+        current_time = datetime.now()
+        current_weekday = current_time.weekday()
+        task_days = [int(day) for day in task['days']]
+        
+        # Находим следующий день выполнения
+        for day_offset in range(1, 8):
+            next_day = (current_weekday + day_offset) % 7
+            if str(next_day) in task_days:
+                next_date = current_time + timedelta(days=day_offset)
+                
+                # Устанавливаем время выполнения
+                hour, minute = map(int, task['time'].split(':'))
+                next_execution = next_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                
+                return next_execution.strftime("%Y-%m-%d %H:%M:%S")
+        
+        return None
+    except Exception as e:
+        print(f"❌ Ошибка расчета следующего выполнения задачи: {e}")
+        return None
+        
         # Добавить в конец task_manager.py перед последними строками инициализации
 
 def create_task_from_template(template, target_chat_id=None, is_test=False):
