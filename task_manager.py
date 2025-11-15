@@ -125,7 +125,7 @@ def create_task(task_data):
         return False, None
 
 def load_tasks():
-    """Загружает все задачи из базы данных"""
+    """Загружает все задачи из базу данных"""
     try:
         return db.load_tasks()
     except Exception as e:
@@ -213,66 +213,238 @@ def format_task_info(task):
         print(f"❌ Ошибка форматирования информации о задаче: {e}")
         return "❌ Ошибка загрузки информации о задаче"
 
-def get_task_target_chat(task_id):
-    """Возвращает ID целевого чата для задачи"""
+def format_task_list_info(tasks):
+    """Форматирует список задач для отображения"""
     try:
-        all_tasks = load_tasks_from_db()
-        task = all_tasks.get(task_id)
-        return task.get('target_chat_id') if task else None
+        if not tasks:
+            return "📭 Активных задач нет"
+        
+        message = "📋 **Список активных задач:**\n\n"
+        
+        for i, (task_id, task) in enumerate(tasks.items(), 1):
+            days_count = len(safe_get_task_value(task, 'days', []))
+            has_image = "🖼️" if task.get('template_image') else ""
+            task_name = safe_get_task_value(task, 'template_name', 'Без названия')
+            task_group = safe_get_task_value(task, 'group_name', 'Не указана')
+            task_time = safe_get_task_value(task, 'time', 'Не указано')
+            task_text = safe_get_task_value(task, 'template_text', '')
+            
+            message += f"{i}. **{task_name}** {has_image}\n"
+            message += f"   🏷️ Группа: {task_group}\n"
+            message += f"   ⏰ Время: {task_time}\n"
+            message += f"   📅 Дней: {days_count}\n"
+            message += f"   📄 Текст: {task_text[:50]}...\n\n"
+        
+        return message
     except Exception as e:
-        print(f"❌ Ошибка получения целевого чата для задачи {task_id}: {e}")
+        print(f"❌ Ошибка форматирования списка задач: {e}")
+        return "❌ Ошибка загрузки списка задач"
+
+def format_task_preview(task):
+    """Форматирует превью задачи"""
+    try:
+        days_names = safe_format_days_list(task.get('days', []))
+        frequency = safe_get_frequency_name(task.get('frequency', 'Не указана'))
+        
+        task_name = safe_get_task_value(task, 'template_name', 'Без названия')
+        task_text = safe_get_task_value(task, 'template_text', '')
+        task_time = safe_get_task_value(task, 'time', '')
+        
+        preview = f"📝 **{task_name}**\n\n"
+        preview += f"📄 {task_text}\n\n"
+        
+        if task.get('template_image'):
+            preview += "🖼️ *Есть изображение*\n"
+        
+        if task_time:
+            preview += f"⏰ Время отправки: {task_time} (МСК)\n"
+        
+        if days_names:
+            preview += f"📅 Дни: {', '.join(days_names)}\n"
+        
+        preview += f"🔄 Периодичность: {frequency}"
+        
+        return preview
+    except Exception as e:
+        print(f"❌ Ошибка форматирования превью задачи: {e}")
+        return "❌ Ошибка загрузки превью задачи"
+
+def create_task_id():
+    """Создает уникальный ID для задачи"""
+    try:
+        return str(uuid.uuid4())[:8]
+    except Exception as e:
+        print(f"❌ Ошибка создания ID задачи: {e}")
+        return str(int(datetime.now().timestamp()))[-8:]
+
+def update_task(task_id, task_data):
+    """Обновляет задачу"""
+    try:
+        task_data['id'] = task_id
+        return save_task(task_data)
+    except Exception as e:
+        print(f"❌ Ошибка обновления задачи {task_id}: {e}")
+        return False
+
+def update_task_field(task_id, field_name, field_value):
+    """Обновляет конкретное поле задачи"""
+    try:
+        task = get_task_by_id(task_id)
+        if not task:
+            return False, "Задача не найдена"
+        
+        task[field_name] = field_value
+        return update_task(task_id, task)
+    except Exception as e:
+        print(f"❌ Ошибка обновления поля {field_name} задачи {task_id}: {e}")
+        return False, f"Ошибка обновления: {e}"
+
+def activate_task(task_id):
+    """Активирует задачу"""
+    try:
+        return update_task_field(task_id, 'is_active', True)
+    except Exception as e:
+        print(f"❌ Ошибка активации задачи {task_id}: {e}")
+        return False, f"Ошибка активации: {e}"
+
+def deactivate_task(task_id):
+    """Деактивирует задачу"""
+    try:
+        return update_task_field(task_id, 'is_active', False)
+    except Exception as e:
+        print(f"❌ Ошибка деактивации задачи {task_id}: {e}")
+        return False, f"Ошибка деактивации: {e}"
+
+def get_tasks_by_group(group_id):
+    """Возвращает задачи определенной группы"""
+    try:
+        tasks = get_all_active_tasks()
+        group_tasks = {}
+        
+        for task_id, task in tasks.items():
+            if task.get('group_name') == group_id:
+                group_tasks[task_id] = task
+        
+        return group_tasks
+    except Exception as e:
+        print(f"❌ Ошибка получения задач группы {group_id}: {e}")
+        return {}
+
+def get_task_stats():
+    """Возвращает статистику по задачам"""
+    try:
+        all_tasks = load_tasks()
+        active_tasks = get_all_active_tasks()
+        
+        stats = {
+            'total_tasks': len(all_tasks),
+            'active_tasks': len(active_tasks),
+            'inactive_tasks': len(all_tasks) - len(active_tasks),
+            'tasks_with_images': 0,
+            'tasks_with_schedule': 0
+        }
+        
+        for task in all_tasks.values():
+            if task.get('template_image'):
+                stats['tasks_with_images'] += 1
+            if task.get('time') and task.get('days'):
+                stats['tasks_with_schedule'] += 1
+        
+        return stats
+    except Exception as e:
+        print(f"❌ Ошибка получения статистики задач: {e}")
+        return {
+            'total_tasks': 0,
+            'active_tasks': 0,
+            'inactive_tasks': 0,
+            'tasks_with_images': 0,
+            'tasks_with_schedule': 0
+        }
+
+# ===== ФУНКЦИИ ДЛЯ РАБОТЫ С ИЗОБРАЖЕНИЯМИ =====
+
+def save_task_image(image_file, task_id):
+    """Сохраняет изображение для задачи"""
+    try:
+        # Создаем уникальное имя файла
+        file_extension = os.path.splitext(image_file.filename)[1] if hasattr(image_file, 'filename') else '.jpg'
+        image_filename = f"{task_id}{file_extension}"
+        image_path = os.path.join(TASK_IMAGES_DIR, image_filename)
+        
+        # Сохраняем файл
+        with open(image_path, 'wb') as f:
+            if hasattr(image_file, 'getvalue'):
+                f.write(image_file.getvalue())
+            else:
+                f.write(image_file)
+        
+        print(f"✅ Изображение задачи сохранено: {image_path}")
+        return image_path
+        
+    except Exception as e:
+        print(f"❌ Ошибка сохранения изображения задачи: {e}")
         return None
 
-def update_task_execution_time(task_id, next_execution):
-    """Обновляет время следующего выполнения задачи"""
+def delete_task_image(image_path):
+    """Удаляет изображение задачи"""
     try:
-        all_tasks = load_tasks_from_db()
-        message = f"**🏷️ Группа: {group_name}**\n\n"
-
-        if task_id in all_tasks:
-            task = all_tasks[task_id]
-            task['last_executed'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            task['next_execution'] = next_execution
-        for i, (template_id, template) in enumerate(templates, 1):
-            days_names = safe_format_days_list(template.get('days', []))
-            frequency = safe_get_frequency_name(template.get('frequency', 'Не указана'))
-            has_image = "✅ Есть" if template.get('image') else "❌ Нет"
-
-            success = update_task_in_db(task_id, task)
-            return success
-        
+        if image_path and os.path.exists(image_path):
+            os.remove(image_path)
+            print(f"✅ Изображение задачи удалено: {image_path}")
+            return True
         return False
+    except Exception as e:
+        print(f"❌ Ошибка удаления изображения задачи: {e}")
+        return False
+
+def get_task_image_path(task_id):
+    """Возвращает путь к изображению задачи"""
+    try:
+        # Ищем файл с любым расширением
+        if not os.path.exists(TASK_IMAGES_DIR):
+            return None
+        
+        for filename in os.listdir(TASK_IMAGES_DIR):
+            if filename.startswith(task_id):
+                return os.path.join(TASK_IMAGES_DIR, filename)
+        
+        return None
+    except Exception as e:
+        print(f"❌ Ошибка получения пути изображения для задачи {task_id}: {e}")
+        return None
+
+# ===== ФУНКЦИИ ДЛЯ ПЛАНИРОВЩИКА =====
+
+def get_tasks_for_execution():
+    """Возвращает задачи, готовые к выполнению"""
+    try:
+        active_tasks = get_all_active_tasks()
+        tasks_to_execute = {}
+        
+        current_time = datetime.now()
+        current_weekday = str(current_time.weekday())  # 0-6, где 0 - понедельник
+        
+        for task_id, task in active_tasks.items():
+            # Проверяем, сегодня ли день выполнения
+            if current_weekday in task.get('days', []):
+                tasks_to_execute[task_id] = task
+        
+        return tasks_to_execute
+    except Exception as e:
+        print(f"❌ Ошибка получения задач для выполнения: {e}")
+        return {}
+
+def update_task_execution_time(task_id):
+    """Обновляет время последнего выполнения задачи"""
+    try:
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return update_task_field(task_id, 'last_executed', current_time)
     except Exception as e:
         print(f"❌ Ошибка обновления времени выполнения задачи {task_id}: {e}")
         return False
 
-def init_task_files():
-    """Инициализирует файлы задач (для обратной совместимости)"""
-    try:
-        # Для PostgreSQL файлы не нужны, но оставляем для совместимости
-        data_dir = "data"
-        if not os.path.exists(data_dir):
-            os.makedirs(data_dir)
-        
-        task_files = ['active_tasks.json', 'test_tasks.json']
-        for file in task_files:
-            file_path = os.path.join(data_dir, file)
-            if not os.path.exists(file_path):
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    json.dump({}, f, ensure_ascii=False, indent=2)
-        
-        print("✅ Файлы задач инициализированы")
-        return True
-            message += f"**{i}. {template['name']}**\n"
-            message += f"   📄 Текст: {template['text'][:80]}...\n"
-            message += f"   🖼️ Изображение: {has_image}\n"
-            message += f"   ⏰ Время: {template.get('time', 'Не указано')}\n"
-            message += f"   📅 Дни: {', '.join(days_names) if days_names else 'Не указаны'}\n"
-            message += f"   🔄 Периодичность: {frequency}\n\n"
-        
-        return message
-    except Exception as e:
-        print(f"❌ Ошибка инициализации файлов задач: {e}")
-        return False
-        print(f"❌ Ошибка форматирования детальной информации группы {group_id}: {e}")
-        return f"❌ Ошибка загрузки информации о группе"
+# Инициализация при импорте
+print("📥 Task_manager загружен")
+init_task_files()
+init_database()
+print("✅ Task_manager инициализирован")
