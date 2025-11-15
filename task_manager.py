@@ -442,6 +442,139 @@ def update_task_execution_time(task_id):
     except Exception as e:
         print(f"❌ Ошибка обновления времени выполнения задачи {task_id}: {e}")
         return False
+        
+        # Добавить в конец task_manager.py перед последними строками инициализации
+
+def create_task_from_template(template, target_chat_id=None, is_test=False):
+    """Создает задачу на основе шаблона"""
+    try:
+        task_data = {
+            'template_id': template.get('id'),
+            'template_name': template.get('name', 'Без названия'),
+            'template_text': template.get('text', ''),
+            'template_image': template.get('image'),
+            'group_name': template.get('group', ''),
+            'time': template.get('time', ''),
+            'days': template.get('days', []),
+            'frequency': template.get('frequency', 'weekly'),
+            'created_by': template.get('created_by'),
+            'is_active': True,
+            'is_test': is_test,
+            'target_chat_id': target_chat_id
+        }
+        
+        success, task_id = create_task(task_data)
+        return success, task_id
+        
+    except Exception as e:
+        print(f"❌ Ошибка создания задачи из шаблона: {e}")
+        return False, None
+
+def get_tasks_by_template(template_id):
+    """Возвращает задачи, созданные на основе указанного шаблона"""
+    try:
+        all_tasks = load_tasks()
+        template_tasks = {}
+        
+        for task_id, task in all_tasks.items():
+            if task.get('template_id') == template_id:
+                template_tasks[task_id] = task
+        
+        return template_tasks
+    except Exception as e:
+        print(f"❌ Ошибка получения задач по шаблону {template_id}: {e}")
+        return {}
+
+def format_template_tasks_info(template_id):
+    """Форматирует информацию о задачах, созданных из шаблона"""
+    try:
+        tasks = get_tasks_by_template(template_id)
+        
+        if not tasks:
+            return "📭 Нет задач, созданных из этого шаблона"
+        
+        message = f"📋 **Задачи, созданные из шаблона:**\n\n"
+        
+        for i, (task_id, task) in enumerate(tasks.items(), 1):
+            is_active = "✅ Активна" if task.get('is_active', True) else "❌ Неактивна"
+            is_test = "🧪 Тестовая" if task.get('is_test', False) else "📤 Рабочая"
+            task_name = safe_get_task_value(task, 'template_name', 'Без названия')
+            
+            message += f"{i}. **{task_name}**\n"
+            message += f"   📊 Статус: {is_active} | {is_test}\n"
+            message += f"   🆔 ID задачи: `{task_id}`\n"
+            
+            if task.get('target_chat_id'):
+                message += f"   💬 Целевой чат: {task['target_chat_id']}\n"
+            
+            if task.get('last_executed'):
+                message += f"   ⏱️ Последний запуск: {task['last_executed']}\n"
+            
+            message += "\n"
+        
+        return message
+    except Exception as e:
+        print(f"❌ Ошибка форматирования информации о задачах шаблона: {e}")
+        return "❌ Ошибка загрузки информации о задачах"
+
+def validate_task_data(task_data):
+    """Проверяет данные задачи на валидность"""
+    try:
+        required_fields = ['template_name', 'group_name']
+        for field in required_fields:
+            if not task_data.get(field):
+                return False, f"Отсутствует обязательное поле: {field}"
+        
+        # Проверяем время
+        if task_data.get('time'):
+            try:
+                hour, minute = map(int, task_data['time'].split(':'))
+                if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                    return False, "Неверный формат времени"
+            except ValueError:
+                return False, "Неверный формат времени"
+        
+        return True, "OK"
+    except Exception as e:
+        print(f"❌ Ошибка валидации данных задачи: {e}")
+        return False, f"Ошибка валидации: {e}"
+
+def get_frequency_types():
+    """Возвращает доступные типы периодичности"""
+    return FREQUENCY_TYPES
+
+def get_week_days():
+    """Возвращает дни недели для выбора"""
+    return DAYS_OF_WEEK
+
+def delete_task_and_image(task_id):
+    """Удаляет задачу и связанное с ней изображение"""
+    try:
+        # Получаем информацию о задаче
+        task = get_task_by_id(task_id)
+        if not task:
+            return False, "Задача не найдена"
+        
+        # Удаляем изображение если есть
+        if task.get('template_image'):
+            delete_task_image(task['template_image'])
+        
+        # Удаляем задачу из базы данных
+        success = delete_task(task_id)
+        
+        if success:
+            return True, f"Задача '{task['template_name']}' успешно удалена"
+        else:
+            return False, "Ошибка при удалении задачи"
+    except Exception as e:
+        print(f"❌ Ошибка удаления задачи и изображения {task_id}: {e}")
+        return False, f"Ошибка удаления: {e}"
+
+# Инициализация при импорте
+print("📥 Task_manager загружен")
+init_task_files()
+init_database()
+print("✅ Task_manager инициализирован")
 
 # Инициализация при импорте
 print("📥 Task_manager загружен")
