@@ -443,6 +443,18 @@ def get_template_by_name(template_name):
         print(f"❌ Ошибка поиска шаблона по имени {template_name}: {e}")
         return None
 
+def get_template_by_name_and_group(template_name, group_id):
+    """Возвращает шаблон по имени и группе"""
+    try:
+        templates = get_templates_by_group(group_id)
+        for template_id, template in templates:
+            if template.get('name') == template_name:
+                return template_id, template
+        return None, None
+    except Exception as e:
+        print(f"❌ Ошибка поиска шаблона по имени {template_name} в группе {group_id}: {e}")
+        return None, None
+
 def template_exists(template_name, group_id):
     """Проверяет, существует ли шаблон с таким именем в группе"""
     try:
