@@ -557,7 +557,7 @@ def update_task_execution_time(task_id):
         print(f"❌ Ошибка обновления времени выполнения задачи {task_id}: {e}")
         return False
         
-        def calculate_next_execution(task):
+def calculate_next_execution(task):
     """Рассчитывает следующее время выполнения задачи"""
     try:
         from datetime import datetime, timedelta
