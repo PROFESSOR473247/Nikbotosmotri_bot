@@ -1214,10 +1214,9 @@ async def cancel_template(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def get_template_conversation_handler():
     """Возвращает настроенный ConversationHandler для шаблонов"""
-    return ConversationHandler()
-    entry_points=[MessageHandler(filters.Regex("^📋 Шаблоны$"), templates_main)],
-    states={
-        
+    return ConversationHandler(
+        entry_points=[MessageHandler(filters.Regex("^📋 Шаблоны$"), templates_main)],
+        states={
             # Главное меню шаблонов
             TEMPLATES_MAIN: [
                 MessageHandler(filters.Regex("^📋 Список шаблонов$"), template_list_menu),
@@ -1274,9 +1273,8 @@ def get_template_conversation_handler():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, create_template_confirm),
                 MessageHandler(filters.Regex("^🔙 Назад$"), create_template_frequency)
             ],
-    
-    # Редактирование шаблона
-    
+            
+            # Редактирование шаблона
             EDIT_TEMPLATE_SELECT_GROUP: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_select_group),
                 MessageHandler(filters.Regex("^🔙 Назад$"), templates_main)
@@ -1314,7 +1312,7 @@ def get_template_conversation_handler():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_frequency),
                 MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_choose_field)
             ],
-    
+            
             # Удаление шаблона
             DELETE_TEMPLATE_SELECT_GROUP: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, delete_template_select_group),
@@ -1329,3 +1327,5 @@ def get_template_conversation_handler():
                 MessageHandler(filters.Regex("^🔙 Назад$"), delete_template_select)
             ]
         },
+        fallbacks=[CommandHandler("cancel", cancel_template)]
+    )
