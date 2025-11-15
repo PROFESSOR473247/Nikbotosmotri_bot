@@ -1214,7 +1214,7 @@ async def cancel_template(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def get_template_conversation_handler():
     """Возвращает настроенный ConversationHandler для шаблонов"""
-    return ConversationHandler(
+    return ConversationHandler()
         entry_points=[MessageHandler(filters.Regex("^📋 Шаблоны$"), templates_main)],
         states={
             # Главное меню шаблонов
