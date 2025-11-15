@@ -327,6 +327,39 @@ def update_template_field(template_id, field_name, field_value):
         print(f"❌ Ошибка обновления поля {field_name} шаблона {template_id}: {e}")
         return False, f"Ошибка обновления: {e}"
 
+# Добавить в template_manager.py в раздел основных функций
+
+def get_template_groups_for_user(user_id):
+    """Возвращает группы шаблонов с шаблонами для пользователя"""
+    try:
+        accessible_groups = get_user_accessible_groups(user_id)
+        groups_with_templates = {}
+        
+        for group_id in accessible_groups:
+            templates = get_templates_by_group(group_id)
+            if templates:
+                groups_with_templates[group_id] = {
+                    'group_data': accessible_groups[group_id],
+                    'templates': templates
+                }
+        
+        return groups_with_templates
+    except Exception as e:
+        print(f"❌ Ошибка получения групп с шаблонами для пользователя {user_id}: {e}")
+        return {}
+
+def get_template_by_name_and_group(template_name, group_id):
+    """Возвращает шаблон по имени и группе"""
+    try:
+        templates = get_templates_by_group(group_id)
+        for template_id, template in templates:
+            if template.get('name') == template_name:
+                return template_id, template
+        return None, None
+    except Exception as e:
+        print(f"❌ Ошибка поиска шаблона по имени {template_name} в группе {group_id}: {e}")
+        return None, None
+
 # ===== ФУНКЦИИ ДЛЯ РАБОТЫ С ИЗОБРАЖЕНИЯМИ =====
 
 def save_image(image_file, template_id):
