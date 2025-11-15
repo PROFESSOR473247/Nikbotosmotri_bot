@@ -1045,20 +1045,155 @@ async def delete_template_start(update: Update, context: ContextTypes.DEFAULT_TY
     )
     return DELETE_TEMPLATE_SELECT_GROUP
 
-async def delete_template_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Выбор шаблона для удаления"""
+async def delete_template_select_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор группы для удаления"""
     user_text = update.message.text
     
     if user_text == "🔙 Назад":
         await templates_main(update, context)
         return TEMPLATES_MAIN
     
-    # TODO: Реализовать выбор шаблона для удаления
+    # Извлекаем название группы из текста
+    group_name = user_text.replace("🏷️ ", "").strip()
+    user_id = update.effective_user.id
+    
+    # Находим ID группы по имени
+    accessible_groups = get_user_accessible_groups(user_id)
+    group_id = None
+    group_data = None
+    
+    for gid, gdata in accessible_groups.items():
+        if gdata['name'] == group_name:
+            group_id = gid
+            group_data = gdata
+            break
+    
+    if not group_id:
+        await update.message.reply_text(
+            "❌ Группа не найдена",
+            reply_markup=get_groups_keyboard(user_id, "delete")
+        )
+        return DELETE_TEMPLATE_SELECT_GROUP
+    
+    # Получаем шаблоны этой группы
+    templates = get_templates_by_group(group_id)
+    
+    if not templates:
+        await update.message.reply_text(
+            f"📭 В группе '{group_name}' нет шаблонов для удаления",
+            reply_markup=get_templates_main_keyboard()
+        )
+        return TEMPLATES_MAIN
+    
+    # Сохраняем данные группы
+    context.user_data['delete_group_id'] = group_id
+    context.user_data['delete_group_name'] = group_name
+    
+    # Создаем клавиатуру с шаблонами
+    keyboard = []
+    for template_id, template in templates:
+        keyboard.append([f"🗑️ {template['name']}"])
+    
+    keyboard.append(["🔙 Назад"])
+    
     await update.message.reply_text(
-        "🗑️ **Удаление шаблонов**\n\n"
-        "Эта функция находится в разработке",
-        reply_markup=get_templates_main_keyboard()
+        f"🗑️ **Выберите шаблон для удаления:**\n\n"
+        f"Группа: {group_name}",
+        parse_mode='Markdown',
+        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     )
+    return DELETE_TEMPLATE_SELECT
+
+async def delete_template_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор шаблона для удаления"""
+    user_text = update.message.text
+    
+    if user_text == "🔙 Назад":
+        user_id = update.effective_user.id
+        await update.message.reply_text(
+            "🔄 Возврат к выбору группы:",
+            reply_markup=get_groups_keyboard(user_id, "delete")
+        )
+        return DELETE_TEMPLATE_SELECT_GROUP
+    
+    # Извлекаем название шаблона из текста
+    template_name = user_text.replace("🗑️ ", "").strip()
+    group_id = context.user_data.get('delete_group_id')
+    
+    if not group_id:
+        await update.message.reply_text(
+            "❌ Ошибка: данные группы не найдены",
+            reply_markup=get_templates_main_keyboard()
+        )
+        return TEMPLATES_MAIN
+    
+    # Находим шаблон по имени и группе
+    template_id, template = get_template_by_name_and_group(template_name, group_id)
+    
+    if not template_id or not template:
+        await update.message.reply_text(
+            f"❌ Шаблон '{template_name}' не найден в группе",
+            reply_markup=get_templates_main_keyboard()
+        )
+        return TEMPLATES_MAIN
+    
+    # Сохраняем данные для удаления
+    context.user_data['deleting_template_id'] = template_id
+    context.user_data['deleting_template'] = template
+    
+    # Показываем подтверждение
+    info = format_template_info(template)
+    
+    await update.message.reply_text(
+        f"⚠️ **ПОДТВЕРЖДЕНИЕ УДАЛЕНИЯ**\n\n{info}\n"
+        "❌ **ВЫ УВЕРЕНЫ, ЧТО ХОТИТЕ УДАЛИТЬ ДАННЫЙ ШАБЛОН?**\n\n"
+        "Это действие нельзя отменить!",
+        parse_mode='Markdown',
+        reply_markup=get_delete_confirmation_keyboard()
+    )
+    return DELETE_TEMPLATE_CONFIRM
+
+async def delete_template_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Подтверждение удаления шаблона"""
+    user_choice = update.message.text
+    template_id = context.user_data.get('deleting_template_id')
+    template = context.user_data.get('deleting_template')
+    
+    if user_choice == "✅ Да, удалить":
+        if template_id and template:
+            success, message = delete_template_and_image(template_id)
+            
+            if success:
+                await update.message.reply_text(
+                    f"✅ Шаблон '{template['name']}' успешно удален!",
+                    reply_markup=get_templates_main_keyboard()
+                )
+            else:
+                await update.message.reply_text(
+                    f"❌ Ошибка при удалении: {message}",
+                    reply_markup=get_templates_main_keyboard()
+                )
+        else:
+            await update.message.reply_text(
+                "❌ Ошибка: данные шаблона не найдены",
+                reply_markup=get_templates_main_keyboard()
+            )
+    
+    elif user_choice == "❌ Нет, отменить":
+        await update.message.reply_text(
+            "✅ Удаление отменено",
+            reply_markup=get_templates_main_keyboard()
+        )
+    
+    else:
+        await update.message.reply_text(
+            "❌ Неверный выбор",
+            reply_markup=get_delete_confirmation_keyboard()
+        )
+        return DELETE_TEMPLATE_CONFIRM
+    
+    # Очищаем временные данные
+    context.user_data.clear()
     return TEMPLATES_MAIN
 
 # ===== ФУНКЦИЯ ОТМЕНЫ =====
