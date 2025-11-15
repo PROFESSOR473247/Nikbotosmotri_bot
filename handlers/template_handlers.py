@@ -1273,18 +1273,58 @@ def get_template_conversation_handler():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, create_template_confirm),
                 MessageHandler(filters.Regex("^🔙 Назад$"), create_template_frequency)
             ],
-            
-            # Редактирование шаблона
+    
+    # Редактирование шаблона
+    
             EDIT_TEMPLATE_SELECT_GROUP: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_select),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_select_group),
                 MessageHandler(filters.Regex("^🔙 Назад$"), templates_main)
             ],
-            
+            EDIT_TEMPLATE_SELECT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_select),
+                MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_start)
+            ],
+            EDIT_TEMPLATE_FIELD: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_choose_field),
+                MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_select)
+            ],
+            EDIT_TEMPLATE_NAME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_name),
+                MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_choose_field)
+            ],
+            EDIT_TEMPLATE_TEXT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_text),
+                MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_choose_field)
+            ],
+            EDIT_TEMPLATE_IMAGE: [
+                MessageHandler(filters.PHOTO, edit_template_image),
+                MessageHandler(filters.Regex("^⏭️ Пропустить$"), edit_template_image),
+                MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_choose_field)
+            ],
+            EDIT_TEMPLATE_TIME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_time),
+                MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_choose_field)
+            ],
+            EDIT_TEMPLATE_DAYS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_days),
+                MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_choose_field)
+            ],
+            EDIT_TEMPLATE_FREQUENCY: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_template_frequency),
+                MessageHandler(filters.Regex("^🔙 Назад$"), edit_template_choose_field)
+            ],
+    
             # Удаление шаблона
             DELETE_TEMPLATE_SELECT_GROUP: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, delete_template_select),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, delete_template_select_group),
                 MessageHandler(filters.Regex("^🔙 Назад$"), templates_main)
+            ],
+            DELETE_TEMPLATE_SELECT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, delete_template_select),
+                MessageHandler(filters.Regex("^🔙 Назад$"), delete_template_start)
+            ],
+            DELETE_TEMPLATE_CONFIRM: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, delete_template_confirm),
+                MessageHandler(filters.Regex("^🔙 Назад$"), delete_template_select)
             ]
         },
-        fallbacks=[CommandHandler("cancel", cancel_template)]
-    )
