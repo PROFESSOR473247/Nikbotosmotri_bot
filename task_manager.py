@@ -330,6 +330,120 @@ def get_tasks_by_group(group_id):
         print(f"❌ Ошибка получения задач группы {group_id}: {e}")
         return {}
 
+# Добавить в task_manager.py в раздел основных функций
+
+def get_active_tasks_by_group(group_id):
+    """Возвращает активные задачи определенной группы"""
+    try:
+        active_tasks = get_all_active_tasks()
+        group_tasks = {}
+        
+        for task_id, task in active_tasks.items():
+            if task.get('group_name') == group_id:
+                group_tasks[task_id] = task
+        
+        return group_tasks
+    except Exception as e:
+        print(f"❌ Ошибка получения активных задач группы {group_id}: {e}")
+        return {}
+
+def get_tasks_for_user_by_group(user_id, group_id):
+    """Возвращает задачи группы, доступные пользователю"""
+    try:
+        # Проверяем доступ пользователя к группе
+        from template_manager import get_user_accessible_groups
+        accessible_groups = get_user_accessible_groups(user_id)
+        
+        if group_id not in accessible_groups:
+            return {}
+        
+        return get_active_tasks_by_group(group_id)
+    except Exception as e:
+        print(f"❌ Ошибка получения задач группы {group_id} для пользователя {user_id}: {e}")
+        return {}
+
+def format_group_tasks_info(group_id):
+    """Форматирует информацию о задачах группы"""
+    try:
+        tasks = get_active_tasks_by_group(group_id)
+        
+        if not tasks:
+            return f"📭 В этой группе нет активных задач"
+        
+        # Получаем название группы
+        from template_manager import load_groups
+        groups_data = load_groups()
+        group_name = groups_data['groups'].get(group_id, {}).get('name', group_id)
+        
+        message = f"📋 **Активные задачи группы '{group_name}':**\n\n"
+        
+        for i, (task_id, task) in enumerate(tasks.items(), 1):
+            days_count = len(safe_get_task_value(task, 'days', []))
+            has_image = "🖼️" if task.get('template_image') else ""
+            task_name = safe_get_task_value(task, 'template_name', 'Без названия')
+            task_time = safe_get_task_value(task, 'time', 'Не указано')
+            task_text = safe_get_task_value(task, 'template_text', '')
+            
+            message += f"{i}. **{task_name}** {has_image}\n"
+            message += f"   ⏰ {task_time} | 📅 {days_count} дней\n"
+            message += f"   📄 {task_text[:60]}...\n\n"
+        
+        return message
+    except Exception as e:
+        print(f"❌ Ошибка форматирования информации о группе задач {group_id}: {e}")
+        return f"❌ Ошибка загрузки информации о группе"
+
+def get_user_tasks_by_groups(user_id):
+    """Возвращает задачи пользователя, сгруппированные по группам"""
+    try:
+        from template_manager import get_user_accessible_groups
+        accessible_groups = get_user_accessible_groups(user_id)
+        
+        tasks_by_groups = {}
+        for group_id in accessible_groups:
+            group_tasks = get_active_tasks_by_group(group_id)
+            if group_tasks:
+                tasks_by_groups[group_id] = group_tasks
+        
+        return tasks_by_groups
+    except Exception as e:
+        print(f"❌ Ошибка получения задач по группам для пользователя {user_id}: {e}")
+        return {}
+
+def format_user_tasks_by_groups(user_id):
+    """Форматирует информацию о задачах пользователя по группам"""
+    try:
+        tasks_by_groups = get_user_tasks_by_groups(user_id)
+        
+        if not tasks_by_groups:
+            return "📭 У вас нет активных задач"
+        
+        from template_manager import load_groups
+        groups_data = load_groups()
+        
+        message = "📋 **Ваши активные задачи по группам:**\n\n"
+        
+        for group_id, tasks in tasks_by_groups.items():
+            group_name = groups_data['groups'].get(group_id, {}).get('name', group_id)
+            message += f"**🏷️ {group_name}:**\n"
+            
+            for i, (task_id, task) in enumerate(tasks.items(), 1):
+                task_name = safe_get_task_value(task, 'template_name', 'Без названия')
+                task_time = safe_get_task_value(task, 'time', 'Не указано')
+                
+                message += f"  {i}. **{task_name}**\n"
+                message += f"      ⏰ {task_time}\n"
+            
+            message += "\n"
+        
+        total_tasks = sum(len(tasks) for tasks in tasks_by_groups.values())
+        message += f"**Всего активных задач:** {total_tasks}"
+        
+        return message
+    except Exception as e:
+        print(f"❌ Ошибка форматирования задач по группам: {e}")
+        return "❌ Ошибка загрузки информации о задачах"
+        
 def get_task_stats():
     """Возвращает статистику по задачам"""
     try:
