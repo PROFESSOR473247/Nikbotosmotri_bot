@@ -37,11 +37,8 @@ class AuthManager:
     def _create_user_record(self, user_id, username, role='guest'):
         """Создает запись пользователя в базе данных"""
         try:
-            from telegram import Update
-            from handlers.start_handlers import get_user_display_name
-            
-            # Получаем информацию о пользователе
-            full_name = get_user_display_name(user_id)
+            # Простая заглушка для получения имени пользователя
+            full_name = f"User {user_id}"
             
             conn = db.get_connection()
             if not conn:
@@ -268,12 +265,8 @@ class AuthManager:
     def initialize_superadmin(self):
         """Инициализирует суперадминистратора при запуске"""
         try:
-            # Гарантируем, что суперадмин существует и имеет правильную роль
-    def get_user_display_name(user_id):
-        """Простая заглушка для получения имени пользователя"""
-            return f"User {user_id}"
-            
-            full_name = get_user_display_name(self.superadmin_id)
+            # Простая заглушка для получения имени пользователя
+            full_name = f"Superadmin {self.superadmin_id}"
             success, message = self.register_user(
                 self.superadmin_id, 
                 'superadmin', 
