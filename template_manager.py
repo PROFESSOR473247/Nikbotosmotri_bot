@@ -712,11 +712,6 @@ def get_template_by_name_and_group(template_name, group_id):
     except Exception as e:
         print(f"❌ Ошибка поиска шаблона по имени {template_name} в группе {group_id}: {e}")
         return None, None
-        
-        return message
-    except Exception as e:
-        print(f"❌ Ошибка форматирования детальной информации группы {group_id}: {e}")
-        return f"❌ Ошибка загрузки информации о группе"
 
 # Инициализация при импорте
 print("📥 Template_manager загружен")
