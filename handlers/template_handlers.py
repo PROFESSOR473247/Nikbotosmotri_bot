@@ -18,6 +18,7 @@ from template_manager import (
     get_all_templates, load_groups
 )
 from auth_manager import auth_manager
+from template_manager import delete_image  # Добавьте этот импорт
 
 # === СОСТОЯНИЯ CONVERSATION HANDLER ===
 (TEMPLATES_MAIN, TEMPLATE_LIST_MENU, TEMPLATE_LIST_ALL, 
