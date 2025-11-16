@@ -17,7 +17,7 @@ def get_groups_keyboard(user_id, action_type="task"):
     keyboard = []
     
     for group_data in accessible_groups.values():
-        keyboard.append([group_data['name']])
+        keyboard.append([f"🏷️ {group_data['name']}"])
     
     if action_type == "task":
         keyboard.append(["🔙 К задачам"])
