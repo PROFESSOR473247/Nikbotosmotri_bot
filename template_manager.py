@@ -362,17 +362,17 @@ def get_template_by_name_and_group(template_name, group_id):
 
 # ===== ФУНКЦИИ ДЛЯ РАБОТЫ С ИЗОБРАЖЕНИЯМИ =====
 
-def save_image(image_file, template_id):
+def save_image(image_bytes, template_id):
     """Сохраняет изображение для шаблона"""
     try:
         # Создаем уникальное имя файла
-        file_extension = os.path.splitext(image_file.filename)[1]
+        file_extension = '.jpg'  # По умолчанию jpg
         image_filename = f"{template_id}{file_extension}"
         image_path = os.path.join(IMAGES_DIR, image_filename)
         
         # Сохраняем файл
         with open(image_path, 'wb') as f:
-            f.write(image_file.getvalue())
+            f.write(image_bytes)
         
         print(f"✅ Изображение сохранено: {image_path}")
         return image_path
