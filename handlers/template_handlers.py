@@ -300,26 +300,38 @@ async def create_template_image(update: Update, context: ContextTypes.DEFAULT_TY
         return CREATE_TEMPLATE_TIME
     
     if update.message.photo:
-        # Сохраняем изображение
-        photo = update.message.photo[-1]
-        photo_file = await photo.get_file()
-        photo_content = await photo_file.download_as_bytearray()
-        
-        # Создаем временный ID для сохранения
-        temp_id = f"temp_{update.effective_user.id}_{update.update_id}"
-        image_path = save_image(photo_content, temp_id)
-        
-        if image_path:
-            context.user_data['new_template']['image'] = image_path
+        try:
+            # Сохраняем изображение
+            photo = update.message.photo[-1]
+            photo_file = await photo.get_file()
+            
+            # Создаем временный ID для сохранения
+            temp_id = f"temp_{update.effective_user.id}_{update.update_id}"
+            
+            # Скачиваем изображение как bytes
+            photo_bytes = await photo_file.download_as_bytearray()
+            
+            # Сохраняем изображение
+            image_path = save_image(photo_bytes, temp_id)
+            
+            if image_path:
+                context.user_data['new_template']['image'] = image_path
+                await update.message.reply_text(
+                    "✅ Изображение сохранено!\n\n"
+                    "Шаг 5 из 8: Введите время отправки в формате ЧЧ:ММ (МСК):",
+                    reply_markup=get_back_keyboard()
+                )
+                return CREATE_TEMPLATE_TIME
+            else:
+                await update.message.reply_text(
+                    "❌ Ошибка сохранения изображения. Попробуйте еще раз или пропустите:",
+                    reply_markup=get_skip_keyboard()
+                )
+                return CREATE_TEMPLATE_IMAGE
+        except Exception as e:
+            print(f"❌ Ошибка обработки изображения: {e}")
             await update.message.reply_text(
-                "✅ Изображение сохранено!\n\n"
-                "Шаг 5 из 8: Введите время отправки в формате ЧЧ:ММ (МСК):",
-                reply_markup=get_back_keyboard()
-            )
-            return CREATE_TEMPLATE_TIME
-        else:
-            await update.message.reply_text(
-                "❌ Ошибка сохранения изображения. Попробуйте еще раз или пропустите:",
+                "❌ Ошибка обработки изображения. Попробуйте еще раз или пропустите:",
                 reply_markup=get_skip_keyboard()
             )
             return CREATE_TEMPLATE_IMAGE
@@ -329,7 +341,7 @@ async def create_template_image(update: Update, context: ContextTypes.DEFAULT_TY
             reply_markup=get_skip_keyboard()
         )
         return CREATE_TEMPLATE_IMAGE
-
+        
 async def create_template_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ввод времени отправки"""
     time_str = update.message.text.strip()
