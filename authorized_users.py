@@ -3,6 +3,11 @@
 """
 
 from database import db
+from auth_manager import auth_manager
+
+def is_admin(user_id):
+    """Проверяет, является ли пользователь администратором"""
+    return auth_manager.is_admin(user_id)
 
 def get_user_access_groups(user_id):
     """Возвращает список ID групп, к которым у пользователя есть доступ"""
@@ -39,3 +44,15 @@ def get_all_authorized_users():
     except Exception as e:
         print(f"❌ Ошибка получения авторизованных пользователей: {e}")
         return []
+
+def check_duplicate_user(user_id):
+    """Проверяет, существует ли пользователь с таким ID"""
+    users = get_all_authorized_users()
+    for user in users:
+        if user['user_id'] == user_id:
+            return True
+    return False
+
+def get_user_role(user_id):
+    """Возвращает роль пользователя"""
+    return auth_manager.get_user_role(user_id)
