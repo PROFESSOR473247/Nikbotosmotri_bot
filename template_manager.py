@@ -109,38 +109,161 @@ def init_database():
 
 def save_template(template_data):
     """Сохраняет шаблон в базу данных"""
+    print(f"💾 Попытка сохранения шаблона в базу данных: {template_data.get('name')}")
+    
+    conn = db.get_connection()
+    if not conn:
+        print("❌ Не удалось подключиться к базе данных для сохранения шаблона")
+        return False
+        
     try:
-        return db.save_template(template_data)
+        cursor = conn.cursor()
+        
+        # Подготавливаем данные
+        template_id = template_data.get('id')
+        name = template_data.get('name', '')
+        group_name = template_data.get('group', '')
+        text = template_data.get('text', '')
+        image_path = template_data.get('image')
+        time_str = template_data.get('time', '')
+        
+        # Обрабатываем дни - гарантируем что это JSON строка
+        days_data = template_data.get('days', [])
+        if isinstance(days_data, list):
+            days_json = json.dumps(days_data, ensure_ascii=False)
+        else:
+            days_json = '[]'
+            
+        frequency = template_data.get('frequency', '')
+        created_by = template_data.get('created_by')
+        subgroup = template_data.get('subgroup')
+        
+        print(f"📊 Данные для сохранения:")
+        print(f"   ID: {template_id}")
+        print(f"   Name: {name}")
+        print(f"   Group: {group_name}")
+        print(f"   Text: {text[:50]}...")
+        print(f"   Time: {time_str}")
+        print(f"   Days: {days_data}")
+        print(f"   Frequency: {frequency}")
+        print(f"   Created_by: {created_by}")
+        
+        cursor.execute('''
+            INSERT INTO templates (id, name, group_name, text, image_path, time, days, frequency, created_by, subgroup)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (id) DO UPDATE SET
+                name = EXCLUDED.name,
+                group_name = EXCLUDED.group_name,
+                text = EXCLUDED.text,
+                image_path = EXCLUDED.image_path,
+                time = EXCLUDED.time,
+                days = EXCLUDED.days,
+                frequency = EXCLUDED.frequency,
+                subgroup = EXCLUDED.subgroup
+        ''', (
+            template_id,
+            name,
+            group_name,
+            text,
+            image_path,
+            time_str,
+            days_json,
+            frequency,
+            created_by,
+            subgroup
+        ))
+        
+        conn.commit()
+        
+        # Проверим что действительно сохранилось
+        cursor.execute('SELECT COUNT(*) FROM templates WHERE id = %s', (template_id,))
+        count = cursor.fetchone()[0]
+        
+        cursor.close()
+        conn.close()
+        
+        if count > 0:
+            print(f"✅ Шаблон {template_id} успешно сохранен в базе данных (проверено: {count} записей)")
+            return True
+        else:
+            print(f"❌ Шаблон {template_id} не был сохранен в базу данных")
+            return False
+        
     except Exception as e:
         print(f"❌ Ошибка сохранения шаблона: {e}")
+        import traceback
+        traceback.print_exc()
+        try:
+            conn.rollback()
+            conn.close()
+        except:
+            pass
         return False
-
-def create_template(template_data):
-    """Создает новый шаблон"""
-    try:
-        # Генерируем ID для шаблона
-        template_id = create_template_id()
-        template_data['id'] = template_id
-        
-        # Сохраняем в базу данных
-        success = save_template(template_data)
-        
-        if success:
-            print(f"✅ Шаблон создан: {template_data['name']} (ID: {template_id})")
-            return True, template_id
-        else:
-            print(f"❌ Ошибка создания шаблона: {template_data['name']}")
-            return False, None
-    except Exception as e:
-        print(f"❌ Ошибка создания шаблона: {e}")
-        return False, None
 
 def load_templates():
     """Загружает все шаблоны из базы данных"""
+    print("📂 Загрузка шаблонов из базы данных...")
+    
+    conn = db.get_connection()
+    if not conn:
+        print("❌ Не удалось подключиться к базе данных для загрузки шаблонов")
+        return {}
+        
     try:
-        return db.load_templates()
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT * FROM templates ORDER BY created_at DESC')
+        rows = cursor.fetchall()
+        
+        templates = {}
+        for row in rows:
+            try:
+                # Обрабатываем дни
+                days_data = []
+                if row[6]:  # days field
+                    try:
+                        if isinstance(row[6], (str, bytes, bytearray)):
+                            days_data = json.loads(row[6])
+                        else:
+                            days_data = row[6]
+                    except Exception as e:
+                        print(f"⚠️ Ошибка парсинга дней для шаблона {row[0]}: {e}")
+                        days_data = []
+                
+                template = {
+                    'id': row[0],
+                    'name': row[1],
+                    'group': row[2],
+                    'text': row[3],
+                    'image': row[4],
+                    'time': row[5],
+                    'days': days_data,
+                    'frequency': row[7],
+                    'created_by': row[8],
+                    'created_at': row[9].strftime("%Y-%m-%d %H:%M:%S") if row[9] else None,
+                    'subgroup': row[10]
+                }
+                templates[template['id']] = template
+                print(f"📥 Загружен шаблон: {template['name']} (ID: {template['id']})")
+                
+            except Exception as e:
+                print(f"❌ Ошибка обработки строки шаблона: {e}")
+                continue
+        
+        cursor.close()
+        conn.close()
+        
+        print(f"✅ Загружено {len(templates)} шаблонов из базы данных")
+        return templates
+        
     except Exception as e:
         print(f"❌ Ошибка загрузки шаблонов: {e}")
+        import traceback
+        traceback.print_exc()
+        try:
+            conn.close()
+        except:
+            pass
         return {}
 
 def get_all_templates():
@@ -149,10 +272,50 @@ def get_all_templates():
 
 def load_groups():
     """Загружает группы из базы данных"""
+    print("📂 Загрузка групп из базы данных...")
+    
+    conn = db.get_connection()
+    if not conn:
+        print("❌ Не удалось подключиться к базе данных для загрузки групп")
+        return {"groups": {}}
+        
     try:
-        return db.load_groups()
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT * FROM template_groups')
+        rows = cursor.fetchall()
+        
+        groups = {"groups": {}}
+        for row in rows:
+            # Исправляем обработку JSON данных
+            allowed_users = []
+            if row[2]:
+                try:
+                    if isinstance(row[2], (str, bytes, bytearray)):
+                        allowed_users = json.loads(row[2])
+                    else:
+                        allowed_users = row[2]  # Уже список
+                except:
+                    allowed_users = []
+            
+            groups["groups"][row[0]] = {
+                "name": row[1],
+                "allowed_users": allowed_users
+            }
+            print(f"📥 Загружена группа: {row[1]} (ID: {row[0]})")
+        
+        cursor.close()
+        conn.close()
+        
+        print(f"✅ Загружено {len(groups['groups'])} групп из базе данных")
+        return groups
+        
     except Exception as e:
         print(f"❌ Ошибка загрузки групп: {e}")
+        try:
+            conn.close()
+        except:
+            pass
         return {"groups": {}}
 
 def get_template_by_id(template_id):
@@ -296,6 +459,26 @@ def create_template_id():
         print(f"❌ Ошибка создания ID шаблона: {e}")
         return str(int(datetime.now().timestamp()))[-8:]
 
+def create_template(template_data):
+    """Создает новый шаблон"""
+    try:
+        # Генерируем ID для шаблона
+        template_id = create_template_id()
+        template_data['id'] = template_id
+        
+        # Сохраняем в базу данных
+        success = save_template(template_data)
+        
+        if success:
+            print(f"✅ Шаблон создан: {template_data['name']} (ID: {template_id})")
+            return True, template_id
+        else:
+            print(f"❌ Ошибка создания шаблона: {template_data['name']}")
+            return False, None
+    except Exception as e:
+        print(f"❌ Ошибка создания шаблона: {e}")
+        return False, None
+
 def get_template_groups():
     """Возвращает все группы шаблонов"""
     try:
@@ -327,7 +510,17 @@ def update_template_field(template_id, field_name, field_value):
         print(f"❌ Ошибка обновления поля {field_name} шаблона {template_id}: {e}")
         return False, f"Ошибка обновления: {e}"
 
-# Добавить в template_manager.py в раздел основных функций
+def get_template_by_name_and_group(template_name, group_id):
+    """Возвращает шаблон по имени и группе"""
+    try:
+        templates = get_templates_by_group(group_id)
+        for template_id, template in templates:
+            if template.get('name') == template_name:
+                return template_id, template
+        return None, None
+    except Exception as e:
+        print(f"❌ Ошибка поиска шаблона по имени {template_name} в группе {group_id}: {e}")
+        return None, None
 
 def get_template_groups_for_user(user_id):
     """Возвращает группы шаблонов с шаблонами для пользователя"""
@@ -347,18 +540,6 @@ def get_template_groups_for_user(user_id):
     except Exception as e:
         print(f"❌ Ошибка получения групп с шаблонами для пользователя {user_id}: {e}")
         return {}
-
-def get_template_by_name_and_group(template_name, group_id):
-    """Возвращает шаблон по имени и группе"""
-    try:
-        templates = get_templates_by_group(group_id)
-        for template_id, template in templates:
-            if template.get('name') == template_name:
-                return template_id, template
-        return None, None
-    except Exception as e:
-        print(f"❌ Ошибка поиска шаблона по имени {template_name} в группе {group_id}: {e}")
-        return None, None
 
 # ===== ФУНКЦИИ ДЛЯ РАБОТЫ С ИЗОБРАЖЕНИЯМИ =====
 
@@ -442,18 +623,6 @@ def get_template_by_name(template_name):
     except Exception as e:
         print(f"❌ Ошибка поиска шаблона по имени {template_name}: {e}")
         return None
-
-def get_template_by_name_and_group(template_name, group_id):
-    """Возвращает шаблон по имени и группе"""
-    try:
-        templates = get_templates_by_group(group_id)
-        for template_id, template in templates:
-            if template.get('name') == template_name:
-                return template_id, template
-        return None, None
-    except Exception as e:
-        print(f"❌ Ошибка поиска шаблона по имени {template_name} в группе {group_id}: {e}")
-        return None, None
 
 def template_exists(template_name, group_id):
     """Проверяет, существует ли шаблон с таким именем в группе"""
@@ -604,8 +773,6 @@ def delete_template_and_image(template_id):
     except Exception as e:
         print(f"❌ Ошибка удаления шаблона и изображения {template_id}: {e}")
         return False, f"Ошибка удаления: {e}"
-        
-        # ===== ФУНКЦИИ ДЛЯ НОВОГО МЕНЮ ШАБЛОНОВ =====
 
 def get_user_template_access(user_id):
     """Возвращает информацию о доступе пользователя к шаблонам"""
@@ -701,17 +868,10 @@ def format_group_templates_detailed(group_id):
             message += f"   📅 Дни: {', '.join(days_names) if days_names else 'Не указаны'}\n"
             message += f"   🔄 Периодичность: {frequency}\n\n"
         
-def get_template_by_name_and_group(template_name, group_id):
-    """Возвращает шаблон по имени и группе"""
-    try:
-        templates = get_templates_by_group(group_id)
-        for template_id, template in templates:
-            if template.get('name') == template_name:
-                return template_id, template
-        return None, None
+        return message
     except Exception as e:
-        print(f"❌ Ошибка поиска шаблона по имени {template_name} в группе {group_id}: {e}")
-        return None, None
+        print(f"❌ Ошибка форматирования детальной информации группы {group_id}: {e}")
+        return f"❌ Ошибка загрузки информации о группе"
 
 # Инициализация при импорте
 print("📥 Template_manager загружен")
