@@ -134,34 +134,6 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         import traceback
         traceback.print_exc()
 
-# Обернутые обработчики для middleware
-async def wrapped_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    return await check_chat_context(update, context, start)
-
-async def wrapped_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    return await check_chat_context(update, context, help_command)
-
-async def wrapped_my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    return await check_chat_context(update, context, my_id)
-
-async def wrapped_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    return await check_chat_context(update, context, now)
-
-async def wrapped_update_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    return await check_chat_context(update, context, update_menu)
-
-async def wrapped_admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    return await check_chat_context(update, context, admin_stats)
-
-async def wrapped_check_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    return await check_chat_context(update, context, check_access)
-
-async def wrapped_handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    return await check_chat_context(update, context, handle_text)
-
-async def wrapped_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    return await check_chat_context(update, context, cancel)
-
 def main():
     print("🚀 Запуск бота с системой администрирования...")
     print("🆕 ВЕРСИЯ: 2.0 - Разделение личных сообщений и групповых чатов")
@@ -200,20 +172,9 @@ def main():
     # Добавляем обработчик ошибок
     application.add_error_handler(error_handler)
 
-    # ===== ВАЖНО: ПРАВИЛЬНЫЙ ПОРЯДОК ОБРАБОТЧИКОВ =====
+    # ===== ПРАВИЛЬНЫЙ ПОРЯДОК РЕГИСТРАЦИИ ОБРАБОТЧИКОВ =====
     
-    # 1. Сначала команды
-    application.add_handler(CommandHandler("start", wrapped_start))
-    application.add_handler(CommandHandler("help", wrapped_help_command))
-    application.add_handler(CommandHandler("my_id", wrapped_my_id))
-    application.add_handler(CommandHandler("now", wrapped_now))
-    application.add_handler(CommandHandler("update_menu", wrapped_update_menu))
-    
-    # Админские команды
-    application.add_handler(CommandHandler("admin_stats", wrapped_admin_stats))
-    application.add_handler(CommandHandler("check_access", wrapped_check_access))
-
-    # 2. Затем ConversationHandler (они должны быть перед общим текстовым обработчиком)
+    # 1. Сначала ConversationHandler (самые специфичные)
     print("🔄 Регистрация ConversationHandler...")
     
     # Получаем ConversationHandler для всех модулей
@@ -227,15 +188,26 @@ def main():
     application.add_handler(admin_conv_handler)
 
     print(f"✅ ConversationHandler зарегистрированы:")
-    print(f"   • Шаблоны: {len(template_conv_handler.states)} состояний")
-    print(f"   • Задачи: {len(task_conv_handler.states)} состояний") 
-    print(f"   • Администрирование: {len(admin_conv_handler.states)} состояний")
+    print(f"   • Шаблоны: {len(template_conv_handler.entry_points)} entry points")
+    print(f"   • Задачи: {len(task_conv_handler.entry_points)} entry points") 
+    print(f"   • Администрирование: {len(admin_conv_handler.entry_points)} entry points")
 
-    # 3. Обработчик отмены (должен быть после ConversationHandler)
-    application.add_handler(CommandHandler("cancel", wrapped_cancel))
+    # 2. Затем команды
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("my_id", my_id))
+    application.add_handler(CommandHandler("now", now))
+    application.add_handler(CommandHandler("update_menu", update_menu))
+    
+    # Админские команды
+    application.add_handler(CommandHandler("admin_stats", admin_stats))
+    application.add_handler(CommandHandler("check_access", check_access))
+
+    # 3. Обработчик отмены
+    application.add_handler(CommandHandler("cancel", cancel))
 
     # 4. Общий текстовый обработчик (ДОЛЖЕН БЫТЬ ПОСЛЕДНИМ)
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, wrapped_handle_text))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     print("✅ Все обработчики зарегистрированы в правильном порядке")
 
