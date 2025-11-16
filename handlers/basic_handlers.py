@@ -13,6 +13,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Гарантируем права администратора для суперадмина при каждом действии
     auth_manager.update_user_role_if_needed(user_id)
 
+    # Обработка основных команд меню
     if text == "📋 Шаблоны":
         from handlers.template_handlers import templates_main
         return await templates_main(update, context)
@@ -46,15 +47,15 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     else:
+        # Если сообщение не обработано другими обработчиками
         await update.message.reply_text(
-            "❌ Неизвестная команда\n"
-            "Используйте кнопки меню или /help для справки",
+            "🤔 Не понимаю эту команду. Используйте кнопки меню для навигации.",
             reply_markup=get_main_keyboard(user_id)
         )
         return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Отмена любого действия"""
+    """Отмена любого действия и возврат в главное меню"""
     user_id = update.effective_user.id
     
     # Гарантируем права администратора для суперадмина
@@ -64,7 +65,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     
     await update.message.reply_text(
-        "❌ Действие отменено",
+        "❌ Действие отменено. Возврат в главное меню.",
         reply_markup=get_main_keyboard(user_id)
     )
     return ConversationHandler.END
