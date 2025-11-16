@@ -27,7 +27,17 @@ def get_groups_keyboard(user_id, action_type="list"):
     for group_id, group_data in accessible_groups.items():
         keyboard.append([f"🏷️ {group_data['name']}"])
     
-    keyboard.append(["🔙 Назад"])
+    if action_type == "list":
+        keyboard.append(["🔙 К шаблонам"])
+    elif action_type == "create":
+        keyboard.append(["🔙 Назад"])
+    elif action_type == "edit":
+        keyboard.append(["🔙 Назад"])
+    elif action_type == "delete":
+        keyboard.append(["🔙 Назад"])
+    else:
+        keyboard.append(["🔙 Назад"])
+        
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def get_template_confirmation_keyboard():
