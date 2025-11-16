@@ -8,6 +8,10 @@ from keyboards.admin_keyboards import (
 from keyboards.main_keyboards import get_main_keyboard
 from user_chat_manager import user_chat_manager
 from template_manager import load_groups
+from auth_manager import auth_manager
+from authorized_users import is_admin  # Добавьте этот импорт
+
+# ... остальной код без изменений ...
 
 # Состояния для ConversationHandler администрирования
 (
