@@ -42,9 +42,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
         "ℹ️ **Справка по боту**\n\n"
         "📋 **Основные разделы:**\n"
-        "• *Шаблоны* - создание и управление шаблонами сообщений\n"
-        "• *Задачи* - настройка автоматической отправки сообщений\n"
-        "• *Администрирование* - управление пользователями и чатами\n\n"
+        "• Шаблоны - создание и управление шаблонами сообщений\n"
+        "• Задачи - настройка автоматической отправки сообщений\n"
+        "• Администрирование - управление пользователями и чатами\n\n"
         "⏰ **Работа с задачами:**\n"
         "1. Создайте шаблон с текстом и настройками\n"
         "2. Создайте задачу на основе шаблона\n"
@@ -72,11 +72,26 @@ async def my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     
+    # Получаем информацию о правах доступа
+    from auth_manager import auth_manager
+    user_role = auth_manager.get_user_role(user_id)
+    
+    # Получаем доступные группы и чаты
+    from authorized_users import get_user_access_groups, get_user_accessible_chats
+    accessible_groups = get_user_access_groups(user_id)
+    accessible_chats = get_user_accessible_chats(user_id)
+    
+    message = f"🆔 Ваш ID: {user_id}\n"
+    message += f"👤 Username: @{user.username or 'не установлен'}\n"
+    message += f"📛 Имя: {user.full_name}\n"
+    message += f"👑 Должность: {user_role}\n\n"
+    
+    message += f"📋 Доступ к группам: {len(accessible_groups)}\n"
+    message += f"💬 Доступ к чатам: {len(accessible_chats)}"
+    
     await update.message.reply_text(
-        f"🆔 **Ваш ID:** `{user_id}`\n"
-        f"👤 **Username:** @{user.username or 'не установлен'}\n"
-        f"📛 **Имя:** {user.full_name}",
-        parse_mode='Markdown',
+        message,
+        parse_mode=None,  # Отключаем Markdown для безопасности
         reply_markup=get_main_keyboard(user_id)
     )
 
