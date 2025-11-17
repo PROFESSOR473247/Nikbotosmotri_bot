@@ -15,10 +15,10 @@ from template_manager import (
     get_template_groups, update_template_field, format_template_preview,
     get_frequency_types, get_week_days, validate_template_data,
     delete_template_and_image, format_group_templates_info,
-    get_all_templates, load_groups
+    get_all_templates, load_groups, get_template_by_name_and_group,  # ДОБАВЬТЕ ЭТУ ФУНКЦИЮ
+    delete_image, update_template  # ДОБАВЬТЕ ЭТИ ФУНКЦИИ
 )
 from auth_manager import auth_manager
-from template_manager import delete_image  # Добавьте этот импорт
 
 # === СОСТОЯНИЯ CONVERSATION HANDLER ===
 (TEMPLATES_MAIN, TEMPLATE_LIST_MENU, TEMPLATE_LIST_ALL, 
