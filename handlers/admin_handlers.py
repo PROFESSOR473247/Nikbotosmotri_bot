@@ -863,12 +863,39 @@ async def debug_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Проверяем права
     if not is_admin(user_id):
         await update.message.reply_text("❌ Нет прав доступа")
-        return
+        return ConversationHandler.END
+    
+    # В зависимости от нажатой кнопки переходим в нужное состояние
+    if text == "👥 Пользователи":
+        await update.message.reply_text(
+            "👥 **Управление пользователями**\n\nВыберите действие:",
+            parse_mode='Markdown',
+            reply_markup=get_users_management_keyboard()
+        )
+        return USERS_MANAGEMENT
+        
+    elif text == "💬 Тг чаты":
+        await update.message.reply_text(
+            "💬 **Управление Telegram чатами**\n\nВыберите действие:",
+            parse_mode='Markdown', 
+            reply_markup=get_chats_management_keyboard()
+        )
+        return CHATS_MANAGEMENT
+        
+    elif text == "🔧 Тест прав":
+        await update.message.reply_text(
+            "🔧 **Тест прав доступа**\n\nЭта функция находится в разработке.",
+            parse_mode='Markdown',
+            reply_markup=get_admin_main_keyboard()
+        )
+        return ADMIN_MAIN
+        
+    elif text == "📋 Справка":
+        await admin_help(update, context)
+        return ADMIN_MAIN
     
     await update.message.reply_text(
-        f"🔧 Отладка: вы нажали '{text}'\n"
-        f"User ID: {user_id}\n"
-        "Админ-меню должно работать!",
+        f"🔧 Отладка: вы нажали '{text}'\nUser ID: {user_id}",
         reply_markup=get_admin_main_keyboard()
     )
     return ADMIN_MAIN
