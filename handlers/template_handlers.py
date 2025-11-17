@@ -18,7 +18,6 @@ from template_manager import (
     get_all_templates, load_groups
 )
 from template_fixes import get_template_by_name_and_group, update_template, delete_image
-)
 from auth_manager import auth_manager
 
 # === СОСТОЯНИЯ CONVERSATION HANDLER ===
