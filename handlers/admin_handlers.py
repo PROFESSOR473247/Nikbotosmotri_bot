@@ -853,6 +853,26 @@ async def admin_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ===== ДЕБАГ КОМАНДЫ =====
 
+async def debug_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отладочная функция для проверки работы админ-меню"""
+    user_id = update.effective_user.id
+    text = update.message.text
+    
+    print(f"🔧 DEBUG ADMIN: user_id={user_id}, text='{text}'")
+    
+    # Проверяем права
+    if not is_admin(user_id):
+        await update.message.reply_text("❌ Нет прав доступа")
+        return
+    
+    await update.message.reply_text(
+        f"🔧 Отладка: вы нажали '{text}'\n"
+        f"User ID: {user_id}\n"
+        "Админ-меню должно работать!",
+        reply_markup=get_admin_main_keyboard()
+    )
+    return ADMIN_MAIN
+
 async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает статистику системы"""
     user_id = update.effective_user.id
