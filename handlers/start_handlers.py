@@ -1,6 +1,6 @@
 from telegram import Update
 from telegram.ext import ContextTypes
-from keyboards.main_keyboards import get_main_keyboard, get_simple_keyboard
+from keyboards.main_keyboards import get_main_keyboard
 from auth_manager import auth_manager
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -16,12 +16,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
         f"👋 Привет, {user.first_name}!\n\n"
         "🤖 Я бот для автоматизации отправки сообщений по расписанию.\n\n"
-        "📋 **Что я умею:**\n"
+        "📋 Что я умею:\n"
         "• Создавать шаблоны сообщений\n"
         "• Настраивать автоматическую отправку\n"
         "• Управлять задачами и расписанием\n"
         "• Работать с несколькими Telegram чатами\n\n"
-        "💡 **Как начать:**\n"
+        "💡 Как начать:\n"
         "1. Создайте шаблон сообщения\n"
         "2. Настройте задачу с расписанием\n"
         "3. Выберите чат для отправки\n"
@@ -32,7 +32,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         welcome_text,
         reply_markup=get_main_keyboard(user_id),
-        parse_mode='Markdown'
+        parse_mode=None
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -64,7 +64,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         help_text,
         reply_markup=get_main_keyboard(user_id),
-        parse_mode=None  # Отключаем Markdown
+        parse_mode=None
     )
 
 async def my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -91,7 +91,7 @@ async def my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         message,
-        parse_mode=None,  # Отключаем Markdown для безопасности
+        parse_mode=None,
         reply_markup=get_main_keyboard(user_id)
     )
 
@@ -104,10 +104,10 @@ async def now(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_time = datetime.now(moscow_tz)
     
     await update.message.reply_text(
-        f"⏰ **Текущее время (МСК):**\n"
+        f"⏰ Текущее время (МСК):\n"
         f"📅 {current_time.strftime('%d.%m.%Y')}\n"
         f"🕒 {current_time.strftime('%H:%M:%S')}",
-        parse_mode='Markdown',
+        parse_mode=None,
         reply_markup=get_main_keyboard(update.effective_user.id)
     )
 
@@ -117,5 +117,5 @@ async def update_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         "🔄 Меню обновлено",
-        reply_markup=get_main_key
+        reply_markup=get_main_keyboard(user_id)
     )
