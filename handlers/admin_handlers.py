@@ -9,9 +9,7 @@ from keyboards.main_keyboards import get_main_keyboard
 from user_chat_manager import user_chat_manager
 from template_manager import load_groups
 from auth_manager import auth_manager
-from authorized_users import is_admin  # Добавьте этот импорт
-
-# ... остальной код без изменений ...
+from authorized_users import is_admin
 
 # Состояния для ConversationHandler администрирования
 (
@@ -22,7 +20,7 @@ from authorized_users import is_admin  # Добавьте этот импорт
     ADD_CHAT_ID, ADD_CHAT_NAME, ADD_CHAT_USERS,
     EDIT_CHAT_SELECT, EDIT_CHAT_MAIN, EDIT_CHAT_ADD_USER, EDIT_CHAT_REMOVE_USER,
     DELETE_CHAT_SELECT, DELETE_CHAT_CONFIRM
-) = range(24)  # Убрали TEST_PERMISSIONS, теперь 24 состояния
+) = range(24)
 
 # ===== ОСНОВНЫЕ ФУНКЦИИ АДМИНИСТРИРОВАНИЯ =====
 
@@ -30,7 +28,6 @@ async def admin_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Главное меню администрирования"""
     user_id = update.effective_user.id
     
-    from authorized_users import is_admin
     if not is_admin(user_id):
         await update.message.reply_text(
             "❌ У вас нет прав доступа к администрированию",
@@ -76,10 +73,14 @@ async def add_user_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ввод ID пользователя"""
     user_id_text = update.message.text.strip()
     
+    if user_id_text == "🔙 Назад":
+        await users_management(update, context)
+        return USERS_MANAGEMENT
+    
     try:
         user_id = int(user_id_text)
         
-        # ПРОВЕРКА ДУБЛИКАТА - НОВЫЙ КОД
+        # Проверка дубликата
         from authorized_users import check_duplicate_user
         if check_duplicate_user(user_id):
             await update.message.reply_text(
@@ -108,6 +109,10 @@ async def add_user_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ввод имени пользователя"""
     user_name = update.message.text.strip()
     
+    if user_name == "🔙 Назад":
+        await add_user_start(update, context)
+        return ADD_USER_ID
+    
     if not user_name:
         await update.message.reply_text(
             "❌ Имя не может быть пустым. Введите имя:",
@@ -126,6 +131,10 @@ async def add_user_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def add_user_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Выбор роли пользователя"""
     role_text = update.message.text
+    
+    if role_text == "🔙 Назад":
+        await add_user_name(update, context)
+        return ADD_USER_NAME
     
     role_map = {
         "👑 Руководитель": "manager",
@@ -170,6 +179,11 @@ async def add_user_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def add_user_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Выбор Telegram чатов для пользователя"""
     chat_numbers_text = update.message.text.strip()
+    
+    if chat_numbers_text == "🔙 Назад":
+        await add_user_role(update, context)
+        return ADD_USER_ROLE
+    
     chats = context.user_data['available_chats']
     
     try:
@@ -229,6 +243,11 @@ async def add_user_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def add_user_groups(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Выбор групп шаблонов для пользователя"""
     group_numbers_text = update.message.text.strip()
+    
+    if group_numbers_text == "🔙 Назад":
+        await add_user_chats(update, context)
+        return ADD_USER_CHATS
+    
     groups = context.user_data['available_groups']
     user_data = context.user_data['new_user']
     
@@ -369,6 +388,11 @@ async def delete_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def delete_user_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Выбор пользователя для удаления"""
     user_number_text = update.message.text.strip()
+    
+    if user_number_text == "🔙 Назад":
+        await users_management(update, context)
+        return USERS_MANAGEMENT
+    
     users = context.user_data['users_for_deletion']
     
     try:
@@ -399,6 +423,10 @@ async def delete_user_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
     """Подтверждение удаления пользователя"""
     choice = update.message.text
     user = context.user_data.get('deleting_user')
+    
+    if choice == "🔙 Назад":
+        await delete_user_select(update, context)
+        return DELETE_USER_SELECT
     
     if choice == "✅ Да":
         if user:
@@ -467,12 +495,14 @@ async def add_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ввод ID чата"""
     chat_id_text = update.message.text.strip()
     
+    if chat_id_text == "🔙 Назад":
+        await chats_management(update, context)
+        return CHATS_MANAGEMENT
+    
     try:
         chat_id = int(chat_id_text)
         context.user_data['new_chat']['chat_id'] = chat_id
         
-        # Здесь можно попробовать получить название чата из Telegram API
-        # Пока просто запрашиваем у администратора
         await update.message.reply_text(
             "Шаг 2 из 3: Введите название для чата или нажмите 'Оставить название', "
             "если хотите использовать название из Telegram:",
@@ -490,6 +520,10 @@ async def add_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def add_chat_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ввод названия чата"""
     choice = update.message.text
+    
+    if choice == "🔙 Назад":
+        await add_chat_id(update, context)
+        return ADD_CHAT_ID
     
     if choice == "✅ Оставить название":
         # Используем ID как временное название
@@ -546,6 +580,11 @@ async def add_chat_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def add_chat_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Выбор пользователей для чата"""
     user_numbers_text = update.message.text.strip()
+    
+    if user_numbers_text == "🔙 Назад":
+        await add_chat_name(update, context)
+        return ADD_CHAT_NAME
+    
     users = context.user_data['available_users']
     chat_data = context.user_data['new_chat']
     
@@ -671,6 +710,11 @@ async def delete_chat_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def delete_chat_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Выбор чата для удаления"""
     chat_number_text = update.message.text.strip()
+    
+    if chat_number_text == "🔙 Назад":
+        await chats_management(update, context)
+        return CHATS_MANAGEMENT
+    
     chats = context.user_data['chats_for_deletion']
     
     try:
@@ -701,6 +745,10 @@ async def delete_chat_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
     """Подтверждение удаления чата"""
     choice = update.message.text
     chat = context.user_data.get('deleting_chat')
+    
+    if choice == "🔙 Назад":
+        await delete_chat_select(update, context)
+        return DELETE_CHAT_SELECT
     
     if choice == "✅ Да":
         if chat:
@@ -757,48 +805,48 @@ async def test_permissions(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Справка для администратора"""
     help_text = """
-⚙️ **СПРАВКА ДЛЯ АДМИНИСТРАТОРА**
+⚙️ СПРАВКА ДЛЯ АДМИНИСТРАТОРА
 
-👥 **УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ:**
+👥 УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ:
 • Добавить - создание нового пользователя
 • Изменить доступ - редактирование прав пользователя  
 • Список пользователей - просмотр всех пользователей
 • Удалить - удаление пользователя
 
-💬 **УПРАВЛЕНИЕ TELEGRAM ЧАТАМИ:**
+💬 УПРАВЛЕНИЕ TELEGRAM ЧАТАМИ:
 • Добавить - добавление нового чата/канала/группы
 • Изменить доступ - управление доступом пользователей к чатам
 • Список чатов - просмотр всех чатов
 • Удалить - удаление чата из системы
 
-🔧 **ТЕСТ ПРАВ:**
+🔧 ТЕСТ ПРАВ:
 • Проверка прав доступа пользователей (в разработке)
 
-🛠 **ДЕБАГ КОМАНДЫ:**
+🛠 ДЕБАГ КОМАНДЫ:
 • /admin_stats - статистика системы
 • /check_access user_id - проверка прав пользователя
 • /reload_config - перезагрузка конфигурации
 
-📋 **ПРОЦЕСС ДОБАВЛЕНИЯ ПОЛЬЗОВАТЕЛЯ:**
+📋 ПРОЦЕСС ДОБАВЛЕНИЯ ПОЛЬЗОВАТЕЛЯ:
 1. Ввод ID пользователя (только цифры)
 2. Ввод имени пользователя
 3. Выбор должности (руководитель/водитель/гость)
 4. Выбор Telegram чатов для доступа
 5. Выбор групп шаблонов для доступа
 
-📋 **ПРОЦЕСС ДОБАВЛЕНИЯ ЧАТА:**
+📋 ПРОЦЕСС ДОБАВЛЕНИЯ ЧАТА:
 1. Ввод ID чата (цифры, с минусом для групп)
 2. Ввод названия чата
 3. Выбор пользователей с доступом к чату
 
-💡 **ПОЛУЧЕНИЕ ID:**
+💡 ПОЛУЧЕНИЕ ID:
 Пользователь может получить свой ID командой /my_id
 Для получения ID чата добавьте бота в чат и используйте /my_id
 """
 
     await update.message.reply_text(
         help_text,
-        parse_mode='Markdown',
+        parse_mode=None,
         reply_markup=get_admin_main_keyboard()
     )
     return ADMIN_MAIN
@@ -807,8 +855,6 @@ async def admin_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает статистику системы"""
-    from authorized_users import is_admin
-    
     user_id = update.effective_user.id
     if not is_admin(user_id):
         await update.message.reply_text("❌ У вас нет прав доступа к этой команде")
@@ -836,7 +882,7 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         stats_text += f"• {role}: {count}\n"
     
     # Активность чатов
-    active_chats = [chat for chat in chats if chat['user_count'] > 0]
+    active_chats = [chat for chat in chats if user_chat_manager.get_chat_users(chat['chat_id'])]
     stats_text += f"\n💬 **Активные чаты (с пользователями):** {len(active_chats)}"
     
     await update.message.reply_text(
@@ -847,8 +893,6 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def check_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Проверяет права доступа пользователя"""
-    from authorized_users import is_admin
-    
     user_id = update.effective_user.id
     if not is_admin(user_id):
         await update.message.reply_text("❌ У вас нет прав доступа к этой команде")
@@ -914,7 +958,7 @@ async def cancel_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     await update.message.reply_text(
         "🔙 Возврат в главное меню",
-        reply_markup=get_main_keyboard(user_id)  # Должно быть с user_id
+        reply_markup=get_main_keyboard(user_id)
     )
     return ConversationHandler.END
 
@@ -952,9 +996,6 @@ def get_admin_conversation_handler():
             ],
             ADD_USER_ROLE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, add_user_role),
-                MessageHandler(filters.Regex("^👑 Руководитель$"), add_user_role),
-                MessageHandler(filters.Regex("^🚗 Водитель$"), add_user_role),
-                MessageHandler(filters.Regex("^👥 Гость$"), add_user_role),
                 MessageHandler(filters.Regex("^🔙 Назад$"), add_user_name)
             ],
             ADD_USER_CHATS: [
@@ -973,8 +1014,6 @@ def get_admin_conversation_handler():
             ],
             DELETE_USER_CONFIRM: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, delete_user_confirm),
-                MessageHandler(filters.Regex("^✅ Да$"), delete_user_confirm),
-                MessageHandler(filters.Regex("^❌ Нет$"), delete_user_confirm),
                 MessageHandler(filters.Regex("^🔙 Назад$"), delete_user_select)
             ],
             
@@ -993,8 +1032,6 @@ def get_admin_conversation_handler():
             ],
             ADD_CHAT_NAME: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, add_chat_name),
-                MessageHandler(filters.Regex("^✅ Оставить название$"), add_chat_name),
-                MessageHandler(filters.Regex("^✏️ Ввести новое$"), add_chat_name),
                 MessageHandler(filters.Regex("^🔙 Назад$"), add_chat_id)
             ],
             ADD_CHAT_USERS: [
@@ -1009,8 +1046,6 @@ def get_admin_conversation_handler():
             ],
             DELETE_CHAT_CONFIRM: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, delete_chat_confirm),
-                MessageHandler(filters.Regex("^✅ Да$"), delete_chat_confirm),
-                MessageHandler(filters.Regex("^❌ Нет$"), delete_chat_confirm),
                 MessageHandler(filters.Regex("^🔙 Назад$"), delete_chat_select)
             ],
         },
