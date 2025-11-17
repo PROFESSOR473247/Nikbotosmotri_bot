@@ -68,9 +68,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает ID пользователя"""
+    """Показывает ID пользователя и информацию о чате"""
     user = update.effective_user
+    chat = update.effective_chat
     user_id = user.id
+    chat_id = chat.id
     
     # Получаем информацию о правах доступа
     from auth_manager import auth_manager
@@ -81,17 +83,43 @@ async def my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     accessible_groups = get_user_access_groups(user_id)
     accessible_chats = get_user_accessible_chats(user_id)
     
-    message = f"🆔 Ваш ID: {user_id}\n"
-    message += f"👤 Username: @{user.username or 'не установлен'}\n"
-    message += f"📛 Имя: {user.full_name}\n"
-    message += f"👑 Должность: {user_role}\n\n"
+    # Определяем тип чата
+    chat_type = "личные сообщения"
+    if chat.type == "group":
+        chat_type = "группа"
+    elif chat.type == "supergroup":
+        chat_type = "супергруппа"
+    elif chat.type == "channel":
+        chat_type = "канал"
     
-    message += f"📋 Доступ к группам: {len(accessible_groups)}\n"
-    message += f"💬 Доступ к чатам: {len(accessible_chats)}"
+    message = "🆔 **ИНФОРМАЦИЯ ОБ ИДЕНТИФИКАТОРАХ**\n\n"
+    
+    message += "👤 **ИНФОРМАЦИЯ О ПОЛЬЗОВАТЕЛЕ:**\n"
+    message += f"• Ваш ID: `{user_id}`\n"
+    message += f"• Username: @{user.username or 'не установлен'}\n"
+    message += f"• Имя: {user.full_name}\n"
+    message += f"• Должность: {user_role}\n\n"
+    
+    message += "💬 **ИНФОРМАЦИЯ О ЧАТЕ:**\n"
+    message += f"• ID чата: `{chat_id}`\n"
+    message += f"• Тип чата: {chat_type}\n"
+    message += f"• Название: {chat.title or 'личные сообщения'}\n\n"
+    
+    message += "🔐 **ВАШИ ПРАВА ДОСТУПА:**\n"
+    message += f"• Доступ к группам: {len(accessible_groups)}\n"
+    message += f"• Доступ к чатам: {len(accessible_chats)}"
+    
+    # Добавляем список доступных чатов, если их немного
+    if accessible_chats and len(accessible_chats) <= 10:
+        message += "\n\n📋 **ВАШИ ДОСТУПНЫЕ ЧАТЫ:**\n"
+        from user_chat_manager import user_chat_manager
+        user_chats = user_chat_manager.get_user_chat_access(user_id)
+        for i, chat_info in enumerate(user_chats, 1):
+            message += f"{i}. {chat_info['chat_name']} (ID: `{chat_info['chat_id']}`)\n"
     
     await update.message.reply_text(
         message,
-        parse_mode=None,
+        parse_mode='Markdown',
         reply_markup=get_main_keyboard(user_id)
     )
 
