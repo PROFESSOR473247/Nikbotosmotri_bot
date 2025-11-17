@@ -178,14 +178,14 @@ def main():
     print("🔄 Регистрация ConversationHandler...")
     
     # Получаем ConversationHandler для всех модулей
+    admin_conv_handler = get_admin_conversation_handler()
     template_conv_handler = get_template_conversation_handler()
     task_conv_handler = get_task_conversation_handler()
-    admin_conv_handler = get_admin_conversation_handler()
 
     # Добавляем ConversationHandler
+    application.add_handler(admin_conv_handler)    # ПЕРВЫЙ!
     application.add_handler(template_conv_handler)
     application.add_handler(task_conv_handler)
-    application.add_handler(admin_conv_handler)
 
     print(f"✅ ConversationHandler зарегистрированы:")
     print(f"   • Шаблоны: {len(template_conv_handler.entry_points)} entry points")
