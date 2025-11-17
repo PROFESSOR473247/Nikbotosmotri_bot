@@ -1035,26 +1035,33 @@ def get_admin_conversation_handler():
             # ДОБАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯ
             ADD_USER_ID: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, add_user_id),
+                MessageHandler(filters.Regex("^🔙 Назад$"), users_management)
             ],
             ADD_USER_NAME: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, add_user_name),
+                MessageHandler(filters.Regex("^🔙 Назад$"), add_user_start)
             ],
             ADD_USER_ROLE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, add_user_role),
+                MessageHandler(filters.Regex("^🔙 Назад$"), add_user_name)
             ],
             ADD_USER_CHATS: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, add_user_chats),
+                MessageHandler(filters.Regex("^🔙 Назад$"), add_user_role)
             ],
             ADD_USER_GROUPS: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, add_user_groups),
+                MessageHandler(filters.Regex("^🔙 Назад$"), add_user_chats)
             ],
             
             # УДАЛЕНИЕ ПОЛЬЗОВАТЕЛЯ
             DELETE_USER_SELECT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, delete_user_select),
+                MessageHandler(filters.Regex("^🔙 Назад$"), users_management)
             ],
             DELETE_USER_CONFIRM: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, delete_user_confirm),
+                MessageHandler(filters.Regex("^🔙 Назад$"), delete_user_select)
             ],
             
             # === УПРАВЛЕНИЕ TELEGRAM ЧАТАМИ ===
@@ -1068,25 +1075,28 @@ def get_admin_conversation_handler():
             # ДОБАВЛЕНИЕ ЧАТА
             ADD_CHAT_ID: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, add_chat_id),
+                MessageHandler(filters.Regex("^🔙 Назад$"), chats_management)
             ],
             ADD_CHAT_NAME: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, add_chat_name),
+                MessageHandler(filters.Regex("^🔙 Назад$"), add_chat_id)
             ],
             ADD_CHAT_USERS: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, add_chat_users),
+                MessageHandler(filters.Regex("^🔙 Назад$"), add_chat_name)
             ],
             
             # УДАЛЕНИЕ ЧАТА
             DELETE_CHAT_SELECT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, delete_chat_select),
+                MessageHandler(filters.Regex("^🔙 Назад$"), chats_management)
             ],
             DELETE_CHAT_CONFIRM: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, delete_chat_confirm),
+                MessageHandler(filters.Regex("^🔙 Назад$"), delete_chat_select)
             ],
         },
         fallbacks=[CommandHandler("cancel", cancel_admin)],
-        
-        # ВАЖНО: Добавьте эти параметры
         allow_reentry=True,
         per_chat=False,
         per_user=True,
