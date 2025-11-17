@@ -19,7 +19,6 @@ from handlers.task_handlers import get_task_conversation_handler
 from handlers.admin_handlers import get_admin_conversation_handler, admin_stats, check_access
 from handlers.basic_handlers import handle_text, cancel
 from task_scheduler import init_scheduler, task_scheduler
-from chat_middleware import check_chat_context
 
 # Настройка логирования
 logging.basicConfig(
@@ -177,20 +176,20 @@ def main():
     # 1. Сначала ConversationHandler (самые специфичные)
     print("🔄 Регистрация ConversationHandler...")
     
-    # Получаем ConversationHandler для всех модулей
+    # ВАЖНО: Админский обработчик должен быть ПЕРВЫМ
     admin_conv_handler = get_admin_conversation_handler()
     template_conv_handler = get_template_conversation_handler()
     task_conv_handler = get_task_conversation_handler()
 
-    # Добавляем ConversationHandler
+    # Добавляем ConversationHandler в правильном порядке
     application.add_handler(admin_conv_handler)    # ПЕРВЫЙ!
     application.add_handler(template_conv_handler)
     application.add_handler(task_conv_handler)
 
     print(f"✅ ConversationHandler зарегистрированы:")
-    print(f"   • Шаблоны: {len(template_conv_handler.entry_points)} entry points")
-    print(f"   • Задачи: {len(task_conv_handler.entry_points)} entry points") 
-    print(f"   • Администрирование: {len(admin_conv_handler.entry_points)} entry points")
+    print(f"   • Администрирование: {len(admin_conv_handler.states)} состояний")
+    print(f"   • Шаблоны: {len(template_conv_handler.states)} состояний")
+    print(f"   • Задачи: {len(task_conv_handler.states)} состояний")
 
     # 2. Затем команды
     application.add_handler(CommandHandler("start", start))
