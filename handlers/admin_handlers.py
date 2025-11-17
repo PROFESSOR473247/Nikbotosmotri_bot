@@ -990,10 +990,10 @@ def get_admin_conversation_handler():
         entry_points=[MessageHandler(filters.Regex("^⚙️ Администрирование$"), admin_main)],
         states={
             ADMIN_MAIN: [
-                MessageHandler(filters.Regex("^👥 Пользователи$"), users_management),
-                MessageHandler(filters.Regex("^💬 Тг чаты$"), chats_management),
-                MessageHandler(filters.Regex("^🔧 Тест прав$"), test_permissions),
-                MessageHandler(filters.Regex("^📋 Справка$"), admin_help),
+                MessageHandler(filters.Regex("^👥 Пользователи$"), debug_admin),  # Временно для теста
+                MessageHandler(filters.Regex("^💬 Тг чаты$"), debug_admin),       # Временно для теста
+                MessageHandler(filters.Regex("^🔧 Тест прав$"), debug_admin),     # Временно для теста
+                MessageHandler(filters.Regex("^📋 Справка$"), debug_admin),       # Временно для теста
                 MessageHandler(filters.Regex("^🔙 Главное меню$"), cancel_admin)
             ],
             
