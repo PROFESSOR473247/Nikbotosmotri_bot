@@ -1631,9 +1631,10 @@ def get_admin_conversation_handler():
             # === УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ ===
             USERS_MANAGEMENT: [
                 MessageHandler(filters.Regex("^➕ Добавить пользователя$"), add_user_start),
+                MessageHandler(filters.Regex("^✏️ Изменить доступ$"), edit_user_start),  # ДОБАВЬТЕ ЭТУ СТРОКУ
                 MessageHandler(filters.Regex("^📋 Список пользователей$"), list_users),
-                MessageHandler(filters.Regex("^🗑️ Удалить пользователя$"), delete_user_start),
-                MessageHandler(filters.Regex("^🔙 К администрированию$"), admin_main)
+            MessageHandler(filters.Regex("^🗑️ Удалить пользователя$"), delete_user_start),
+            MessageHandler(filters.Regex("^🔙 К администрированию$"), admin_main)
             ],
             
             # ДОБАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯ
@@ -1658,6 +1659,28 @@ def get_admin_conversation_handler():
                 MessageHandler(filters.Regex("^🔙 Назад$"), add_user_chats)
             ],
             
+            # Добавьте новые состояния для редактирования пользователей:
+            EDIT_USER_SELECT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_user_select),
+                MessageHandler(filters.Regex("^🔙 Назад$"), users_management)
+            ],
+            EDIT_USER_MAIN: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_user_main),
+                MessageHandler(filters.Regex("^🔙 Назад$"), edit_user_select)
+            ],
+            EDIT_USER_ROLE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_user_role),
+                MessageHandler(filters.Regex("^🔙 Назад$"), edit_user_main)
+            ],
+            EDIT_USER_CHATS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_user_chats),
+                MessageHandler(filters.Regex("^🔙 Назад$"), edit_user_main)
+            ],
+            EDIT_USER_GROUPS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_user_groups),
+                MessageHandler(filters.Regex("^🔙 Назад$"), edit_user_main)
+            ],
+            
             # УДАЛЕНИЕ ПОЛЬЗОВАТЕЛЯ
             DELETE_USER_SELECT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, delete_user_select),
@@ -1671,6 +1694,7 @@ def get_admin_conversation_handler():
             # === УПРАВЛЕНИЕ TELEGRAM ЧАТАМИ ===
             CHATS_MANAGEMENT: [
                 MessageHandler(filters.Regex("^➕ Добавить чат$"), add_chat_start),
+                MessageHandler(filters.Regex("^✏️ Изменить доступ$"), edit_chat_start),  # ДОБАВЬТЕ ЭТУ СТРОКУ
                 MessageHandler(filters.Regex("^📋 Список чатов$"), list_chats),
                 MessageHandler(filters.Regex("^🗑️ Удалить чат$"), delete_chat_start),
                 MessageHandler(filters.Regex("^🔙 К администрированию$"), admin_main)
@@ -1688,6 +1712,23 @@ def get_admin_conversation_handler():
             ADD_CHAT_USERS: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, add_chat_users),
                 MessageHandler(filters.Regex("^🔙 Назад$"), add_chat_name)
+            ],
+            
+            EDIT_CHAT_SELECT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_chat_select),
+                MessageHandler(filters.Regex("^🔙 Назад$"), chats_management)
+            ],
+            EDIT_CHAT_MAIN: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_chat_main),
+                MessageHandler(filters.Regex("^🔙 Назад$"), edit_chat_select)
+            ],
+            EDIT_CHAT_ADD_USER: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_chat_add_user),
+                MessageHandler(filters.Regex("^🔙 Назад$"), edit_chat_main)
+            ],
+            EDIT_CHAT_REMOVE_USER: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_chat_remove_user),
+                MessageHandler(filters.Regex("^🔙 Назад$"), edit_chat_main)
             ],
             
             # УДАЛЕНИЕ ЧАТА
