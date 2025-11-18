@@ -16,19 +16,19 @@ bot_instance = None
 
 logger = logging.getLogger(__name__)
 
-def init_scheduler(bot_token):
-    """Инициализирует планировщик задач"""
+def init_scheduler(application):
+    """Инициализирует планировщик задач с использованием application"""
     global task_scheduler, bot_instance
     
     if task_scheduler is None:
         task_scheduler = AsyncIOScheduler()
-        bot_instance = Bot(token=bot_token)
+        bot_instance = application.bot
         print("✅ Планировщик задач инициализирован")
     
     return task_scheduler
 
 async def execute_task(task_id, task_data):
-    """Выполняет задачу - отправляет сообщение"""
+    """Выполняет задачу - отправляет сообщение в указанный чат"""
     global bot_instance
     
     try:
@@ -69,11 +69,7 @@ async def execute_task(task_id, task_data):
             print(f"✅ Отправлен текст в чат {target_chat_id}")
         
         # Обновляем время выполнения
-        next_execution = calculate_next_execution(
-            task_data.get('time'), 
-            task_data.get('days', [])
-        )
-        update_task_execution_time(task_id, next_execution)
+        update_task_execution_time(task_id)
         
         print(f"✅ Задача выполнена: {task_data['template_name']}")
         
@@ -84,16 +80,16 @@ async def execute_task(task_id, task_data):
         import traceback
         traceback.print_exc()
 
-async def execute_test_task(template, update, context):
-    """Выполняет тестовую задачу немедленно"""
+async def execute_test_task(template, update, context, target_chat_id=None):
+    """Выполняет тестовую задачу немедленно в указанный чат"""
     try:
         user_id = update.effective_user.id
-        chat_id = update.effective_chat.id
         
-        print(f"🧪 Выполнение тестовой задачи: {template['name']}")
+        # Если чат не указан, отправляем в текущий чат
+        if not target_chat_id:
+            target_chat_id = update.effective_chat.id
         
-        # Для тестовых задач отправляем в текущий чат
-        target_chat_id = chat_id
+        print(f"🧪 Выполнение тестовой задачи: {template['name']} в чат {target_chat_id}")
         
         # Подготавливаем сообщение
         message_text = template.get('text', '')
@@ -115,21 +111,14 @@ async def execute_test_task(template, update, context):
             )
             print(f"✅ Тест: отправлен текст в чат {target_chat_id}")
         
-        # Импортируем здесь чтобы избежать циклического импорта
-        from keyboards.task_keyboards import get_tasks_main_keyboard
-        
-        await update.message.reply_text(
-            f"✅ Тестовое сообщение отправлено в этот чат!\n\n"
-            f"📝 Шаблон: {template['name']}",
-            reply_markup=get_tasks_main_keyboard()
-        )
-        
     except Exception as e:
         print(f"❌ Ошибка тестовой задачи: {e}")
         await update.message.reply_text(
             f"❌ Ошибка отправки тестового сообщения: {e}",
             reply_markup=get_tasks_main_keyboard()
         )
+
+# Остальные функции остаются без изменений...
 
 def schedule_existing_tasks():
     """Планирует существующие активные задачи"""
