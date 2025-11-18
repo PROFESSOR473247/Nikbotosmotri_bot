@@ -4,7 +4,7 @@ import os
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 import pytz
-from datetime import datetime
+from datetime import datetime, timedelta
 from telegram import Bot
 from telegram.error import TelegramError
 
@@ -137,6 +137,36 @@ def schedule_existing_tasks():
                 scheduled_count += 1
     
     print(f"✅ Запланировано задач: {scheduled_count}")
+
+def schedule_test_task(task_id, task_data):
+    """Планирует выполнение тестовой задачи через 5 секунд"""
+    global task_scheduler
+    
+    if not task_scheduler:
+        return False
+    
+    try:
+        # Планируем выполнение через 5 секунд
+        from datetime import datetime, timedelta
+        from apscheduler.triggers.date import DateTrigger
+        
+        execution_time = datetime.now() + timedelta(seconds=5)
+        
+        task_scheduler.add_job(
+            execute_task,
+            trigger=DateTrigger(run_date=execution_time),
+            args=[task_id, task_data],
+            id=f"test_{task_id}",
+            name=f"test_task_{task_id}",
+            replace_existing=True
+        )
+        
+        print(f"✅ Тестовая задача запланирована на: {execution_time}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Ошибка планирования тестовой задачи {task_id}: {e}")
+        return False
 
 def schedule_task(task_id, task_data):
     """Планирует выполнение задачи по расписанию"""
