@@ -538,6 +538,46 @@ def create_task_from_template(template, created_by, target_chat_id=None, is_test
         import traceback
         traceback.print_exc()
         return False, None
+        
+        # ===== ФУНКЦИИ ДЛЯ ПЛАНИРОВЩИКА =====
+
+def update_task_execution_time(task_id):
+    """Обновляет время последнего выполнения задачи"""
+    try:
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return update_task_field(task_id, 'last_executed', current_time)
+    except Exception as e:
+        print(f"❌ Ошибка обновления времени выполнения задачи {task_id}: {e}")
+        return False
+
+def calculate_next_execution(task):
+    """Рассчитывает следующее время выполнения задачи"""
+    try:
+        from datetime import datetime, timedelta
+        
+        if not task.get('days') or not task.get('time'):
+            return None
+            
+        current_time = datetime.now()
+        current_weekday = current_time.weekday()
+        task_days = [int(day) for day in task['days']]
+        
+        # Находим следующий день выполнения
+        for day_offset in range(1, 8):
+            next_day = (current_weekday + day_offset) % 7
+            if str(next_day) in task_days:
+                next_date = current_time + timedelta(days=day_offset)
+                
+                # Устанавливаем время выполнения
+                hour, minute = map(int, task['time'].split(':'))
+                next_execution = next_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                
+                return next_execution.strftime("%Y-%m-%d %H:%M:%S")
+        
+        return None
+    except Exception as e:
+        print(f"❌ Ошибка расчета следующего выполнения задачи: {e}")
+        return None
 
 # Инициализация при импорте
 print("📥 Task_manager загружен")
