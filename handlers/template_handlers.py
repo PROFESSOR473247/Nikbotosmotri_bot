@@ -128,7 +128,10 @@ async def template_list_by_group_show(update: Update, context: ContextTypes.DEFA
     user_text = update.message.text
     
     if user_text == "🔙 Назад":
-        await template_list_menu(update, context)
+        await update.message.reply_text(
+            "🔄 Возврат к выбору способа просмотра:",
+            reply_markup=get_template_list_menu_keyboard()
+        )
         return TEMPLATE_LIST_MENU
     
     # Извлекаем название группы из текста (убираем эмодзи)
