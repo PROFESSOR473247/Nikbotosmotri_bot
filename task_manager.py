@@ -4,7 +4,7 @@ import uuid
 import shutil
 from datetime import datetime, timedelta
 from database import db
-from database_tasks import save_task_to_db, load_tasks_from_db, update_task_in_db, delete_task_from_db  # ДОБАВИТЬ ЭТУ СТРОКУ
+from database_tasks import save_task_to_db, load_tasks_from_db, update_task_in_db, delete_task_from_db
 
 # Дни недели для отображения
 DAYS_OF_WEEK = {
