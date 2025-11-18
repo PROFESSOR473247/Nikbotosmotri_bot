@@ -99,9 +99,12 @@ def init_database():
 def save_task(task_data):
     """Сохраняет задачу в базу данных"""
     try:
-        return db.save_task(task_data)
+        print(f"💾 Попытка сохранения задачи в базу данных...")
+        return database_tasks.save_task_to_db(task_data)
     except Exception as e:
         print(f"❌ Ошибка сохранения задачи: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def create_task(task_data):
