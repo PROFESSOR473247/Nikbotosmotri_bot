@@ -445,7 +445,11 @@ def update_task_field(task_id, field_name, field_value):
             return False, "Задача не найдена"
         
         task[field_name] = field_value
-        return update_task(task_id, task)
+        success = update_task(task_id, task)
+        if success:
+            return True, f"Поле {field_name} успешно обновлено"
+        else:
+            return False, f"Ошибка обновления поля {field_name}"
     except Exception as e:
         print(f"❌ Ошибка обновления поля {field_name} задачи {task_id}: {e}")
         return False, f"Ошибка обновления: {e}"
@@ -453,7 +457,11 @@ def update_task_field(task_id, field_name, field_value):
 def activate_task(task_id):
     """Активирует задачу"""
     try:
-        return update_task_field(task_id, 'is_active', True)
+        success = update_task_field(task_id, 'is_active', True)
+        if success:
+            return True, f"Задача {task_id} успешно активирована"
+        else:
+            return False, f"Ошибка активации задачи {task_id}"
     except Exception as e:
         print(f"❌ Ошибка активации задачи {task_id}: {e}")
         return False, f"Ошибка активации: {e}"
@@ -461,7 +469,11 @@ def activate_task(task_id):
 def deactivate_task(task_id):
     """Деактивирует задачу"""
     try:
-        return update_task_field(task_id, 'is_active', False)
+        success = update_task_field(task_id, 'is_active', False)
+        if success:
+            return True, f"Задача {task_id} успешно деактивирована"
+        else:
+            return False, f"Ошибка деактивации задачи {task_id}"
     except Exception as e:
         print(f"❌ Ошибка деактивации задачи {task_id}: {e}")
         return False, f"Ошибка деактивации: {e}"
