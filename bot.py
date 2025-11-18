@@ -15,7 +15,7 @@ from telegram.ext import (
 from config import BOT_TOKEN
 from handlers.start_handlers import start, help_command, my_id, now, update_menu
 from handlers.template_handlers import get_template_conversation_handler
-from handlers.task_handlers import get_task_conversation_handler
+from handlers.enhanced_task_handlers import get_enhanced_task_conversation_handler
 from handlers.admin_handlers import get_admin_conversation_handler, admin_stats, check_access
 from handlers.basic_handlers import handle_text, cancel
 from task_scheduler import init_scheduler, task_scheduler
@@ -234,7 +234,7 @@ def main():
     # 1. Сначала ConversationHandler (самые специфичные)
     admin_conv_handler = get_admin_conversation_handler()
     template_conv_handler = get_template_conversation_handler()
-    task_conv_handler = get_task_conversation_handler()
+    task_conv_handler = get_enhanced_task_conversation_handler()
 
     # Добавляем ConversationHandler в правильном порядке
     application.add_handler(admin_conv_handler)    # ПЕРВЫЙ!
