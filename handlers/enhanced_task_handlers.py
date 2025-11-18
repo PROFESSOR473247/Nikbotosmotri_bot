@@ -1,5 +1,5 @@
 """
-Улучшенные обработчики задач с выбором чата и проверкой доступа
+Упрощенные улучшенные обработчики задач с выбором чата
 """
 
 from telegram import Update, ReplyKeyboardMarkup
@@ -7,15 +7,12 @@ from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, Mess
 from keyboards.task_keyboards import (
     get_tasks_main_keyboard, get_groups_keyboard,
     get_task_confirmation_keyboard, get_task_edit_keyboard,
-    get_template_edit_keyboard, get_back_keyboard,
-    get_chat_selection_keyboard, get_deactivate_confirmation_keyboard
+    get_back_keyboard, get_chat_selection_keyboard, get_deactivate_confirmation_keyboard
 )
 from keyboards.main_keyboards import get_main_keyboard
-from keyboards.template_keyboards import get_templates_main_keyboard
 from template_manager import (
     get_user_accessible_groups, get_templates_by_group,
-    get_template_by_name_and_group, format_template_info,
-    update_template, get_template_by_id
+    get_template_by_name_and_group
 )
 from task_manager import (
     create_task_from_template, get_active_tasks_by_group,
@@ -25,17 +22,17 @@ from task_manager import (
 from auth_manager import auth_manager
 from chat_access_manager import chat_access_manager
 
-# Состояния для улучшенного ConversationHandler задач
+# Состояния для ConversationHandler задач
 (
     TASKS_MAIN, CREATE_TASK_GROUP, CREATE_TASK_SELECT, CREATE_TASK_CHAT_SELECT, CREATE_TASK_CONFIRM,
-    CREATE_TASK_EDIT, CREATE_TASK_EDIT_TEMPLATE, DEACTIVATE_TASK_GROUP, DEACTIVATE_TASK_SELECT, 
-    DEACTIVATE_TASK_CONFIRM, TEST_TASK_GROUP, TEST_TASK_SELECT, TEST_TASK_CHAT_SELECT, TEST_TASK_CONFIRM
-) = range(14)
+    CREATE_TASK_EDIT, DEACTIVATE_TASK_GROUP, DEACTIVATE_TASK_SELECT, DEACTIVATE_TASK_CONFIRM,
+    TEST_TASK_GROUP, TEST_TASK_SELECT, TEST_TASK_CHAT_SELECT, TEST_TASK_CONFIRM
+) = range(13)
 
 # ===== ОСНОВНЫЕ ФУНКЦИИ ЗАДАЧ =====
 
 async def enhanced_tasks_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Главное меню задач (уровень 2)"""
+    """Главное меню задач"""
     user_id = update.effective_user.id
     auth_manager.update_user_role_if_needed(user_id)
     
@@ -65,7 +62,7 @@ async def enhanced_create_task_start(update: Update, context: ContextTypes.DEFAU
     accessible_chats = await chat_access_manager.get_user_accessible_chats_with_membership(user_id)
     if not accessible_chats:
         await update.message.reply_text(
-            "❌ У вас нет доступа ни к одному Telegram чату или вы не состоите в них\n\n"
+            "❌ У вас нет доступа ни к одному Telegram чату\n\n"
             "Обратитесь к администратору для предоставления доступа к чатам",
             reply_markup=get_tasks_main_keyboard()
         )
@@ -90,8 +87,6 @@ async def enhanced_create_task_select_group(update: Update, context: ContextType
     """Выбор группы для создания задачи"""
     user_text = update.message.text
     user_id = update.effective_user.id
-    
-    print(f"🔍 Пользователь выбрал группу: {user_text}")
     
     # Если нажата кнопка "Назад"
     if user_text == "🔙 К задачам":
@@ -152,8 +147,6 @@ async def enhanced_create_task_select_template(update: Update, context: ContextT
     template_text = update.message.text
     user_id = update.effective_user.id
     
-    print(f"🔍 Пользователь выбрал шаблон: {template_text}")
-    
     # Если нажата кнопка "Назад"
     if template_text == "🔙 Назад":
         await update.message.reply_text(
@@ -162,7 +155,7 @@ async def enhanced_create_task_select_template(update: Update, context: ContextT
         )
         return CREATE_TASK_GROUP
     
-    # Извлекаем название шаблона из текста (убираем эмодзи)
+    # Извлекаем название шаблона из текста
     if template_text.startswith("📝 "):
         template_name = template_text[2:].strip()
     else:
@@ -202,9 +195,6 @@ async def enhanced_create_task_select_template(update: Update, context: ContextT
 async def enhanced_create_task_select_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Выбор чата для задачи"""
     user_text = update.message.text
-    user_id = update.effective_user.id
-    
-    print(f"🔍 Пользователь выбрал чат: {user_text}")
     
     # Если нажата кнопка "Назад"
     if user_text == "🔙 Назад":
@@ -267,7 +257,7 @@ def format_enhanced_task_confirmation(template, chat_name):
     try:
         from template_manager import safe_format_days_list, safe_get_frequency_name, safe_get_template_value
         
-        # Безопасно обрабатываем дни недели
+        # Безопасно обрабатываем данные
         days_names = safe_format_days_list(template.get('days', []))
         frequency = safe_get_frequency_name(template.get('frequency', 'Не указана'))
         
@@ -352,626 +342,17 @@ async def enhanced_create_task_confirm(update: Update, context: ContextTypes.DEF
         )
         return CREATE_TASK_CONFIRM
 
-async def enhanced_create_task_edit_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка выбора редактирования на этапе подтверждения"""
-    choice = update.message.text
-    
-    if choice == "🔙 Назад":
-        # Возвращаемся к подтверждению
-        return await show_task_confirmation(update, context)
-    
-    elif choice == "🏷️ Изменить группу":
-        user_id = update.effective_user.id
-        await update.message.reply_text(
-            "🔄 **Выберите новую группу:**",
-            reply_markup=get_groups_keyboard(user_id, "task")
-        )
-        return CREATE_TASK_GROUP
-    
-    elif choice == "📝 Выбрать другой шаблон":
-        group_id = context.user_data['task_creation']['group']
-        templates = get_templates_by_group(group_id)
-        
-        # Создаем клавиатуру с шаблонами
-        keyboard = []
-        for template_id, template in templates:
-            keyboard.append([f"📝 {template['name']}"])
-        
-        keyboard.append(["🔙 Назад"])
-        
-        await update.message.reply_text(
-            "🔄 **Выберите другой шаблон:**",
-            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-        )
-        return CREATE_TASK_SELECT
-    
-    elif choice == "⚙️ Изменить настройки шаблона":
-        # Переходим к редактированию шаблона
-        template_id = context.user_data['task_creation']['template_id']
-        template = context.user_data['task_creation']['template']
-        
-        # Сохраняем текущий шаблон для редактирования
-        context.user_data['editing_template_id'] = template_id
-        context.user_data['editing_template'] = template
-        context.user_data['editing_in_task_creation'] = True
-        
-        # Показываем меню редактирования шаблона
-        info = format_template_info(template)
-        
-        await update.message.reply_text(
-            f"✏️ **Редактирование шаблона**\n\n{info}\n"
-            "**Выберите поле для редактирования:**",
-            parse_mode='Markdown',
-            reply_markup=get_template_edit_keyboard()
-        )
-        return CREATE_TASK_EDIT_TEMPLATE
-    
-    elif choice == "💬 Изменить чат":
-        # Возвращаемся к выбору чата
-        accessible_chats = context.user_data['task_creation']['accessible_chats']
-        await update.message.reply_text(
-            "🔄 **Выберите другой Telegram чат:**",
-            reply_markup=get_chat_selection_keyboard(accessible_chats)
-        )
-        return CREATE_TASK_CHAT_SELECT
-    
-    else:
-        await update.message.reply_text(
-            "❌ Неверный выбор",
-            reply_markup=get_task_edit_keyboard()
-        )
-        return CREATE_TASK_EDIT
-
-async def enhanced_create_task_edit_template(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Редактирование шаблона в процессе создания задачи"""
-    # Используем существующие функции редактирования шаблонов
-    from handlers.template_handlers import (
-        edit_template_choose_field, edit_template_name, edit_template_text,
-        edit_template_image, edit_template_time, edit_template_days,
-        edit_template_frequency, save_edited_template
-    )
-    
-    user_text = update.message.text
-    
-    # Если завершено редактирование, возвращаемся к подтверждению задачи
-    if user_text == "✅ Завершить редактирование":
-        template_id = context.user_data['editing_template_id']
-        template_data = context.user_data['editing_template']
-        
-        # Обновляем шаблон в базе данных
-        success = update_template(template_id, template_data)
-        
-        if success:
-            # Обновляем данные в контексте создания задачи
-            context.user_data['task_creation']['template'] = template_data
-            context.user_data['task_creation']['template_id'] = template_id
-            
-            await update.message.reply_text(
-                "✅ Шаблон успешно обновлен!",
-                reply_markup=get_task_edit_keyboard()
-            )
-            
-            # Удаляем временные данные редактирования
-            if 'editing_template_id' in context.user_data:
-                del context.user_data['editing_template_id']
-            if 'editing_template' in context.user_data:
-                del context.user_data['editing_template']
-            if 'editing_in_task_creation' in context.user_data:
-                del context.user_data['editing_in_task_creation']
-            
-            return CREATE_TASK_EDIT
-        else:
-            await update.message.reply_text(
-                "❌ Ошибка обновления шаблона",
-                reply_markup=get_template_edit_keyboard()
-            )
-            return CREATE_TASK_EDIT_TEMPLATE
-    
-    # Если нажата кнопка "Назад"
-    if user_text == "🔙 Назад":
-        await update.message.reply_text(
-            "🔄 Возврат к выбору редактирования:",
-            reply_markup=get_task_edit_keyboard()
-        )
-        return CREATE_TASK_EDIT
-    
-    # Перенаправляем на соответствующие обработчики редактирования
-    if 'editing_field' not in context.user_data:
-        # Выбор поля для редактирования
-        if user_text in ["🏷️ Название", "📝 Текст", "🖼️ Изображение", 
-                        "⏰ Время", "📅 Дни отправки", "🔄 Периодичность"]:
-            context.user_data['editing_field'] = user_text
-            return await handle_template_field_selection(update, context)
-        else:
-            await update.message.reply_text(
-                "❌ Неверный выбор поля",
-                reply_markup=get_template_edit_keyboard()
-            )
-            return CREATE_TASK_EDIT_TEMPLATE
-    else:
-        # Обработка ввода данных для выбранного поля
-        return await handle_template_field_input(update, context)
-
-async def handle_template_field_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обрабатывает выбор поля шаблона для редактирования"""
-    field = context.user_data['editing_field']
-    template = context.user_data['editing_template']
-    
-    if field == "🏷️ Название":
-        await update.message.reply_text(
-            f"✏️ Введите новое название шаблона:\n\nТекущее: {template.get('name', 'Не указано')}",
-            reply_markup=get_back_keyboard()
-        )
-        return CREATE_TASK_EDIT_TEMPLATE
-        
-    elif field == "📝 Текст":
-        await update.message.reply_text(
-            f"✏️ Введите новый текст шаблона:\n\nТекущий: {template.get('text', 'Не указан')[:100]}...",
-            reply_markup=get_back_keyboard()
-        )
-        return CREATE_TASK_EDIT_TEMPLATE
-        
-    elif field == "🖼️ Изображение":
-        await update.message.reply_text(
-            "✏️ Пришлите новое изображение или нажмите '⏭️ Пропустить' для удаления текущего:",
-            reply_markup=get_skip_keyboard()
-        )
-        return CREATE_TASK_EDIT_TEMPLATE
-        
-    elif field == "⏰ Время":
-        await update.message.reply_text(
-            f"✏️ Введите новое время отправки (ЧЧ:ММ МСК):\n\nТекущее: {template.get('time', 'Не указано')}",
-            reply_markup=get_back_keyboard()
-        )
-        return CREATE_TASK_EDIT_TEMPLATE
-        
-    elif field == "📅 Дни отправки":
-        # Сохраняем текущие дни для редактирования
-        context.user_data['selected_days'] = template.get('days', [])
-        selected_days_text = [DAYS_OF_WEEK[d] for d in context.user_data['selected_days']]
-        await update.message.reply_text(
-            f"📅 **Выберите дни отправки:**\n\n"
-            f"Текущие дни: {', '.join(selected_days_text) if selected_days_text else 'Не указаны'}\n\n"
-            "Выберите дни из списка:",
-            parse_mode='Markdown',
-            reply_markup=get_days_keyboard(context.user_data['selected_days'])
-        )
-        return CREATE_TASK_EDIT_TEMPLATE
-        
-    elif field == "🔄 Периодичность":
-        current_freq = template.get('frequency', 'weekly')
-        freq_text = "📅 1 в неделю" if current_freq == "weekly" else "🗓️ 2 в месяц" if current_freq == "2_per_month" else "📆 1 в месяц"
-        await update.message.reply_text(
-            f"🔄 Выберите новую периодичность:\n\nТекущая: {freq_text}",
-            reply_markup=get_frequency_keyboard()
-        )
-        return CREATE_TASK_EDIT_TEMPLATE
-
-async def handle_template_field_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обрабатывает ввод данных для выбранного поля шаблона"""
-    field = context.user_data['editing_field']
-    user_text = update.message.text
-    
-    if field == "🏷️ Название":
-        if user_text == "🔙 Назад":
-            del context.user_data['editing_field']
-            await update.message.reply_text(
-                "🔄 Возврат к выбору поля:",
-                reply_markup=get_template_edit_keyboard()
-            )
-            return CREATE_TASK_EDIT_TEMPLATE
-        
-        context.user_data['editing_template']['name'] = user_text
-        await update.message.reply_text(
-            f"✅ Название обновлено: {user_text}",
-            reply_markup=get_template_edit_keyboard()
-        )
-        del context.user_data['editing_field']
-        return CREATE_TASK_EDIT_TEMPLATE
-        
-    elif field == "📝 Текст":
-        if user_text == "🔙 Назад":
-            del context.user_data['editing_field']
-            await update.message.reply_text(
-                "🔄 Возврат к выбору поля:",
-                reply_markup=get_template_edit_keyboard()
-            )
-            return CREATE_TASK_EDIT_TEMPLATE
-        
-        context.user_data['editing_template']['text'] = user_text
-        await update.message.reply_text(
-            "✅ Текст шаблона обновлен",
-            reply_markup=get_template_edit_keyboard()
-        )
-        del context.user_data['editing_field']
-        return CREATE_TASK_EDIT_TEMPLATE
-        
-    # Аналогично для других полей...
-    # Для экономии места опускаю полную реализацию всех полей
-    
-    return CREATE_TASK_EDIT_TEMPLATE
-
-def get_skip_keyboard():
-    """Клавиатура для пропуска"""
-    from keyboards.template_keyboards import get_skip_keyboard as get_skip_kb
-    return get_skip_kb()
-
-def get_days_keyboard(selected_days):
-    """Клавиатура выбора дней"""
-    from keyboards.template_keyboards import get_days_keyboard as get_days_kb
-    return get_days_kb(selected_days)
-
-def get_frequency_keyboard():
-    """Клавиатура выбора периодичности"""
-    from keyboards.template_keyboards import get_frequency_keyboard as get_freq_kb
-    return get_freq_kb()
-
-DAYS_OF_WEEK = {
-    '0': 'Понедельник', '1': 'Вторник', '2': 'Среда',
-    '3': 'Четверг', '4': 'Пятница', '5': 'Суббота', '6': 'Воскресенье'
-}
-
-# ===== ТЕСТИРОВАНИЕ С ВЫБОРОМ ЧАТА =====
-
-async def enhanced_test_task_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Начало тестирования задачи с выбором чата"""
-    user_id = update.effective_user.id
-    accessible_groups = get_user_accessible_groups(user_id)
-    
-    if not accessible_groups:
-        await update.message.reply_text(
-            "❌ У вас нет доступа ни к одной группе",
-            reply_markup=get_tasks_main_keyboard()
-        )
-        return TASKS_MAIN
-    
-    # Проверяем доступные чаты
-    accessible_chats = await chat_access_manager.get_user_accessible_chats_with_membership(user_id)
-    if not accessible_chats:
-        await update.message.reply_text(
-            "❌ У вас нет доступа ни к одному Telegram чату или вы не состоите в них",
-            reply_markup=get_tasks_main_keyboard()
-        )
-        return TASKS_MAIN
-    
-    context.user_data['task_creation'] = {
-        'created_by': user_id,
-        'is_test': True,
-        'accessible_chats': accessible_chats
-    }
-    
-    await update.message.reply_text(
-        "🧪 **Тестирование задачи**\n\n"
-        "Шаг 1 из 3: Выберите группу:",
-        parse_mode='Markdown',
-        reply_markup=get_groups_keyboard(user_id, "test")
-    )
-    return TEST_TASK_GROUP
-
-async def enhanced_test_task_select_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Выбор группы для тестирования"""
-    return await enhanced_create_task_select_group(update, context)
-
-async def enhanced_test_task_select_template(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Выбор шаблона для тестирования"""
-    return await enhanced_create_task_select_template(update, context)
-
-async def enhanced_test_task_select_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Выбор чата для тестирования"""
-    return await enhanced_create_task_select_chat(update, context)
-
-async def enhanced_test_task_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Подтверждение тестирования"""
-    user_choice = update.message.text
-    task_data = context.user_data['task_creation']
-    template = task_data['template']
-    
-    if user_choice == "✅ Подтвердить":
-        # Создаем тестовую задачу
-        success, task_id = create_task_from_template(
-            template, 
-            task_data['created_by'],
-            target_chat_id=task_data.get('target_chat_id'),
-            is_test=True
-        )
-        
-        if success:
-            # Для тестовых задач сразу выполняем отправку
-            from task_scheduler import execute_test_task
-            await execute_test_task(template, update, context, task_data.get('target_chat_id'))
-            
-            chat_name = task_data.get('target_chat_name', 'текущий чат')
-            await update.message.reply_text(
-                f"✅ Тестовая задача успешно создана и отправлена!\n\n"
-                f"📝 Шаблон: {task_data['template_name']}\n"
-                f"💬 Чат: {chat_name}\n"
-                f"🆔 ID задачи: `{task_id}`",
-                parse_mode='Markdown',
-                reply_markup=get_tasks_main_keyboard()
-            )
-        else:
-            await update.message.reply_text(
-                "❌ Ошибка при создании тестовой задачи",
-                reply_markup=get_tasks_main_keyboard()
-            )
-        
-        # Очищаем временные данные
-        context.user_data.clear()
-        return TASKS_MAIN
-    
-    elif user_choice == "✏️ Изменить":
-        await update.message.reply_text(
-            "🔧 **Что вы хотите изменить?**",
-            reply_markup=get_task_edit_keyboard()
-        )
-        return CREATE_TASK_EDIT
-    
-    elif user_choice == "🔙 Назад":
-        # Возвращаемся к выбору чата
-        accessible_chats = context.user_data['task_creation']['accessible_chats']
-        await update.message.reply_text(
-            "🔄 Возврат к выбору чата:",
-            reply_markup=get_chat_selection_keyboard(accessible_chats)
-        )
-        return TEST_TASK_CHAT_SELECT
-    
-    else:
-        await update.message.reply_text(
-            "❌ Неверный выбор",
-            reply_markup=get_task_confirmation_keyboard()
-        )
-        return TEST_TASK_CONFIRM
-
-# ===== СТАТУС ЗАДАЧ С ФИЛЬТРАЦИЕЙ ПО ДОСТУПУ =====
-
-async def enhanced_show_tasks_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает статус всех активных задач с фильтрацией по доступу"""
-    user_id = update.effective_user.id
-    
-    # Получаем только задачи, доступные пользователю
-    user_tasks = get_user_accessible_tasks(user_id)
-    
-    if not user_tasks:
-        await update.message.reply_text(
-            "📊 **Статус задач**\n\n"
-            "❌ Нет активных задач, доступных вам",
-            parse_mode='Markdown',
-            reply_markup=get_tasks_main_keyboard()
-        )
-        return TASKS_MAIN
-    
-    message_text = "📊 **Статус ваших активных задач:**\n\n"
-    
-    for i, (task_id, task) in enumerate(user_tasks.items(), 1):
-        task_type = "🧪 Тест" if task.get('is_test') else "📅 Регулярная"
-        chat_info = ""
-        
-        if task.get('target_chat_id'):
-            # Пытаемся получить название чата
-            chat_name = f"Чат ID: {task['target_chat_id']}"
-            from user_chat_manager import user_chat_manager
-            user_chats = user_chat_manager.get_user_chat_access(user_id)
-            for chat in user_chats:
-                if chat['chat_id'] == task['target_chat_id']:
-                    chat_name = chat['chat_name']
-                    break
-            chat_info = f"💬 {chat_name}"
-        else:
-            chat_info = "💬 Чат не указан"
-        
-        message_text += f"{i}. **{task['template_name']}** ({task_type})\n"
-        message_text += f"   🏷️ Группа: {task.get('group_name', 'Не указана')}\n"
-        message_text += f"   {chat_info}\n"
-        message_text += f"   ⏰ Время: {task.get('time', 'Не указано')}\n"
-        
-        if task.get('next_execution'):
-            message_text += f"   ⏱️ Следующее: {task['next_execution']}\n"
-        
-        message_text += "\n"
-    
-    message_text += f"Всего ваших активных задач: {len(user_tasks)}"
-    
-    await update.message.reply_text(
-        message_text,
-        parse_mode='Markdown',
-        reply_markup=get_tasks_main_keyboard()
-    )
-    return TASKS_MAIN
-
-# ===== ДЕАКТИВАЦИЯ ЗАДАЧ =====
-
-async def enhanced_deactivate_task_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Начало деактивации задачи с фильтрацией по доступу"""
-    user_id = update.effective_user.id
-    accessible_groups = get_user_accessible_groups(user_id)
-    
-    if not accessible_groups:
-        await update.message.reply_text(
-            "❌ У вас нет доступа ни к одной группе",
-            reply_markup=get_tasks_main_keyboard()
-        )
-        return TASKS_MAIN
-    
-    await update.message.reply_text(
-        "🗑️ **Отмена задачи**\n\n"
-        "Выберите группу:",
-        parse_mode='Markdown',
-        reply_markup=get_groups_keyboard(user_id, "deactivate")
-    )
-    return DEACTIVATE_TASK_GROUP
-
-async def enhanced_deactivate_task_select_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Выбор группы для деактивации задачи"""
-    user_text = update.message.text
-    user_id = update.effective_user.id
-    
-    # Если нажата кнопка "Назад"
-    if user_text == "🔙 К задачам":
-        await enhanced_tasks_main(update, context)
-        return TASKS_MAIN
-    
-    # Извлекаем название группы из текста
-    group_name = user_text.replace("🏷️ ", "").strip()
-    
-    # Находим ID группы по имени
-    accessible_groups = get_user_accessible_groups(user_id)
-    group_id = None
-    for gid, gdata in accessible_groups.items():
-        if gdata['name'] == group_name:
-            group_id = gid
-            break
-    
-    if not group_id:
-        await update.message.reply_text(
-            "❌ Группа не найдена",
-            reply_markup=get_groups_keyboard(user_id, "deactivate")
-        )
-        return DEACTIVATE_TASK_GROUP
-    
-    # Сохраняем ID группы в контекст
-    context.user_data['deactivate_group'] = group_id
-    context.user_data['deactivate_group_name'] = group_name
-    
-    # Получаем активные задачи этой группы, доступные пользователю
-    tasks = get_active_tasks_by_group(group_id)
-    user_tasks = {tid: t for tid, t in tasks.items() if t.get('created_by') == user_id}
-    
-    if not user_tasks:
-        await update.message.reply_text(
-            f"📭 В группе '{group_name}' нет ваших активных задач",
-            reply_markup=get_tasks_main_keyboard()
-        )
-        return TASKS_MAIN
-    
-    # Создаем клавиатуру с задачами
-    keyboard = []
-    for task_id, task in user_tasks.items():
-        keyboard.append([f"🗑️ {task['template_name']}"])
-    
-    keyboard.append(["🔙 Назад"])
-    
-    await update.message.reply_text(
-        f"🗑️ **Выберите задачу для отмены:**\n\n"
-        f"Группа: {group_name}",
-        parse_mode='Markdown',
-        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    )
-    return DEACTIVATE_TASK_SELECT
-
-async def enhanced_deactivate_task_select_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Выбор задачи для деактивации"""
-    task_text = update.message.text
-    
-    # Если нажата кнопка "Назад"
-    if task_text == "🔙 Назад":
-        user_id = update.effective_user.id
-        await update.message.reply_text(
-            "🔄 Возврат к выбору группы",
-            reply_markup=get_groups_keyboard(user_id, "deactivate")
-        )
-        return DEACTIVATE_TASK_GROUP
-    
-    # Извлекаем название шаблона из текста (убираем эмодзи)
-    if task_text.startswith("🗑️ "):
-        template_name = task_text[2:].strip()
-    else:
-        template_name = task_text
-    
-    # Получаем ID группы из контекста
-    group_id = context.user_data.get('deactivate_group')
-    
-    # Ищем задачу по имени шаблона в этой группе
-    tasks = get_active_tasks_by_group(group_id)
-    task_id = None
-    task_data = None
-    
-    for tid, tdata in tasks.items():
-        if tdata['template_name'] == template_name and tdata.get('created_by') == update.effective_user.id:
-            task_id = tid
-            task_data = tdata
-            break
-    
-    if not task_data:
-        await update.message.reply_text(
-            "❌ Задача не найдена",
-            reply_markup=get_tasks_main_keyboard()
-        )
-        return TASKS_MAIN
-    
-    # Сохраняем ID для деактивации
-    context.user_data['deactivating_task_id'] = task_id
-    context.user_data['deactivating_task'] = task_data
-    
-    # Показываем подтверждение
-    info = format_task_info(task_data)
-    
-    await update.message.reply_text(
-        f"⚠️ **ПОДТВЕРЖДЕНИЕ ОТМЕНЫ ЗАДАЧИ**\n\n{info}\n"
-        "❌ **ВЫ УВЕРЕНЫ, ЧТО ХОТИТЕ ОТМЕНИТЬ ДАННУЮ ЗАДАЧУ?**\n\n"
-        "Это действие нельзя отменить!",
-        parse_mode='Markdown',
-        reply_markup=get_deactivate_confirmation_keyboard()
-    )
-    return DEACTIVATE_TASK_CONFIRM
-
-async def enhanced_deactivate_task_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Подтверждение деактивации задачи"""
-    user_choice = update.message.text
-    task_id = context.user_data.get('deactivating_task_id')
-    task = context.user_data.get('deactivating_task')
-    
-    if user_choice == "✅ Да, отменить задачу":
-        if task_id and task:
-            success, message = deactivate_task(task_id)
-            
-            if success:
-                await update.message.reply_text(
-                    f"✅ Задача '{task['template_name']}' успешно отменена!",
-                    reply_markup=get_tasks_main_keyboard()
-                )
-            else:
-                await update.message.reply_text(
-                    f"❌ Ошибка при отмене: {message}",
-                    reply_markup=get_tasks_main_keyboard()
-                )
-        else:
-            await update.message.reply_text(
-                "❌ Ошибка: данные задачи не найдены",
-                reply_markup=get_tasks_main_keyboard()
-            )
-    
-    elif user_choice == "❌ Нет, оставить активной":
-        await update.message.reply_text(
-            "✅ Отмена отменена",
-            reply_markup=get_tasks_main_keyboard()
-        )
-    
-    else:
-        await update.message.reply_text(
-            "❌ Неверный выбор",
-            reply_markup=get_deactivate_confirmation_keyboard()
-        )
-        return DEACTIVATE_TASK_CONFIRM
-    
-    # Очищаем временные данные
-    context.user_data.clear()
-    return TASKS_MAIN
-
-# ===== ФУНКЦИЯ ОТМЕНЫ =====
+# Остальные функции можно добавить позже...
 
 async def enhanced_cancel_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Отмена и возврат в главное меню"""
-    # Очищаем временные данные
     context.user_data.clear()
-    
     user_id = update.effective_user.id
     await update.message.reply_text(
         "🔙 Возврат в главное меню",
         reply_markup=get_main_keyboard(user_id)
     )
     return ConversationHandler.END
-
-# ===== CONVERSATION HANDLER =====
 
 def get_enhanced_task_conversation_handler():
     """Возвращает улучшенный ConversationHandler для задач с выбором чата"""
@@ -980,13 +361,9 @@ def get_enhanced_task_conversation_handler():
         states={
             TASKS_MAIN: [
                 MessageHandler(filters.Regex("^➕ Создать задачу$"), enhanced_create_task_start),
-                MessageHandler(filters.Regex("^🗑️ Отменить задачу$"), enhanced_deactivate_task_start),
-                MessageHandler(filters.Regex("^🧪 Тестирование$"), enhanced_test_task_start),
-                MessageHandler(filters.Regex("^📊 Статус задач$"), enhanced_show_tasks_status),
                 MessageHandler(filters.Regex("^🔙 Главное меню$"), enhanced_cancel_task)
             ],
             
-            # === СОЗДАНИЕ ЗАДАЧ С ВЫБОРОМ ЧАТА ===
             CREATE_TASK_GROUP: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, enhanced_create_task_select_group),
                 MessageHandler(filters.Regex("^🔙 К задачам$"), enhanced_tasks_main)
@@ -1002,47 +379,6 @@ def get_enhanced_task_conversation_handler():
             CREATE_TASK_CONFIRM: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, enhanced_create_task_confirm),
                 MessageHandler(filters.Regex("^🔙 Назад$"), enhanced_create_task_select_chat)
-            ],
-            CREATE_TASK_EDIT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, enhanced_create_task_edit_choice),
-                MessageHandler(filters.Regex("^🔙 Назад$"), enhanced_create_task_confirm)
-            ],
-            CREATE_TASK_EDIT_TEMPLATE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, enhanced_create_task_edit_template),
-                MessageHandler(filters.Regex("^🔙 Назад$"), enhanced_create_task_edit_choice),
-                MessageHandler(filters.PHOTO, enhanced_create_task_edit_template),
-            ],
-            
-            # === ДЕАКТИВАЦИЯ ЗАДАЧ ===
-            DEACTIVATE_TASK_GROUP: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, enhanced_deactivate_task_select_group),
-                MessageHandler(filters.Regex("^🔙 К задачам$"), enhanced_tasks_main)
-            ],
-            DEACTIVATE_TASK_SELECT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, enhanced_deactivate_task_select_task),
-                MessageHandler(filters.Regex("^🔙 Назад$"), enhanced_deactivate_task_start)
-            ],
-            DEACTIVATE_TASK_CONFIRM: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, enhanced_deactivate_task_confirm),
-                MessageHandler(filters.Regex("^🔙 Назад$"), enhanced_deactivate_task_select_task)
-            ],
-            
-            # === ТЕСТИРОВАНИЕ С ВЫБОРОМ ЧАТА ===
-            TEST_TASK_GROUP: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, enhanced_test_task_select_group),
-                MessageHandler(filters.Regex("^🔙 К задачам$"), enhanced_tasks_main)
-            ],
-            TEST_TASK_SELECT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, enhanced_test_task_select_template),
-                MessageHandler(filters.Regex("^🔙 Назад$"), enhanced_test_task_start)
-            ],
-            TEST_TASK_CHAT_SELECT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, enhanced_test_task_select_chat),
-                MessageHandler(filters.Regex("^🔙 Назад$"), enhanced_test_task_select_template)
-            ],
-            TEST_TASK_CONFIRM: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, enhanced_test_task_confirm),
-                MessageHandler(filters.Regex("^🔙 Назад$"), enhanced_test_task_select_chat)
             ],
         },
         fallbacks=[CommandHandler("cancel", enhanced_cancel_task)]
