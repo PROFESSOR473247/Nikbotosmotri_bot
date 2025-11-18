@@ -383,9 +383,9 @@ def format_task_info(task):
         info += f"⏰ Время: {task_time} (МСК)\n"
         info += f"📅 Дни: {', '.join(days_names) if days_names else 'Не указаны'}\n"
         info += f"🔄 Периодичность: {frequency}\n"
-        info += f"📊 Статус: {        if taskis_active}\n"
+        info += f"📊 Статус: {is_active}\n"
         
-.get('last_executed'):
+        if task.get('last_executed'):
             info += f"⏱️ Последний запуск: {task['last_executed']}\n"
         
         return info
