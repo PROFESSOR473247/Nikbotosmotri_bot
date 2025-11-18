@@ -356,6 +356,354 @@ async def list_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=get_users_management_keyboard()
     )
     return USERS_MANAGEMENT
+    
+    # --- РЕДАКТИРОВАНИЕ ПОЛЬЗОВАТЕЛЯ ---
+
+async def edit_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Начало редактирования пользователя"""
+    users = user_chat_manager.get_all_users()
+    
+    if not users:
+        await update.message.reply_text(
+            "📭 В системе нет пользователей для редактирования",
+            reply_markup=get_users_management_keyboard()
+        )
+        return USERS_MANAGEMENT
+    
+    user_list = "✏️ **Выберите пользователя для редактирования:**\n\n"
+    for i, user in enumerate(users, 1):
+        user_list += f"{i}. {user['full_name']} (ID: {user['user_id']})\n"
+    
+    user_list += "\nВведите номер пользователя:"
+    
+    context.user_data['users_for_editing'] = users
+    
+    await update.message.reply_text(
+        user_list,
+        parse_mode='Markdown',
+        reply_markup=get_back_keyboard()
+    )
+    return EDIT_USER_SELECT
+
+async def edit_user_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор пользователя для редактирования"""
+    user_number_text = update.message.text.strip()
+    
+    if user_number_text == "🔙 Назад":
+        await users_management(update, context)
+        return USERS_MANAGEMENT
+    
+    users = context.user_data['users_for_editing']
+    
+    try:
+        user_number = int(user_number_text)
+        if 1 <= user_number <= len(users):
+            user = users[user_number - 1]
+            context.user_data['editing_user'] = user
+            
+            # Получаем текущие доступы пользователя
+            user_chats = user_chat_manager.get_user_chat_access(user['user_id'])
+            user_groups = user_chat_manager.get_user_template_group_access(user['user_id'])
+            
+            message = f"✏️ **Редактирование пользователя:**\n\n"
+            message += f"👤 **{user['full_name']}** (ID: {user['user_id']})\n"
+            message += f"👑 **Текущая должность:** {user['role']}\n\n"
+            
+            message += "💬 **Текущие доступы к чатам:**\n"
+            if user_chats:
+                for chat in user_chats:
+                    message += f"• {chat['chat_name']}\n"
+            else:
+                message += "❌ Нет доступа\n"
+            
+            message += "\n📋 **Текущие доступы к группам:**\n"
+            if user_groups:
+                for group in user_groups:
+                    message += f"• {group['name']}\n"
+            else:
+                message += "❌ Нет доступа\n"
+            
+            message += "\n**Что вы хотите изменить?**"
+            
+            await update.message.reply_text(
+                message,
+                parse_mode='Markdown',
+                reply_markup=get_user_edit_keyboard()
+            )
+            return EDIT_USER_MAIN
+        else:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text(
+            "❌ Неверный номер пользователя. Введите номер из списка:",
+            reply_markup=get_back_keyboard()
+        )
+        return EDIT_USER_SELECT
+
+async def edit_user_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Главное меню редактирования пользователя"""
+    choice = update.message.text
+    user = context.user_data.get('editing_user')
+    
+    if choice == "🔙 К пользователям":
+        await users_management(update, context)
+        return USERS_MANAGEMENT
+    
+    if choice == "👑 Изменить должность":
+        await update.message.reply_text(
+            "👑 **Выберите новую должность для пользователя:**",
+            parse_mode='Markdown',
+            reply_markup=get_roles_keyboard()
+        )
+        return EDIT_USER_ROLE
+    
+    elif choice == "📝 Группы шаблонов":
+        # Показываем список групп для редактирования
+        groups_data = load_groups()
+        groups = []
+        for group_id, group_data in groups_data['groups'].items():
+            groups.append({'id': group_id, 'name': group_data['name']})
+        
+        if not groups:
+            await update.message.reply_text(
+                "❌ В системе нет групп шаблонов.",
+                reply_markup=get_user_edit_keyboard()
+            )
+            return EDIT_USER_MAIN
+        
+        # Получаем текущие доступы пользователя
+        user_groups = user_chat_manager.get_user_template_group_access(user['user_id'])
+        current_group_ids = [group['id'] for group in user_groups]
+        
+        group_list = "📋 **Текущие доступы к группам:**\n\n"
+        for i, group in enumerate(groups, 1):
+            status = "✅" if group['id'] in current_group_ids else "❌"
+            group_list += f"{i}. {status} {group['name']}\n"
+        
+        group_list += "\nУкажите ЧЕРЕЗ ЗАПЯТУЮ номера групп для доступа (например: 1, 3):"
+        
+        context.user_data['available_groups'] = groups
+        context.user_data['current_group_ids'] = current_group_ids
+        
+        await update.message.reply_text(
+            group_list,
+            parse_mode='Markdown',
+            reply_markup=get_back_keyboard()
+        )
+        return EDIT_USER_GROUPS
+    
+    elif choice == "💬 Telegram чаты":
+        # Показываем список чатов для редактирования
+        chats = user_chat_manager.get_all_chats()
+        
+        if not chats:
+            await update.message.reply_text(
+                "❌ В системе нет Telegram чатов.",
+                reply_markup=get_user_edit_keyboard()
+            )
+            return EDIT_USER_MAIN
+        
+        # Получаем текущие доступы пользователя
+        user_chats = user_chat_manager.get_user_chat_access(user['user_id'])
+        current_chat_ids = [chat['chat_id'] for chat in user_chats]
+        
+        chat_list = "💬 **Текущие доступы к чатам:**\n\n"
+        for i, chat in enumerate(chats, 1):
+            status = "✅" if chat['chat_id'] in current_chat_ids else "❌"
+            chat_list += f"{i}. {status} {chat['chat_name']}\n"
+        
+        chat_list += "\nУкажите ЧЕРЕЗ ЗАПЯТУЮ номера чатов для доступа (например: 1, 3):"
+        
+        context.user_data['available_chats'] = chats
+        context.user_data['current_chat_ids'] = current_chat_ids
+        
+        await update.message.reply_text(
+            chat_list,
+            parse_mode='Markdown',
+            reply_markup=get_back_keyboard()
+        )
+        return EDIT_USER_CHATS
+    
+    elif choice == "✅ Завершить редактирование":
+        return await save_user_edits(update, context)
+    
+    else:
+        await update.message.reply_text(
+            "❌ Неверный выбор",
+            reply_markup=get_user_edit_keyboard()
+        )
+        return EDIT_USER_MAIN
+
+async def edit_user_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Изменение роли пользователя"""
+    role_text = update.message.text
+    
+    if role_text == "🔙 Назад":
+        await update.message.reply_text(
+            "🔄 Возврат к редактированию пользователя",
+            reply_markup=get_user_edit_keyboard()
+        )
+        return EDIT_USER_MAIN
+    
+    role_map = {
+        "👑 Руководитель": "manager",
+        "🚗 Водитель": "driver", 
+        "👥 Гость": "guest"
+    }
+    
+    if role_text not in role_map:
+        await update.message.reply_text(
+            "❌ Выберите роль из предложенных:",
+            reply_markup=get_roles_keyboard()
+        )
+        return EDIT_USER_ROLE
+    
+    user = context.user_data['editing_user']
+    new_role = role_map[role_text]
+    
+    # Обновляем роль пользователя
+    success, message = auth_manager.update_user_role(user['user_id'], new_role)
+    
+    if success:
+        context.user_data['editing_user']['role'] = new_role
+        await update.message.reply_text(
+            f"✅ Должность пользователя изменена на: {role_text}",
+            reply_markup=get_user_edit_keyboard()
+        )
+    else:
+        await update.message.reply_text(
+            f"❌ Ошибка при изменении должности: {message}",
+            reply_markup=get_user_edit_keyboard()
+        )
+    
+    return EDIT_USER_MAIN
+
+async def edit_user_groups(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Изменение доступа к группам"""
+    group_numbers_text = update.message.text.strip()
+    
+    if group_numbers_text == "🔙 Назад":
+        await update.message.reply_text(
+            "🔄 Возврат к редактированию пользователя",
+            reply_markup=get_user_edit_keyboard()
+        )
+        return EDIT_USER_MAIN
+    
+    groups = context.user_data['available_groups']
+    user = context.user_data['editing_user']
+    
+    try:
+        # Парсим номера групп
+        group_numbers = [int(num.strip()) for num in group_numbers_text.split(',')]
+        
+        # Проверяем валидность номеров
+        valid_numbers = []
+        for num in group_numbers:
+            if 1 <= num <= len(groups):
+                valid_numbers.append(num)
+        
+        if not valid_numbers:
+            await update.message.reply_text(
+                "❌ Неверные номера групп. Укажите номера через запятую:",
+                reply_markup=get_back_keyboard()
+            )
+            return EDIT_USER_GROUPS
+        
+        # Удаляем все текущие доступы к группам
+        current_group_ids = context.user_data['current_group_ids']
+        for group_id in current_group_ids:
+            user_chat_manager.revoke_template_group_access(user['user_id'], group_id)
+        
+        # Предоставляем доступ к выбранным группам
+        for group_num in valid_numbers:
+            group = groups[group_num - 1]
+            user_chat_manager.grant_template_group_access(user['user_id'], group['id'])
+        
+        await update.message.reply_text(
+            f"✅ Доступ к группам обновлен!",
+            reply_markup=get_user_edit_keyboard()
+        )
+        return EDIT_USER_MAIN
+        
+    except ValueError:
+        await update.message.reply_text(
+            "❌ Неверный формат. Укажите номера через запятую:",
+            reply_markup=get_back_keyboard()
+        )
+        return EDIT_USER_GROUPS
+
+async def edit_user_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Изменение доступа к чатам"""
+    chat_numbers_text = update.message.text.strip()
+    
+    if chat_numbers_text == "🔙 Назад":
+        await update.message.reply_text(
+            "🔄 Возврат к редактированию пользователя",
+            reply_markup=get_user_edit_keyboard()
+        )
+        return EDIT_USER_MAIN
+    
+    chats = context.user_data['available_chats']
+    user = context.user_data['editing_user']
+    
+    try:
+        # Парсим номера чатов
+        chat_numbers = [int(num.strip()) for num in chat_numbers_text.split(',')]
+        
+        # Проверяем валидность номеров
+        valid_numbers = []
+        for num in chat_numbers:
+            if 1 <= num <= len(chats):
+                valid_numbers.append(num)
+        
+        if not valid_numbers:
+            await update.message.reply_text(
+                "❌ Неверные номера чатов. Укажите номера через запятую:",
+                reply_markup=get_back_keyboard()
+            )
+            return EDIT_USER_CHATS
+        
+        # Удаляем все текущие доступы к чатам
+        current_chat_ids = context.user_data['current_chat_ids']
+        for chat_id in current_chat_ids:
+            user_chat_manager.revoke_chat_access(user['user_id'], chat_id)
+        
+        # Предоставляем доступ к выбранным чатам
+        for chat_num in valid_numbers:
+            chat = chats[chat_num - 1]
+            user_chat_manager.grant_chat_access(user['user_id'], chat['chat_id'])
+        
+        await update.message.reply_text(
+            f"✅ Доступ к чатам обновлен!",
+            reply_markup=get_user_edit_keyboard()
+        )
+        return EDIT_USER_MAIN
+        
+    except ValueError:
+        await update.message.reply_text(
+            "❌ Неверный формат. Укажите номера через запятую:",
+            reply_markup=get_back_keyboard()
+        )
+        return EDIT_USER_CHATS
+
+async def save_user_edits(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Завершение редактирования пользователя"""
+    user = context.user_data.get('editing_user')
+    
+    if user:
+        await update.message.reply_text(
+            f"✅ Редактирование пользователя {user['full_name']} завершено!",
+            reply_markup=get_users_management_keyboard()
+        )
+    else:
+        await update.message.reply_text(
+            "✅ Редактирование завершено",
+            reply_markup=get_users_management_keyboard()
+        )
+    
+    # Очищаем временные данные
+    context.user_data.clear()
+    return USERS_MANAGEMENT
 
 # --- УДАЛЕНИЕ ПОЛЬЗОВАТЕЛЯ ---
 
@@ -677,6 +1025,262 @@ async def list_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown',
         reply_markup=get_chats_management_keyboard()
     )
+    return CHATS_MANAGEMENT
+    
+    # --- РЕДАКТИРОВАНИЕ ЧАТА ---
+
+async def edit_chat_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Начало редактирования чата"""
+    chats = user_chat_manager.get_all_chats()
+    
+    if not chats:
+        await update.message.reply_text(
+            "📭 В системе нет чатов для редактирования",
+            reply_markup=get_chats_management_keyboard()
+        )
+        return CHATS_MANAGEMENT
+    
+    chat_list = "✏️ **Выберите чат для редактирования:**\n\n"
+    for i, chat in enumerate(chats, 1):
+        chat_list += f"{i}. {chat['chat_name']} (ID: {chat['chat_id']})\n"
+    
+    chat_list += "\nВведите номер чата:"
+    
+    context.user_data['chats_for_editing'] = chats
+    
+    await update.message.reply_text(
+        chat_list,
+        parse_mode='Markdown',
+        reply_markup=get_back_keyboard()
+    )
+    return EDIT_CHAT_SELECT
+
+async def edit_chat_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор чата для редактирования"""
+    chat_number_text = update.message.text.strip()
+    
+    if chat_number_text == "🔙 Назад":
+        await chats_management(update, context)
+        return CHATS_MANAGEMENT
+    
+    chats = context.user_data['chats_for_editing']
+    
+    try:
+        chat_number = int(chat_number_text)
+        if 1 <= chat_number <= len(chats):
+            chat = chats[chat_number - 1]
+            context.user_data['editing_chat'] = chat
+            
+            # Получаем текущих пользователей чата
+            chat_users = user_chat_manager.get_chat_users(chat['chat_id'])
+            
+            message = f"✏️ **Редактирование чата:**\n\n"
+            message += f"💬 **{chat['chat_name']}** (ID: {chat['chat_id']})\n\n"
+            
+            message += "👥 **Текущие пользователи с доступом:**\n"
+            if chat_users:
+                for user in chat_users:
+                    message += f"• {user['full_name']} ({user['role']})\n"
+            else:
+                message += "❌ Нет пользователей с доступом\n"
+            
+            message += "\n**Что вы хотите изменить?**"
+            
+            await update.message.reply_text(
+                message,
+                parse_mode='Markdown',
+                reply_markup=get_chat_edit_keyboard()
+            )
+            return EDIT_CHAT_MAIN
+        else:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text(
+            "❌ Неверный номер чата. Введите номер из списка:",
+            reply_markup=get_back_keyboard()
+        )
+        return EDIT_CHAT_SELECT
+
+async def edit_chat_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Главное меню редактирования чата"""
+    choice = update.message.text
+    chat = context.user_data.get('editing_chat')
+    
+    if choice == "🔙 К чатам":
+        await chats_management(update, context)
+        return CHATS_MANAGEMENT
+    
+    if choice == "👥 Добавить пользователя":
+        # Показываем список пользователей для добавления
+        users = user_chat_manager.get_all_users()
+        
+        if not users:
+            await update.message.reply_text(
+                "❌ В системе нет пользователей.",
+                reply_markup=get_chat_edit_keyboard()
+            )
+            return EDIT_CHAT_MAIN
+        
+        # Получаем текущих пользователей чата
+        chat_users = user_chat_manager.get_chat_users(chat['chat_id'])
+        current_user_ids = [user['user_id'] for user in chat_users]
+        
+        user_list = "👥 **Выберите пользователя для добавления:**\n\n"
+        for i, user in enumerate(users, 1):
+            status = "✅" if user['user_id'] in current_user_ids else "❌"
+            user_list += f"{i}. {status} {user['full_name']} ({user['role']})\n"
+        
+        user_list += "\nВведите номер пользователя:"
+        
+        context.user_data['available_users'] = users
+        context.user_data['current_user_ids'] = current_user_ids
+        
+        await update.message.reply_text(
+            user_list,
+            parse_mode='Markdown',
+            reply_markup=get_back_keyboard()
+        )
+        return EDIT_CHAT_ADD_USER
+    
+    elif choice == "🚫 Исключить пользователя":
+        # Показываем текущих пользователей чата для удаления
+        chat_users = user_chat_manager.get_chat_users(chat['chat_id'])
+        
+        if not chat_users:
+            await update.message.reply_text(
+                "❌ В этом чате нет пользователей для исключения.",
+                reply_markup=get_chat_edit_keyboard()
+            )
+            return EDIT_CHAT_MAIN
+        
+        user_list = "🚫 **Выберите пользователя для исключения:**\n\n"
+        for i, user in enumerate(chat_users, 1):
+            user_list += f"{i}. {user['full_name']} ({user['role']})\n"
+        
+        user_list += "\nВведите номер пользователя:"
+        
+        context.user_data['chat_users'] = chat_users
+        
+        await update.message.reply_text(
+            user_list,
+            parse_mode='Markdown',
+            reply_markup=get_back_keyboard()
+        )
+        return EDIT_CHAT_REMOVE_USER
+    
+    elif choice == "✅ Завершить редактирование":
+        return await save_chat_edits(update, context)
+    
+    else:
+        await update.message.reply_text(
+            "❌ Неверный выбор",
+            reply_markup=get_chat_edit_keyboard()
+        )
+        return EDIT_CHAT_MAIN
+
+async def edit_chat_add_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Добавление пользователя в чат"""
+    user_number_text = update.message.text.strip()
+    
+    if user_number_text == "🔙 Назад":
+        await update.message.reply_text(
+            "🔄 Возврат к редактированию чата",
+            reply_markup=get_chat_edit_keyboard()
+        )
+        return EDIT_CHAT_MAIN
+    
+    users = context.user_data['available_users']
+    chat = context.user_data['editing_chat']
+    
+    try:
+        user_number = int(user_number_text)
+        if 1 <= user_number <= len(users):
+            user = users[user_number - 1]
+            
+            # Предоставляем доступ пользователю к чату
+            success, message = user_chat_manager.grant_chat_access(user['user_id'], chat['chat_id'])
+            
+            if success:
+                await update.message.reply_text(
+                    f"✅ Пользователь {user['full_name']} добавлен в чат!",
+                    reply_markup=get_chat_edit_keyboard()
+                )
+            else:
+                await update.message.reply_text(
+                    f"❌ Ошибка при добавлении: {message}",
+                    reply_markup=get_chat_edit_keyboard()
+                )
+        else:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text(
+            "❌ Неверный номер пользователя. Введите номер из списка:",
+            reply_markup=get_back_keyboard()
+        )
+        return EDIT_CHAT_ADD_USER
+    
+    return EDIT_CHAT_MAIN
+
+async def edit_chat_remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Исключение пользователя из чата"""
+    user_number_text = update.message.text.strip()
+    
+    if user_number_text == "🔙 Назад":
+        await update.message.reply_text(
+            "🔄 Возврат к редактированию чата",
+            reply_markup=get_chat_edit_keyboard()
+        )
+        return EDIT_CHAT_MAIN
+    
+    chat_users = context.user_data['chat_users']
+    chat = context.user_data['editing_chat']
+    
+    try:
+        user_number = int(user_number_text)
+        if 1 <= user_number <= len(chat_users):
+            user = chat_users[user_number - 1]
+            
+            # Отзываем доступ пользователя к чату
+            success, message = user_chat_manager.revoke_chat_access(user['user_id'], chat['chat_id'])
+            
+            if success:
+                await update.message.reply_text(
+                    f"✅ Пользователь {user['full_name']} исключен из чата!",
+                    reply_markup=get_chat_edit_keyboard()
+                )
+            else:
+                await update.message.reply_text(
+                    f"❌ Ошибка при исключении: {message}",
+                    reply_markup=get_chat_edit_keyboard()
+                )
+        else:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text(
+            "❌ Неверный номер пользователя. Введите номер из списка:",
+            reply_markup=get_back_keyboard()
+        )
+        return EDIT_CHAT_REMOVE_USER
+    
+    return EDIT_CHAT_MAIN
+
+async def save_chat_edits(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Завершение редактирования чата"""
+    chat = context.user_data.get('editing_chat')
+    
+    if chat:
+        await update.message.reply_text(
+            f"✅ Редактирование чата {chat['chat_name']} завершено!",
+            reply_markup=get_chats_management_keyboard()
+        )
+    else:
+        await update.message.reply_text(
+            "✅ Редактирование завершено",
+            reply_markup=get_chats_management_keyboard()
+        )
+    
+    # Очищаем временные данные
+    context.user_data.clear()
     return CHATS_MANAGEMENT
 
 # --- УДАЛЕНИЕ ЧАТА ---
