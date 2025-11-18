@@ -28,7 +28,7 @@ def get_groups_keyboard(user_id, action_type="list"):
         keyboard.append([f"🏷️ {group_data['name']}"])
     
     if action_type == "list":
-        keyboard.append(["🔙 К шаблонам"])
+        keyboard.append(["🔙 Назад"])  # Изменено с "🔙 К шаблонам" на "🔙 Назад"
     elif action_type == "create":
         keyboard.append(["🔙 Назад"])
     elif action_type == "edit":
@@ -39,7 +39,7 @@ def get_groups_keyboard(user_id, action_type="list"):
         keyboard.append(["🔙 Назад"])
         
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
+    
 def get_template_confirmation_keyboard():
     """Клавиатура подтверждения создания шаблона"""
     keyboard = [
