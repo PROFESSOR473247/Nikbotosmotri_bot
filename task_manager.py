@@ -4,12 +4,15 @@ import uuid
 import shutil
 from datetime import datetime, timedelta
 from database import db
+from database_tasks import save_task_to_db, load_tasks_from_db, update_task_in_db, delete_task_from_db  # ДОБАВИТЬ ЭТУ СТРОКУ
 
 # Дни недели для отображения
 DAYS_OF_WEEK = {
     '0': 'Понедельник', '1': 'Вторник', '2': 'Среда',
     '3': 'Четверг', '4': 'Пятница', '5': 'Суббота', '6': 'Воскресенье'
 }
+
+# ... остальной код без изменений ...
 
 # Типы периодичности
 FREQUENCY_TYPES = {
