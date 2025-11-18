@@ -15,7 +15,7 @@ from telegram.ext import (
 from config import BOT_TOKEN
 from handlers.start_handlers import start, help_command, my_id, now, update_menu
 from handlers.template_handlers import get_template_conversation_handler
-from handlers.task_handlers import get_task_conversation_handler  # Временно используем старый
+from handlers.task_handlers import get_task_conversation_handler
 from handlers.admin_handlers import get_admin_conversation_handler, admin_stats, check_access
 from handlers.basic_handlers import handle_text, cancel
 from task_scheduler import init_scheduler, task_scheduler
@@ -134,9 +134,64 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         import traceback
         traceback.print_exc()
 
+async def debug_task_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Временная команда для отладки создания задачи"""
+    user_id = update.effective_user.id
+    
+    try:
+        await update.message.reply_text("🔄 Запуск отладки создания задачи...")
+        
+        # Импортируем здесь чтобы избежать циклических импортов
+        from task_manager import create_task_from_template
+        from template_manager import get_template_by_name_and_group
+        
+        # Тестовые данные
+        template_name = "Тестовый шаблон для размещения задачи"
+        group_id = "hongqi"
+        
+        print(f"🔍 Поиск шаблона: {template_name} в группе {group_id}")
+        
+        # Ищем шаблон
+        template_id, template_data = get_template_by_name_and_group(template_name, group_id)
+        
+        if not template_data:
+            await update.message.reply_text("❌ Шаблон не найден")
+            return
+        
+        print(f"✅ Шаблон найден: {template_data.get('name')}")
+        print(f"📊 Данные шаблона: {template_data}")
+        
+        # Пробуем создать задачу
+        print("🔄 Попытка создания задачи...")
+        
+        success, task_id = create_task_from_template(
+            template_data,
+            created_by=user_id,
+            target_chat_id=update.effective_chat.id,  # Текущий чат
+            is_test=False
+        )
+        
+        print(f"📋 Результат создания: success={success}, task_id={task_id}")
+        
+        if success:
+            await update.message.reply_text(
+                f"✅ Тестовая задача создана успешно!\n"
+                f"🆔 ID задачи: `{task_id}`",
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text("❌ Ошибка создания задачи в тестовом режиме")
+            
+    except Exception as e:
+        error_msg = f"💥 Критическая ошибка: {str(e)}"
+        print(error_msg)
+        import traceback
+        traceback.print_exc()
+        await update.message.reply_text(error_msg)
+
 def main():
-    print("🚀 Запуск бота...")
-    print("🆕 ВЕРСИЯ: 2.0 - Базовая система")
+    print("🚀 Запуск бота с системой отладки...")
+    print("🆕 ВЕРСИЯ: 2.1 - С отладочными командами")
     
     # Регистрируем обработчики сигналов
     signal.signal(signal.SIGINT, signal_handler)
@@ -201,6 +256,9 @@ def main():
     # Админские команды
     application.add_handler(CommandHandler("admin_stats", admin_stats))
     application.add_handler(CommandHandler("check_access", check_access))
+    
+    # Отладочные команды
+    application.add_handler(CommandHandler("debug_task", debug_task_command))
 
     # 3. Обработчик отмены
     application.add_handler(CommandHandler("cancel", cancel))
@@ -223,12 +281,13 @@ def main():
         print(f"⚠️ Ошибка инициализации планировщика: {e}")
 
     print("✅ Бот запущен и готов к работе!")
-    print("🎉 Режим: БАЗОВАЯ СИСТЕМА")
+    print("🎉 Режим: БАЗОВАЯ СИСТЕМА С ОТЛАДКОЙ")
     print("💬 Контекст: РАЗДЕЛЕНИЕ ЛИЧНЫХ СООБЩЕНИЙ И ГРУПП")
     print("👑 Суперадмин: АВТОМАТИЧЕСКОЕ ВОССТАНОВЛЕНИЕ ПРАВ")
     print("💾 Все данные сохраняются в PostgreSQL")
     print("⏰ Планировщик задач активен")
     print("👥 Система управления пользователями и чатами готова")
+    print("🐛 Отладочные команды доступны")
     
     try:
         print("🔄 Запуск бота...")
