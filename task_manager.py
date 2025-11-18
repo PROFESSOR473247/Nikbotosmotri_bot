@@ -111,6 +111,8 @@ def create_task(task_data):
         task_id = create_task_id()
         task_data['id'] = task_id
         
+        print(f"🆔 Сгенерирован ID задачи: {task_id}")
+        
         # Сохраняем в базу данных
         success = save_task(task_data)
         
@@ -122,6 +124,8 @@ def create_task(task_data):
             return False, None
     except Exception as e:
         print(f"❌ Ошибка создания задачи: {e}")
+        import traceback
+        traceback.print_exc()
         return False, None
 
 def load_tasks():
