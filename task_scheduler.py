@@ -9,6 +9,7 @@ from telegram import Bot
 from telegram.error import TelegramError
 
 from task_manager import get_all_active_tasks, update_task_execution_time, calculate_next_execution
+from keyboards.task_keyboards import get_tasks_main_keyboard
 
 # Глобальный планировщик
 task_scheduler = None
@@ -117,8 +118,6 @@ async def execute_test_task(template, update, context, target_chat_id=None):
             f"❌ Ошибка отправки тестового сообщения: {e}",
             reply_markup=get_tasks_main_keyboard()
         )
-
-# Остальные функции остаются без изменений...
 
 def schedule_existing_tasks():
     """Планирует существующие активные задачи"""
