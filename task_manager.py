@@ -588,9 +588,16 @@ def calculate_next_execution(task):
         
         # Добавить в конец task_manager.py перед последними строками инициализации
 
-def create_task_from_template(template, target_chat_id=None, is_test=False):
+def create_task_from_template(template, created_by, target_chat_id=None, is_test=False):
     """Создает задачу на основе шаблона"""
     try:
+        print(f"🔄 Создание задачи из шаблона: {template.get('name')}")
+        print(f"📊 Данные шаблона: {template}")
+        print(f"👤 Создатель: {created_by}")
+        print(f"💬 Целевой чат: {target_chat_id}")
+        print(f"🧪 Тестовая: {is_test}")
+        
+        # Подготавливаем данные задачи
         task_data = {
             'template_id': template.get('id'),
             'template_name': template.get('name', 'Без названия'),
@@ -600,17 +607,28 @@ def create_task_from_template(template, target_chat_id=None, is_test=False):
             'time': template.get('time', ''),
             'days': template.get('days', []),
             'frequency': template.get('frequency', 'weekly'),
-            'created_by': template.get('created_by'),
+            'created_by': created_by,
             'is_active': True,
             'is_test': is_test,
             'target_chat_id': target_chat_id
         }
         
+        print(f"📦 Данные для сохранения задачи: {task_data}")
+        
+        # Создаем задачу
         success, task_id = create_task(task_data)
+        
+        if success:
+            print(f"✅ Задача успешно создана: {task_id}")
+        else:
+            print("❌ Ошибка при вызове create_task")
+            
         return success, task_id
         
     except Exception as e:
-        print(f"❌ Ошибка создания задачи из шаблона: {e}")
+        print(f"❌ Критическая ошибка в create_task_from_template: {e}")
+        import traceback
+        traceback.print_exc()
         return False, None
 
 def get_tasks_by_template(template_id):
