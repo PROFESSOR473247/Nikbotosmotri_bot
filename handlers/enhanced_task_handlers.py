@@ -289,36 +289,57 @@ async def enhanced_create_task_confirm(update: Update, context: ContextTypes.DEF
     template = task_data['template']
     
     if user_choice == "✅ Подтвердить":
-        # Создаем задачу с указанием целевого чата
-        success, task_id = create_task_from_template(
-            template, 
-            task_data['created_by'],
-            target_chat_id=task_data.get('target_chat_id'),
-            is_test=task_data.get('is_test', False)
-        )
-        
-        if success:
-            task_type = "тестовую" if task_data.get('is_test') else "регулярную"
-            chat_name = task_data.get('target_chat_name', 'не указан')
+        try:
+            # Добавим детальное логирование
+            print(f"🔄 Начало создания задачи...")
+            print(f"📊 Данные шаблона: {template}")
+            print(f"👤 Создатель: {task_data['created_by']}")
+            print(f"💬 Целевой чат: {task_data.get('target_chat_id')}")
+            
+            # Создаем задачу с указанием целевого чата
+            success, task_id = create_task_from_template(
+                template, 
+                task_data['created_by'],
+                target_chat_id=task_data.get('target_chat_id'),
+                is_test=task_data.get('is_test', False)
+            )
+            
+            print(f"📋 Результат создания: success={success}, task_id={task_id}")
+            
+            if success:
+                task_type = "тестовую" if task_data.get('is_test') else "регулярную"
+                chat_name = task_data.get('target_chat_name', 'не указан')
+                
+                await update.message.reply_text(
+                    f"✅ {task_type.capitalize()} задача успешно создана!\n\n"
+                    f"📝 Шаблон: {task_data['template_name']}\n"
+                    f"💬 Чат: {chat_name}\n"
+                    f"🆔 ID задачи: `{task_id}`",
+                    parse_mode='Markdown',
+                    reply_markup=get_tasks_main_keyboard()
+                )
+            else:
+                await update.message.reply_text(
+                    "❌ Ошибка при создании задачи. Проверьте логи для деталей.",
+                    reply_markup=get_tasks_main_keyboard()
+                )
+            
+            # Очищаем временные данные
+            context.user_data.clear()
+            return TASKS_MAIN
+            
+        except Exception as e:
+            print(f"💥 Критическая ошибка в enhanced_create_task_confirm: {e}")
+            import traceback
+            traceback.print_exc()
             
             await update.message.reply_text(
-                f"✅ {task_type.capitalize()} задача успешно создана!\n\n"
-                f"📝 Шаблон: {task_data['template_name']}\n"
-                f"💬 Чат: {chat_name}\n"
-                f"🆔 ID задачи: `{task_id}`",
-                parse_mode='Markdown',
+                f"💥 Критическая ошибка: {str(e)}",
                 reply_markup=get_tasks_main_keyboard()
             )
-        else:
-            await update.message.reply_text(
-                "❌ Ошибка при создании задачи",
-                reply_markup=get_tasks_main_keyboard()
-            )
-        
-        # Очищаем временные данные
-        context.user_data.clear()
-        return TASKS_MAIN
+            return TASKS_MAIN
     
+    # Остальной код без изменений...
     elif user_choice == "✏️ Изменить":
         await update.message.reply_text(
             "🔧 **Что вы хотите изменить?**",
@@ -341,8 +362,6 @@ async def enhanced_create_task_confirm(update: Update, context: ContextTypes.DEF
             reply_markup=get_task_confirmation_keyboard()
         )
         return CREATE_TASK_CONFIRM
-
-# Остальные функции можно добавить позже...
 
 async def enhanced_cancel_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Отмена и возврат в главное меню"""
