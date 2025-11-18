@@ -15,11 +15,10 @@ from telegram.ext import (
 from config import BOT_TOKEN
 from handlers.start_handlers import start, help_command, my_id, now, update_menu
 from handlers.template_handlers import get_template_conversation_handler
-from handlers.enhanced_task_handlers import get_enhanced_task_conversation_handler
+from handlers.task_handlers import get_task_conversation_handler  # Временно используем старый
 from handlers.admin_handlers import get_admin_conversation_handler, admin_stats, check_access
 from handlers.basic_handlers import handle_text, cancel
 from task_scheduler import init_scheduler, task_scheduler
-from chat_access_manager import init_chat_access_manager
 
 # Настройка логирования
 logging.basicConfig(
@@ -136,8 +135,8 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         traceback.print_exc()
 
 def main():
-    print("🚀 Запуск бота с улучшенной системой задач...")
-    print("🆕 ВЕРСИЯ: 3.0 - Система задач с выбором чатов и проверкой доступа")
+    print("🚀 Запуск бота...")
+    print("🆕 ВЕРСИЯ: 2.0 - Базовая система")
     
     # Регистрируем обработчики сигналов
     signal.signal(signal.SIGINT, signal_handler)
@@ -173,12 +172,6 @@ def main():
     # Добавляем обработчик ошибок
     application.add_error_handler(error_handler)
 
-    # ===== ИНИЦИАЛИЗАЦИЯ СИСТЕМ ДОСТУПА =====
-    
-    # Инициализируем менеджер доступа к чатам
-    init_chat_access_manager(BOT_TOKEN)
-    print("✅ Менеджер доступа к чатам инициализирован")
-
     # ===== ПРАВИЛЬНЫЙ ПОРЯДОК РЕГИСТРАЦИИ ОБРАБОТЧИКОВ =====
     
     print("🔄 Регистрация ConversationHandler...")
@@ -186,17 +179,17 @@ def main():
     # 1. Сначала ConversationHandler (самые специфичные)
     admin_conv_handler = get_admin_conversation_handler()
     template_conv_handler = get_template_conversation_handler()
-    enhanced_task_conv_handler = get_enhanced_task_conversation_handler()
+    task_conv_handler = get_task_conversation_handler()
 
     # Добавляем ConversationHandler в правильном порядке
-    application.add_handler(admin_conv_handler)          # ПЕРВЫЙ!
-    application.add_handler(template_conv_handler)       # ВТОРОЙ
-    application.add_handler(enhanced_task_conv_handler)  # ТРЕТИЙ - УЛУЧШЕННЫЙ!
+    application.add_handler(admin_conv_handler)    # ПЕРВЫЙ!
+    application.add_handler(template_conv_handler)
+    application.add_handler(task_conv_handler)
 
     print(f"✅ ConversationHandler зарегистрированы:")
     print(f"   • Администрирование: {len(admin_conv_handler.states)} состояний")
     print(f"   • Шаблоны: {len(template_conv_handler.states)} состояний")
-    print(f"   • Задачи (улучшенные): {len(enhanced_task_conv_handler.states)} состояний")
+    print(f"   • Задачи: {len(task_conv_handler.states)} состояний")
 
     # 2. Затем команды
     application.add_handler(CommandHandler("start", start))
@@ -230,24 +223,12 @@ def main():
         print(f"⚠️ Ошибка инициализации планировщика: {e}")
 
     print("✅ Бот запущен и готов к работе!")
-    print("🎉 Режим: УЛУЧШЕННАЯ СИСТЕМА ЗАДАЧ")
+    print("🎉 Режим: БАЗОВАЯ СИСТЕМА")
     print("💬 Контекст: РАЗДЕЛЕНИЕ ЛИЧНЫХ СООБЩЕНИЙ И ГРУПП")
     print("👑 Суперадмин: АВТОМАТИЧЕСКОЕ ВОССТАНОВЛЕНИЕ ПРАВ")
     print("💾 Все данные сохраняются в PostgreSQL")
     print("⏰ Планировщик задач активен")
     print("👥 Система управления пользователями и чатами готова")
-    
-    # Информация о новых функциях задач
-    print("\n" + "="*60)
-    print("🆕 НОВЫЕ ВОЗМОЖНОСТИ СИСТЕМЫ ЗАДАЧ:")
-    print("• ✅ Выбор конкретного Telegram чата для отправки")
-    print("• 🔒 Проверка членства пользователя в выбранном чате")
-    print("• ✏️ Редактирование шаблона на этапе создания задачи")
-    print("• 📊 Фильтрация задач по доступным пользователю")
-    print("• 🧪 Тестирование с отправкой в указанный чат")
-    print("• 💬 Вся настройка в личных сообщениях")
-    print("• 🚀 Отправка результатов только в целевые чаты")
-    print("="*60)
     
     try:
         print("🔄 Запуск бота...")
