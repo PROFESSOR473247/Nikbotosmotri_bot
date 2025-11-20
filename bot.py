@@ -3,7 +3,7 @@ import os
 import asyncio
 import signal
 import sys
-from threading import Thread
+import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from telegram import Update
@@ -189,17 +189,44 @@ def initialize_services():
     except Exception as e:
         logger.error(f"⚠️ Ошибка инициализации: {e}")
 
-class BotRunner:
-    """Класс для управления жизненным циклом бота"""
+class BotManager:
+    """Менеджер для управления ботом с отдельным event loop"""
     
     def __init__(self):
         self.application = None
+        self.bot_thread = None
         self.is_running = False
         
-    async def start_bot(self):
-        """Запускает бота"""
+    def start(self):
+        """Запускает бота в отдельном потоке"""
+        if self.is_running:
+            logger.warning("⚠️ Бот уже запущен")
+            return
+            
+        self.bot_thread = threading.Thread(target=self._run_bot, daemon=True)
+        self.bot_thread.start()
+        self.is_running = True
+        logger.info("✅ Бот запущен в отдельном потоке")
+        
+    def _run_bot(self):
+        """Запускает бота в отдельном event loop"""
         try:
-            logger.info("🚀 Запуск бота...")
+            # Создаем новый event loop для этого потока
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            # Запускаем бота
+            loop.run_until_complete(self._start_bot())
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка в потоке бота: {e}")
+        finally:
+            loop.close()
+            
+    async def _start_bot(self):
+        """Асинхронный запуск бота"""
+        try:
+            logger.info("🚀 Инициализация бота...")
             
             # Инициализируем сервисы
             initialize_services()
@@ -222,22 +249,20 @@ class BotRunner:
                 logger.error(f"⚠️ Ошибка инициализации планировщика: {e}")
 
             logger.info("✅ Бот запущен и готов к работе!")
-            self.is_running = True
             
-            # Запускаем polling с правильными параметрами для Render
+            # Запускаем polling
             await self.application.run_polling(
                 drop_pending_updates=True,
                 allowed_updates=Update.ALL_TYPES,
-                close_loop=False,  # Важно для Render!
-                stop_signals=[]    # Отключаем обработку сигналов
+                close_loop=False
             )
             
         except Exception as e:
             logger.error(f"❌ Критическая ошибка при запуске бота: {e}")
             raise
-    
-    async def stop_bot(self):
-        """Останавливает бота gracefully"""
+            
+    async def stop(self):
+        """Останавливает бота"""
         if self.application and self.is_running:
             logger.info("🛑 Остановка бота...")
             self.is_running = False
@@ -262,27 +287,28 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
+    logger.info("🚀 Запуск системы...")
+    
     # Запускаем HTTP сервер в отдельном потоке
-    http_thread = Thread(target=run_http_server, daemon=True)
+    http_thread = threading.Thread(target=run_http_server, daemon=True)
     http_thread.start()
     logger.info("✅ HTTP сервер запущен")
     
     # Создаем и запускаем бота
-    bot_runner = BotRunner()
+    bot_manager = BotManager()
+    bot_manager.start()
     
+    # Держим основной поток активным
     try:
-        # Запускаем бота в основном event loop
-        asyncio.run(bot_runner.start_bot())
+        while True:
+            # Просто ждем, пока бот работает
+            threading.Event().wait(60)
     except KeyboardInterrupt:
-        logger.info("🛑 Бот остановлен пользователем")
+        logger.info("🛑 Получен сигнал остановки")
     except Exception as e:
-        logger.error(f"❌ Неожиданная ошибка: {e}")
+        logger.error(f"❌ Ошибка в основном потоке: {e}")
     finally:
-        # Graceful shutdown
-        try:
-            asyncio.run(bot_runner.stop_bot())
-        except Exception as e:
-            logger.error(f"❌ Ошибка при остановке бота: {e}")
+        logger.info("👋 Завершение работы")
 
 if __name__ == '__main__':
     main()
