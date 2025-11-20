@@ -7,6 +7,6 @@ services:
     startCommand: python bot.py
     envVars:
       - key: BOT_TOKEN
-        fromGroup: telegram-bot-secrets
+        sync: false
       - key: DATABASE_URL
-        fromGroup: telegram-bot-secrets
+        sync: false
