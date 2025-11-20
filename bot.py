@@ -1,11 +1,9 @@
 import logging
-import asyncio
 import os
-import threading
-import time
-import requests
-import signal
-import sys
+import asyncio
+from threading import Thread
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
 from telegram import Update
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, filters, 
@@ -18,121 +16,42 @@ from handlers.template_handlers import get_template_conversation_handler
 from handlers.enhanced_task_handlers import get_enhanced_task_conversation_handler
 from handlers.admin_handlers import get_admin_conversation_handler, admin_stats, check_access
 from handlers.basic_handlers import handle_text, cancel
-from task_scheduler import init_scheduler, task_scheduler
+from task_scheduler import init_scheduler, start_scheduler
 
 # Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
+logger = logging.getLogger(__name__)
 
-# Глобальная переменная для graceful shutdown
-is_shutting_down = False
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b'Bot is running!')
+    
+    def log_message(self, format, *args):
+        return
 
-def signal_handler(signum, frame):
-    """Обработчик сигналов для graceful shutdown"""
-    global is_shutting_down
-    print(f"🛑 Получен сигнал {signum}, завершаем работу...")
-    is_shutting_down = True
-    
-    # Останавливаем планировщик задач
-    if task_scheduler:
-        task_scheduler.stop()
-    
-    sys.exit(0)
-
-def keep_alive():
-    """Периодически пингует приложение чтобы не дать ему заснуть"""
-    def ping():
-        while not is_shutting_down:
-            try:
-                render_url = os.environ.get('RENDER_EXTERNAL_URL')
-                if render_url:
-                    response = requests.get(render_url, timeout=10)
-                    print(f"🔄 Пинг отправлен: {response.status_code}")
-                else:
-                    print("🔄 Keep-alive: бот активен")
-            except Exception as e:
-                print(f"⚠️ Ошибка пинга: {e}")
-            time.sleep(300)
-    
-    ping_thread = threading.Thread(target=ping, daemon=True)
-    ping_thread.start()
-    print("✅ Keep-alive система запущена")
-
-def check_database():
-    """Проверяет состояние базы данных при запуске"""
-    print("=" * 60)
-    print("🔍 ПРОВЕРКА БАЗЫ ДАННЫХ ПРИ ЗАПУСКЕ")
-    print("=" * 60)
-    
+def run_http_server():
+    """Запускает HTTP сервер для health checks"""
+    port = int(os.environ.get('PORT', 10000))
+    server = HTTPServer(('0.0.0.0', port), HealthHandler)
+    logger.info(f"✅ HTTP server listening on port {port}")
     try:
-        from database import db
-        from template_manager import get_all_templates, load_groups
-        from task_manager import get_all_active_tasks
-        from user_chat_manager import user_chat_manager
-        from auth_manager import auth_manager
-        
-        # Инициализируем базу данных
-        print("📊 Инициализация базы данных...")
-        db.init_database()
-        
-        # Проверяем состояние
-        print("📊 Проверка состояния базы данных...")
-        
-        # Проверяем шаблоны
-        templates = get_all_templates()
-        print(f"✅ Шаблонов в базе данных: {len(templates)}")
-        
-        for template_id, template in templates.items():
-            print(f"   📝 {template_id}: {template.get('name', 'Без названия')} "
-                  f"(группа: {template.get('group', 'Не указана')})")
-        
-        # Проверяем группы
-        groups_data = load_groups()
-        groups_count = len(groups_data.get('groups', {}))
-        print(f"✅ Групп в базе данных: {groups_count}")
-        
-        for group_id, group_data in groups_data.get('groups', {}).items():
-            print(f"   👥 {group_id}: {group_data.get('name', 'Без названия')}")
-            
-        # Проверяем активные задачи
-        active_tasks = get_all_active_tasks()
-        print(f"✅ Активных задач: {len(active_tasks)}")
-        
-        for task_id, task in active_tasks.items():
-            target_chat = task.get('target_chat_id', 'Не указан')
-            print(f"   📋 {task_id}: {task.get('template_name', 'Без названия')} "
-                  f"(чат: {target_chat})")
-        
-        # Проверяем пользователей и чаты
-        users = user_chat_manager.get_all_users()
-        chats = user_chat_manager.get_all_chats()
-        print(f"✅ Пользователей в системе: {len(users)}")
-        print(f"✅ Telegram чатов в системе: {len(chats)}")
-        
-        # Гарантируем права суперадмина
-        from config import ADMIN_USER_ID
-        auth_manager.update_user_role_if_needed(ADMIN_USER_ID)
-        print(f"✅ Права суперадмина проверены: {ADMIN_USER_ID}")
-            
+        server.serve_forever()
     except Exception as e:
-        print(f"❌ Ошибка проверки базы данных: {e}")
-        import traceback
-        traceback.print_exc()
-    
-    print("=" * 60)
+        logger.error(f"❌ Ошибка HTTP сервера: {e}")
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик ошибок"""
     try:
         raise context.error
     except Exception as e:
-        print(f"❌ Ошибка в обработчике: {e}")
+        logger.error(f"❌ Ошибка в обработчике: {e}")
         if "Conflict" in str(e):
-            print("⚠️ Обнаружен конфликт - вероятно запущен другой экземпляр бота")
-        import traceback
-        traceback.print_exc()
+            logger.error("⚠️ Обнаружен конфликт - вероятно запущен другой экземпляр бота")
 
 async def debug_task_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Временная команда для отладки создания задачи"""
@@ -141,42 +60,32 @@ async def debug_task_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     try:
         await update.message.reply_text("🔄 Запуск отладки создания задачи...")
         
-        # Импортируем здесь чтобы избежать циклических импортов
         from task_manager import create_task_from_template
         from template_manager import get_template_by_name_and_group
         
-        # Тестовые данные
         template_name = "Тестовый шаблон для размещения задачи"
         group_id = "hongqi"
         
-        print(f"🔍 Поиск шаблона: {template_name} в группе {group_id}")
+        logger.info(f"🔍 Поиск шаблона: {template_name} в группе {group_id}")
         
-        # Ищем шаблон
         template_id, template_data = get_template_by_name_and_group(template_name, group_id)
         
         if not template_data:
             await update.message.reply_text("❌ Шаблон не найден")
             return
         
-        print(f"✅ Шаблон найден: {template_data.get('name')}")
-        print(f"📊 Данные шаблона: {template_data}")
-        
-        # Пробуем создать задачу
-        print("🔄 Попытка создания задачи...")
+        logger.info(f"✅ Шаблон найден: {template_data.get('name')}")
         
         success, task_id = create_task_from_template(
             template_data,
             created_by=user_id,
-            target_chat_id=update.effective_chat.id,  # Текущий чат
+            target_chat_id=update.effective_chat.id,
             is_test=False
         )
         
-        print(f"📋 Результат создания: success={success}, task_id={task_id}")
-        
         if success:
             await update.message.reply_text(
-                f"✅ Тестовая задача создана успешно!\n"
-                f"🆔 ID задачи: `{task_id}`",
+                f"✅ Тестовая задача создана успешно!\n🆔 ID задачи: `{task_id}`",
                 parse_mode='Markdown'
             )
         else:
@@ -184,42 +93,106 @@ async def debug_task_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
             
     except Exception as e:
         error_msg = f"💥 Критическая ошибка: {str(e)}"
-        print(error_msg)
-        import traceback
-        traceback.print_exc()
+        logger.error(error_msg)
         await update.message.reply_text(error_msg)
 
-def main():
-    print("🚀 Запуск бота с системой отладки...")
-    print("🆕 ВЕРСИЯ: 2.1 - С отладочными командами")
+def check_database():
+    """Проверяет состояние базы данных при запуске"""
+    logger.info("🔍 ПРОВЕРКА БАЗЫ ДАННЫХ ПРИ ЗАПУСКЕ")
     
-    # Регистрируем обработчики сигналов
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+    try:
+        from database import db
+        from template_manager import get_all_templates, load_groups
+        from task_manager import get_all_active_tasks
+        from user_chat_manager import user_chat_manager
+        from auth_manager import auth_manager
+        
+        db.init_database()
+        
+        templates = get_all_templates()
+        groups_data = load_groups()
+        groups_count = len(groups_data.get('groups', {}))
+        active_tasks = get_all_active_tasks()
+        users = user_chat_manager.get_all_users()
+        chats = user_chat_manager.get_all_chats()
+        
+        logger.info(f"✅ Шаблонов в базе данных: {len(templates)}")
+        logger.info(f"✅ Групп в базе данных: {groups_count}")
+        logger.info(f"✅ Активных задач: {len(active_tasks)}")
+        logger.info(f"✅ Пользователей в системе: {len(users)}")
+        logger.info(f"✅ Telegram чатов в системе: {len(chats)}")
+        
+        from config import ADMIN_USER_ID
+        auth_manager.update_user_role_if_needed(ADMIN_USER_ID)
+        logger.info(f"✅ Права суперадмина проверены: {ADMIN_USER_ID}")
+            
+    except Exception as e:
+        logger.error(f"❌ Ошибка проверки базы данных: {e}")
+
+def setup_handlers(application):
+    """Настраивает все обработчики для приложения"""
+    
+    logger.info("🔄 Регистрация обработчиков...")
+    
+    # 1. ConversationHandler (самые специфичные)
+    admin_conv_handler = get_admin_conversation_handler()
+    template_conv_handler = get_template_conversation_handler()
+    task_conv_handler = get_enhanced_task_conversation_handler()
+
+    application.add_handler(admin_conv_handler)
+    application.add_handler(template_conv_handler)
+    application.add_handler(task_conv_handler)
+
+    logger.info(f"✅ ConversationHandler зарегистрированы")
+
+    # 2. Команды
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("my_id", my_id))
+    application.add_handler(CommandHandler("now", now))
+    application.add_handler(CommandHandler("update_menu", update_menu))
+    application.add_handler(CommandHandler("admin_stats", admin_stats))
+    application.add_handler(CommandHandler("check_access", check_access))
+    application.add_handler(CommandHandler("debug_task", debug_task_command))
+
+    # 3. Обработчик отмены
+    application.add_handler(CommandHandler("cancel", cancel))
+
+    # 4. Общий текстовый обработчик (последний)
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+
+    logger.info("✅ Все обработчики зарегистрированы")
+
+def initialize_services():
+    """Инициализирует все сервисы приложения"""
     
     # Проверяем базу данных
     check_database()
     
-    # ОБНОВЛЯЕМ СТРУКТУРУ БАЗЫ ДАННЫХ
+    # Обновляем структуру базы данных
     try:
         from database_updater import update_database_structure
         update_database_structure()
-        print("✅ Структура базы данных проверена и обновлена")
+        logger.info("✅ Структура базы данных проверена и обновлена")
     except Exception as e:
-        print(f"⚠️ Ошибка обновления структуры базы данных: {e}")
+        logger.error(f"⚠️ Ошибка обновления структуры базы данных: {e}")
     
     # Инициализируем файлы шаблонов и задач
     try:
         from template_manager import init_files
         from task_manager import init_task_files
-        
         init_files()
         init_task_files()
-        print("✅ Менеджер шаблонов и задач инициализирован")
+        logger.info("✅ Менеджер шаблонов и задач инициализирован")
     except Exception as e:
-        print(f"⚠️ Ошибка инициализации: {e}")
+        logger.error(f"⚠️ Ошибка инициализации: {e}")
+
+async def main():
+    """Основная асинхронная функция запуска бота"""
+    logger.info("🚀 Запуск бота...")
     
-    keep_alive()
+    # Инициализируем сервисы
+    initialize_services()
 
     # Создаем приложение
     application = Application.builder().token(BOT_TOKEN).build()
@@ -227,115 +200,41 @@ def main():
     # Добавляем обработчик ошибок
     application.add_error_handler(error_handler)
 
-    # ===== ПРАВИЛЬНЫЙ ПОРЯДОК РЕГИСТРАЦИИ ОБРАБОТЧИКОВ =====
-    
-    print("🔄 Регистрация ConversationHandler...")
-    
-    # 1. Сначала ConversationHandler (самые специфичные)
-    admin_conv_handler = get_admin_conversation_handler()
-    template_conv_handler = get_template_conversation_handler()
-    task_conv_handler = get_enhanced_task_conversation_handler()
+    # Настраиваем обработчики
+    setup_handlers(application)
 
-    # Добавляем ConversationHandler в правильном порядке
-    application.add_handler(admin_conv_handler)    # ПЕРВЫЙ!
-    application.add_handler(template_conv_handler)
-    application.add_handler(task_conv_handler)
-
-    print(f"✅ ConversationHandler зарегистрированы:")
-    print(f"   • Администрирование: {len(admin_conv_handler.states)} состояний")
-    print(f"   • Шаблоны: {len(template_conv_handler.states)} состояний")
-    print(f"   • Задачи: {len(task_conv_handler.states)} состояний")
-
-    # 2. Затем команды
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("my_id", my_id))
-    application.add_handler(CommandHandler("now", now))
-    application.add_handler(CommandHandler("update_menu", update_menu))
-    
-    # Админские команды
-    application.add_handler(CommandHandler("admin_stats", admin_stats))
-    application.add_handler(CommandHandler("check_access", check_access))
-    
-    # Отладочные команды
-    application.add_handler(CommandHandler("debug_task", debug_task_command))
-
-    # 3. Обработчик отмены
-    application.add_handler(CommandHandler("cancel", cancel))
-
-    # 4. Общий текстовый обработчик (ДОЛЖЕН БЫТЬ ПОСЛЕДНИМ)
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-
-    print("✅ Все обработчики зарегистрированы в правильном порядке")
-
-    # Инициализируем планировщик задач
+    # Инициализируем и запускаем планировщик
     try:
         init_scheduler(application)
-        print("✅ Планировщик задач инициализирован")
-        
-        # Запускаем планировщик
-        from task_scheduler import start_scheduler
         start_scheduler()
-        print("✅ Планировщик задач запущен")
+        logger.info("✅ Планировщик задач инициализирован и запущен")
     except Exception as e:
-        print(f"⚠️ Ошибка инициализации планировщика: {e}")
+        logger.error(f"⚠️ Ошибка инициализации планировщика: {e}")
 
-    print("✅ Бот запущен и готов к работе!")
-    print("🎉 Режим: БАЗОВАЯ СИСТЕМА С ОТЛАДКОЙ")
-    print("💬 Контекст: РАЗДЕЛЕНИЕ ЛИЧНЫХ СООБЩЕНИЙ И ГРУПП")
-    print("👑 Суперадмин: АВТОМАТИЧЕСКОЕ ВОССТАНОВЛЕНИЕ ПРАВ")
-    print("💾 Все данные сохраняются в PostgreSQL")
-    print("⏰ Планировщик задач активен")
-    print("👥 Система управления пользователями и чатами готова")
-    print("🐛 Отладочные команды доступны")
+    logger.info("✅ Бот запущен и готов к работе!")
     
+    # Запускаем бота с обработкой исключений
     try:
-        print("🔄 Запуск бота...")
-        application.run_polling(
+        await application.run_polling(
             drop_pending_updates=True,
             allowed_updates=Update.ALL_TYPES,
-            close_loop=False,
-            timeout=60
+            timeout=60,
+            close_loop=False
         )
     except Exception as e:
-        print(f"❌ Критическая ошибка при запуске бота: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"❌ Критическая ошибка при запуске бота: {e}")
+        raise
 
 if __name__ == '__main__':
-    # Для Render Web Service
-    import os
-    from threading import Thread
-    from http.server import HTTPServer, BaseHTTPRequestHandler
-    
-    class HealthHandler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b'Bot is running!')
-        
-        def log_message(self, format, *args):
-            return
-    
-    def run_http_server():
-        port = int(os.environ.get('PORT', 10000))
-        server = HTTPServer(('0.0.0.0', port), HealthHandler)
-        print(f"✅ HTTP server listening on port {port}")
-        try:
-            server.serve_forever()
-        except Exception as e:
-            print(f"❌ Ошибка HTTP сервера: {e}")
-    
-    http_thread = Thread(target=run_http_server)
-    http_thread.daemon = True
+    # Запускаем HTTP сервер в отдельном потоке
+    http_thread = Thread(target=run_http_server, daemon=True)
     http_thread.start()
+    logger.info("✅ HTTP сервер запущен")
     
     # Запускаем бота
     try:
-        main()
+        asyncio.run(main())
     except KeyboardInterrupt:
-        print("🛑 Бот остановлен пользователем")
+        logger.info("🛑 Бот остановлен пользователем")
     except Exception as e:
-        print(f"❌ Неожиданная ошибка: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"❌ Неожиданная ошибка: {e}")
