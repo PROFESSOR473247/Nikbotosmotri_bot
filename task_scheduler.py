@@ -1,6 +1,6 @@
 import logging
-import asyncio
 import os
+import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 import pytz
@@ -8,8 +8,7 @@ from datetime import datetime, timedelta
 from telegram import Bot
 from telegram.error import TelegramError
 
-from task_manager import get_all_active_tasks, update_task_execution_time, calculate_next_execution
-from keyboards.task_keyboards import get_tasks_main_keyboard
+from task_manager import get_all_active_tasks, update_task_execution_time
 
 # Глобальный планировщик
 task_scheduler = None
@@ -24,7 +23,18 @@ def init_scheduler(application):
     if task_scheduler is None:
         task_scheduler = AsyncIOScheduler()
         bot_instance = application.bot
-        print("✅ Планировщик задач инициализирован")
+        
+        # Настраиваем планировщик
+        task_scheduler.configure(
+            timezone=pytz.timezone('Europe/Moscow'),
+            job_defaults={
+                'misfire_grace_time': 300,  # 5 минут на выполнение
+                'coalesce': True,  # объединять пропущенные выполнения
+                'max_instances': 1  # только один экземпляр задачи
+            }
+        )
+        
+        logger.info("✅ Планировщик задач инициализирован")
     
     return task_scheduler
 
@@ -33,18 +43,18 @@ async def execute_task(task_id, task_data):
     global bot_instance
     
     try:
-        print(f"🔄 Выполнение задачи: {task_data['template_name']} (ID: {task_id})")
+        logger.info(f"🔄 Выполнение задачи: {task_data['template_name']} (ID: {task_id})")
         
         # Определяем чат для отправки
         target_chat_id = task_data.get('target_chat_id')
         
-        # Если целевой чат не указан, используем чат создателя (для обратной совместимости)
+        # Если целевой чат не указан, используем чат создателя
         if not target_chat_id:
             target_chat_id = task_data.get('created_by')
-            print(f"⚠️ Целевой чат не указан, отправляем создателю: {target_chat_id}")
+            logger.info(f"⚠️ Целевой чат не указан, отправляем создателю: {target_chat_id}")
         
         if not target_chat_id:
-            print(f"❌ Не указан чат для отправки задачи {task_id}")
+            logger.error(f"❌ Не указан чат для отправки задачи {task_id}")
             return
         
         # Подготавливаем сообщение
@@ -53,50 +63,43 @@ async def execute_task(task_id, task_data):
         
         # Отправляем сообщение
         if image_path and os.path.exists(image_path):
-            # Отправляем изображение с текстом
             with open(image_path, 'rb') as photo:
                 await bot_instance.send_photo(
                     chat_id=target_chat_id,
                     photo=photo,
                     caption=message_text
                 )
-            print(f"✅ Отправлено фото + текст в чат {target_chat_id}")
+            logger.info(f"✅ Отправлено фото + текст в чат {target_chat_id}")
         else:
-            # Отправляем только текст
             await bot_instance.send_message(
                 chat_id=target_chat_id,
                 text=message_text
             )
-            print(f"✅ Отправлен текст в чат {target_chat_id}")
+            logger.info(f"✅ Отправлен текст в чат {target_chat_id}")
         
         # Обновляем время выполнения
         update_task_execution_time(task_id)
         
-        print(f"✅ Задача выполнена: {task_data['template_name']}")
+        logger.info(f"✅ Задача выполнена: {task_data['template_name']}")
         
     except TelegramError as e:
-        print(f"❌ Ошибка Telegram при выполнении задачи {task_id}: {e}")
+        logger.error(f"❌ Ошибка Telegram при выполнении задачи {task_id}: {e}")
     except Exception as e:
-        print(f"❌ Ошибка выполнения задачи {task_id}: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"❌ Ошибка выполнения задачи {task_id}: {e}")
 
 async def execute_test_task(template, update, context, target_chat_id=None):
     """Выполняет тестовую задачу немедленно в указанный чат"""
     try:
         user_id = update.effective_user.id
         
-        # Если чат не указан, отправляем в текущий чат
         if not target_chat_id:
             target_chat_id = update.effective_chat.id
         
-        print(f"🧪 Выполнение тестовой задачи: {template['name']} в чат {target_chat_id}")
+        logger.info(f"🧪 Выполнение тестовой задачи: {template['name']} в чат {target_chat_id}")
         
-        # Подготавливаем сообщение
         message_text = template.get('text', '')
         image_path = template.get('image')
         
-        # Отправляем сообщение
         if image_path and os.path.exists(image_path):
             with open(image_path, 'rb') as photo:
                 await context.bot.send_photo(
@@ -104,16 +107,17 @@ async def execute_test_task(template, update, context, target_chat_id=None):
                     photo=photo,
                     caption=message_text
                 )
-            print(f"✅ Тест: отправлено фото + текст в чат {target_chat_id}")
+            logger.info(f"✅ Тест: отправлено фото + текст в чат {target_chat_id}")
         else:
             await context.bot.send_message(
                 chat_id=target_chat_id,
                 text=message_text
             )
-            print(f"✅ Тест: отправлен текст в чат {target_chat_id}")
+            logger.info(f"✅ Тест: отправлен текст в чат {target_chat_id}")
         
     except Exception as e:
-        print(f"❌ Ошибка тестовой задачи: {e}")
+        logger.error(f"❌ Ошибка тестовой задачи: {e}")
+        from keyboards.task_keyboards import get_tasks_main_keyboard
         await update.message.reply_text(
             f"❌ Ошибка отправки тестового сообщения: {e}",
             reply_markup=get_tasks_main_keyboard()
@@ -124,7 +128,7 @@ def schedule_existing_tasks():
     global task_scheduler
     
     if not task_scheduler:
-        print("❌ Планировщик не инициализирован")
+        logger.error("❌ Планировщик не инициализирован")
         return
     
     active_tasks = get_all_active_tasks()
@@ -136,7 +140,7 @@ def schedule_existing_tasks():
             if success:
                 scheduled_count += 1
     
-    print(f"✅ Запланировано задач: {scheduled_count}")
+    logger.info(f"✅ Запланировано задач: {scheduled_count}")
 
 def schedule_test_task(task_id, task_data):
     """Планирует выполнение тестовой задачи через 5 секунд"""
@@ -146,7 +150,6 @@ def schedule_test_task(task_id, task_data):
         return False
     
     try:
-        # Планируем выполнение через 5 секунд
         from datetime import datetime, timedelta
         from apscheduler.triggers.date import DateTrigger
         
@@ -161,11 +164,11 @@ def schedule_test_task(task_id, task_data):
             replace_existing=True
         )
         
-        print(f"✅ Тестовая задача запланирована на: {execution_time}")
+        logger.info(f"✅ Тестовая задача запланирована на: {execution_time}")
         return True
         
     except Exception as e:
-        print(f"❌ Ошибка планирования тестовой задачи {task_id}: {e}")
+        logger.error(f"❌ Ошибка планирования тестовой задачи {task_id}: {e}")
         return False
 
 def schedule_task(task_id, task_data):
@@ -180,7 +183,7 @@ def schedule_task(task_id, task_data):
         days = task_data.get('days', [])
         
         if not time_str or not days:
-            print(f"⚠️ Не могу запланировать задачу {task_id}: нет времени или дней")
+            logger.warning(f"⚠️ Не могу запланировать задачу {task_id}: нет времени или дней")
             return False
         
         # Парсим время
@@ -188,7 +191,7 @@ def schedule_task(task_id, task_data):
         
         # Создаем cron триггер для указанных дней
         trigger = CronTrigger(
-            day_of_week=','.join(days),  # 0-понедельник, 6-воскресенье
+            day_of_week=','.join(map(str, days)),  # Преобразуем в строки
             hour=hour,
             minute=minute,
             timezone=pytz.timezone('Europe/Moscow')
@@ -204,11 +207,11 @@ def schedule_task(task_id, task_data):
             replace_existing=True
         )
         
-        print(f"✅ Задача запланирована: {task_data['template_name']} на {time_str} в дни {days}")
+        logger.info(f"✅ Задача запланирована: {task_data['template_name']} на {time_str} в дни {days}")
         return True
         
     except Exception as e:
-        print(f"❌ Ошибка планирования задачи {task_id}: {e}")
+        logger.error(f"❌ Ошибка планирования задачи {task_id}: {e}")
         return False
 
 def start_scheduler():
@@ -218,16 +221,14 @@ def start_scheduler():
     if task_scheduler and not task_scheduler.running:
         task_scheduler.start()
         schedule_existing_tasks()
-        print("✅ Планировщик задач запущен")
         
-        # Выводим информацию о запланированных задачах
         jobs = task_scheduler.get_jobs()
-        print(f"📅 Запланировано jobs: {len(jobs)}")
+        logger.info(f"✅ Планировщик задач запущен. Запланировано jobs: {len(jobs)}")
 
 def stop_scheduler():
     """Останавливает планировщик"""
     global task_scheduler
     
     if task_scheduler and task_scheduler.running:
-        task_scheduler.shutdown()
-        print("✅ Планировщик задач остановлен")
+        task_scheduler.shutdown(wait=False)
+        logger.info("✅ Планировщик задач остановлен")
