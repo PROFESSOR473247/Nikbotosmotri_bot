@@ -3,9 +3,9 @@ import os
 import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.date import DateTrigger
 import pytz
 from datetime import datetime, timedelta
-from telegram import Bot
 from telegram.error import TelegramError
 
 from task_manager import get_all_active_tasks, update_task_execution_time
@@ -21,19 +21,16 @@ def init_scheduler(application):
     global task_scheduler, bot_instance
     
     if task_scheduler is None:
-        task_scheduler = AsyncIOScheduler()
-        bot_instance = application.bot
-        
-        # Настраиваем планировщик
-        task_scheduler.configure(
+        # Создаем планировщик с правильной конфигурацией для Render
+        task_scheduler = AsyncIOScheduler(
             timezone=pytz.timezone('Europe/Moscow'),
             job_defaults={
-                'misfire_grace_time': 300,  # 5 минут на выполнение
-                'coalesce': True,  # объединять пропущенные выполнения
-                'max_instances': 1  # только один экземпляр задачи
+                'misfire_grace_time': 300,
+                'coalesce': True,
+                'max_instances': 1
             }
         )
-        
+        bot_instance = application.bot
         logger.info("✅ Планировщик задач инициализирован")
     
     return task_scheduler
@@ -150,9 +147,6 @@ def schedule_test_task(task_id, task_data):
         return False
     
     try:
-        from datetime import datetime, timedelta
-        from apscheduler.triggers.date import DateTrigger
-        
         execution_time = datetime.now() + timedelta(seconds=5)
         
         task_scheduler.add_job(
@@ -191,7 +185,7 @@ def schedule_task(task_id, task_data):
         
         # Создаем cron триггер для указанных дней
         trigger = CronTrigger(
-            day_of_week=','.join(map(str, days)),  # Преобразуем в строки
+            day_of_week=','.join(map(str, days)),
             hour=hour,
             minute=minute,
             timezone=pytz.timezone('Europe/Moscow')
