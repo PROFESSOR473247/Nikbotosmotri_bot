@@ -1,6 +1,8 @@
 import logging
 import os
 import asyncio
+import signal
+import sys
 from threading import Thread
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -16,7 +18,7 @@ from handlers.template_handlers import get_template_conversation_handler
 from handlers.enhanced_task_handlers import get_enhanced_task_conversation_handler
 from handlers.admin_handlers import get_admin_conversation_handler, admin_stats, check_access
 from handlers.basic_handlers import handle_text, cancel
-from task_scheduler import init_scheduler, start_scheduler
+from task_scheduler import init_scheduler, start_scheduler, stop_scheduler
 
 # Настройка логирования
 logging.basicConfig(
@@ -187,54 +189,100 @@ def initialize_services():
     except Exception as e:
         logger.error(f"⚠️ Ошибка инициализации: {e}")
 
-async def main():
-    """Основная асинхронная функция запуска бота"""
-    logger.info("🚀 Запуск бота...")
+class BotRunner:
+    """Класс для управления жизненным циклом бота"""
     
-    # Инициализируем сервисы
-    initialize_services()
+    def __init__(self):
+        self.application = None
+        self.is_running = False
+        
+    async def start_bot(self):
+        """Запускает бота"""
+        try:
+            logger.info("🚀 Запуск бота...")
+            
+            # Инициализируем сервисы
+            initialize_services()
 
-    # Создаем приложение
-    application = Application.builder().token(BOT_TOKEN).build()
+            # Создаем приложение
+            self.application = Application.builder().token(BOT_TOKEN).build()
+            
+            # Добавляем обработчик ошибок
+            self.application.add_error_handler(error_handler)
+
+            # Настраиваем обработчики
+            setup_handlers(self.application)
+
+            # Инициализируем и запускаем планировщик
+            try:
+                init_scheduler(self.application)
+                start_scheduler()
+                logger.info("✅ Планировщик задач инициализирован и запущен")
+            except Exception as e:
+                logger.error(f"⚠️ Ошибка инициализации планировщика: {e}")
+
+            logger.info("✅ Бот запущен и готов к работе!")
+            self.is_running = True
+            
+            # Запускаем polling с правильными параметрами для Render
+            await self.application.run_polling(
+                drop_pending_updates=True,
+                allowed_updates=Update.ALL_TYPES,
+                close_loop=False,  # Важно для Render!
+                stop_signals=[]    # Отключаем обработку сигналов
+            )
+            
+        except Exception as e:
+            logger.error(f"❌ Критическая ошибка при запуске бота: {e}")
+            raise
     
-    # Добавляем обработчик ошибок
-    application.add_error_handler(error_handler)
+    async def stop_bot(self):
+        """Останавливает бота gracefully"""
+        if self.application and self.is_running:
+            logger.info("🛑 Остановка бота...")
+            self.is_running = False
+            
+            # Останавливаем планировщик
+            stop_scheduler()
+            
+            # Останавливаем приложение
+            await self.application.stop()
+            await self.application.shutdown()
+            
+            logger.info("✅ Бот остановлен")
 
-    # Настраиваем обработчики
-    setup_handlers(application)
+def signal_handler(signum, frame):
+    """Обработчик сигналов для graceful shutdown"""
+    logger.info(f"🛑 Получен сигнал {signum}, завершаем работу...")
+    sys.exit(0)
 
-    # Инициализируем и запускаем планировщик
-    try:
-        init_scheduler(application)
-        start_scheduler()
-        logger.info("✅ Планировщик задач инициализирован и запущен")
-    except Exception as e:
-        logger.error(f"⚠️ Ошибка инициализации планировщика: {e}")
-
-    logger.info("✅ Бот запущен и готов к работе!")
+def main():
+    """Основная функция запуска"""
+    # Регистрируем обработчики сигналов
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
     
-    # Запускаем бота с обработкой исключений
-    try:
-        await application.run_polling(
-            drop_pending_updates=True,
-            allowed_updates=Update.ALL_TYPES,
-            timeout=60,
-            close_loop=False
-        )
-    except Exception as e:
-        logger.error(f"❌ Критическая ошибка при запуске бота: {e}")
-        raise
-
-if __name__ == '__main__':
     # Запускаем HTTP сервер в отдельном потоке
     http_thread = Thread(target=run_http_server, daemon=True)
     http_thread.start()
     logger.info("✅ HTTP сервер запущен")
     
-    # Запускаем бота
+    # Создаем и запускаем бота
+    bot_runner = BotRunner()
+    
     try:
-        asyncio.run(main())
+        # Запускаем бота в основном event loop
+        asyncio.run(bot_runner.start_bot())
     except KeyboardInterrupt:
         logger.info("🛑 Бот остановлен пользователем")
     except Exception as e:
         logger.error(f"❌ Неожиданная ошибка: {e}")
+    finally:
+        # Graceful shutdown
+        try:
+            asyncio.run(bot_runner.stop_bot())
+        except Exception as e:
+            logger.error(f"❌ Ошибка при остановке бота: {e}")
+
+if __name__ == '__main__':
+    main()
