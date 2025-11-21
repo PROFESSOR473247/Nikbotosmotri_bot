@@ -1,7 +1,8 @@
 import json
 import os
 import uuid
-import shutil
+import shutilimport logging
+logger = logging.getLogger(__name__)
 from datetime import datetime, timedelta
 from database import db
 
@@ -508,8 +509,9 @@ def get_active_tasks_by_group(group_id):
         print(f"❌ Ошибка получения активных задач группы {group_id}: {e}")
         return {}
 
-def create_task_from_template(template, created_by, target_chat_id=None, is_test=False):
-    """Создает задачу на основе шаблона"""
+def create_task_from_template(template_data, created_by, target_chat_id=None, is_test=False):
+    """Создает задачу из шаблона"""
+    logger.info("🔄 Начало создания задачи из шаблона...")
     try:
         print(f"🔄 Создание задачи из шаблона: {template.get('name')}")
         print(f"📊 Данные шаблона: {template}")
