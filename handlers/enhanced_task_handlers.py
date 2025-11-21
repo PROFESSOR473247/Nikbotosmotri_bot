@@ -282,7 +282,7 @@ def format_enhanced_task_confirmation(template, chat_name):
         return "❌ Ошибка загрузки подтверждения задачи"
 
 async def enhanced_create_task_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Подтверждение создания задачи - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+    """Подтверждение создания задачи"""
     user_choice = update.message.text
     task_data = context.user_data['task_creation']
     template = task_data['template']
@@ -291,7 +291,7 @@ async def enhanced_create_task_confirm(update: Update, context: ContextTypes.DEF
         try:
             # Создаем задачу с указанием целевого чата
             success, task_id = create_task_from_template(
-                template_data=template,  # ИСПРАВЛЕНО: передаем template_data вместо template
+                template_data=template,
                 created_by=task_data['created_by'],
                 target_chat_id=task_data.get('target_chat_id'),
                 is_test=task_data.get('is_test', False)
@@ -409,7 +409,7 @@ async def enhanced_test_task_select_chat(update: Update, context: ContextTypes.D
     return await enhanced_create_task_select_chat(update, context)
 
 async def enhanced_test_task_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Подтверждение тестирования - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+    """Подтверждение тестирования"""
     user_choice = update.message.text
     task_data = context.user_data['task_creation']
     template = task_data['template']
@@ -418,7 +418,7 @@ async def enhanced_test_task_confirm(update: Update, context: ContextTypes.DEFAU
         try:
             # Создаем тестовую задачу
             success, task_id = create_task_from_template(
-                template_data=template,  # ИСПРАВЛЕНО: передаем template_data вместо template
+                template_data=template,
                 created_by=task_data['created_by'],
                 target_chat_id=task_data.get('target_chat_id'),
                 is_test=True
@@ -476,6 +476,50 @@ async def enhanced_test_task_confirm(update: Update, context: ContextTypes.DEFAU
             reply_markup=get_task_confirmation_keyboard()
         )
         return TEST_TASK_CONFIRM
+
+# ===== СТАТУС ЗАДАЧ =====
+
+async def show_tasks_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает статус всех активных задач"""
+    user_id = update.effective_user.id
+    
+    # Получаем доступные задачи пользователя
+    accessible_tasks = get_user_accessible_tasks(user_id)
+    
+    if not accessible_tasks:
+        await update.message.reply_text(
+            "📊 **Статус задач**\n\n"
+            "❌ Нет активных задач",
+            parse_mode='Markdown',
+            reply_markup=get_tasks_main_keyboard()
+        )
+        return TASKS_MAIN
+    
+    message_text = "📊 **Статус активных задач:**\n\n"
+    
+    for i, (task_id, task) in enumerate(accessible_tasks.items(), 1):
+        task_type = "🧪 Тест" if task.get('is_test') else "📅 Регулярная"
+        
+        message_text += f"{i}. **{task['template_name']}** ({task_type})\n"
+        message_text += f"   🏷️ Группа: {task.get('group_name', 'Не указана')}\n"
+        message_text += f"   ⏰ Время: {task.get('time', 'Не указано')}\n"
+        
+        if task.get('target_chat_id'):
+            message_text += f"   💬 Чат: {task.get('target_chat_id')}\n"
+        
+        if task.get('next_execution'):
+            message_text += f"   ⏱️ Следующее: {task['next_execution']}\n"
+        
+        message_text += "\n"
+    
+    message_text += f"Всего активных задач: {len(accessible_tasks)}"
+    
+    await update.message.reply_text(
+        message_text,
+        parse_mode='Markdown',
+        reply_markup=get_tasks_main_keyboard()
+    )
+    return TASKS_MAIN
 
 # ===== ДЕАКТИВАЦИЯ ЗАДАЧ =====
 
@@ -676,6 +720,7 @@ def get_enhanced_task_conversation_handler():
                 MessageHandler(filters.Regex("^➕ Создать задачу$"), enhanced_create_task_start),
                 MessageHandler(filters.Regex("^🗑️ Отменить задачу$"), enhanced_deactivate_task_start),
                 MessageHandler(filters.Regex("^🧪 Тестирование$"), enhanced_test_task_start),
+                MessageHandler(filters.Regex("^📊 Статус задач$"), show_tasks_status),
                 MessageHandler(filters.Regex("^🔙 Главное меню$"), enhanced_cancel_task)
             ],
             
