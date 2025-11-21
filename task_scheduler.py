@@ -8,7 +8,7 @@ import pytz
 from datetime import datetime, timedelta
 from telegram.error import TelegramError
 
-from task_manager import get_all_active_tasks, update_task_execution_time
+from task_manager import get_all_active_tasks, update_task_execution_time, deactivate_task
 
 # Глобальный планировщик
 task_scheduler = None
@@ -54,6 +54,18 @@ async def execute_task(task_id, task_data):
             logger.error(f"❌ Не указан чат для отправки задачи {task_id}")
             return
         
+        logger.info(f"📨 Попытка отправки в чат: {target_chat_id}")
+        
+        # Проверяем права бота в чате
+        try:
+            chat = await bot_instance.get_chat(target_chat_id)
+            logger.info(f"✅ Чат найден: {chat.title if hasattr(chat, 'title') else 'личные сообщения'}")
+        except Exception as e:
+            logger.error(f"❌ Бот не имеет доступа к чату {target_chat_id}: {e}")
+            # Деактивируем задачу если чат недоступен
+            deactivate_task(task_id)
+            return
+        
         # Подготавливаем сообщение
         message_text = task_data.get('template_text', '')
         image_path = task_data.get('template_image')
@@ -77,10 +89,27 @@ async def execute_task(task_id, task_data):
         # Обновляем время выполнения
         update_task_execution_time(task_id)
         
+        # ДЛЯ ТЕСТОВЫХ ЗАДАЧ: деактивируем после выполнения
+        if task_data.get('is_test', False):
+            success, message = deactivate_task(task_id)
+            if success:
+                logger.info(f"✅ Тестовая задача {task_id} деактивирована после выполнения")
+                # Удаляем задачу из планировщика
+                unschedule_task(task_id)
+            else:
+                logger.error(f"❌ Ошибка деактивации тестовой задачи {task_id}: {message}")
+        
         logger.info(f"✅ Задача выполнена: {task_data['template_name']}")
         
     except TelegramError as e:
         logger.error(f"❌ Ошибка Telegram при выполнении задачи {task_id}: {e}")
+        
+        # Если чат не найден или бот заблокирован, деактивируем задачу
+        if "Chat not found" in str(e) or "bot was blocked" in str(e) or "Forbidden" in str(e):
+            logger.warning(f"⚠️ Чат {target_chat_id} недоступен, деактивируем задачу {task_id}")
+            deactivate_task(task_id)
+            unschedule_task(task_id)
+            
     except Exception as e:
         logger.error(f"❌ Ошибка выполнения задачи {task_id}: {e}")
 
@@ -208,6 +237,34 @@ def schedule_task(task_id, task_data):
         
     except Exception as e:
         logger.error(f"❌ Ошибка планирования задачи {task_id}: {e}")
+        return False
+
+def unschedule_task(task_id):
+    """Удаляет задачу из планировщика"""
+    global task_scheduler
+    
+    if not task_scheduler:
+        return False
+    
+    try:
+        # Пытаемся удалить обычную задачу
+        if task_scheduler.get_job(task_id):
+            task_scheduler.remove_job(task_id)
+            logger.info(f"✅ Задача {task_id} удалена из планировщика")
+            return True
+        
+        # Пытаемся удалить тестовую задачу
+        test_job_id = f"test_{task_id}"
+        if task_scheduler.get_job(test_job_id):
+            task_scheduler.remove_job(test_job_id)
+            logger.info(f"✅ Тестовая задача {task_id} удалена из планировщика")
+            return True
+            
+        logger.warning(f"⚠️ Задача {task_id} не найдена в планировщике")
+        return False
+            
+    except Exception as e:
+        logger.error(f"❌ Ошибка удаления задачи {task_id}: {e}")
         return False
 
 def start_scheduler():
