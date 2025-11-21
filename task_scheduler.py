@@ -144,6 +144,7 @@ def schedule_test_task(task_id, task_data):
     global task_scheduler
     
     if not task_scheduler:
+        logger.error("❌ Планировщик не инициализирован для тестовой задачи")
         return False
     
     try:
@@ -170,6 +171,7 @@ def schedule_task(task_id, task_data):
     global task_scheduler
     
     if not task_scheduler:
+        logger.error("❌ Планировщик не инициализирован")
         return False
     
     try:
@@ -226,3 +228,20 @@ def stop_scheduler():
     if task_scheduler and task_scheduler.running:
         task_scheduler.shutdown(wait=False)
         logger.info("✅ Планировщик задач остановлен")
+
+def get_scheduler_status():
+    """Возвращает статус планировщика"""
+    global task_scheduler
+    
+    if not task_scheduler:
+        return "❌ Планировщик не инициализирован"
+    
+    status = "✅ Планировщик запущен\n" if task_scheduler.running else "❌ Планировщик остановлен\n"
+    jobs = task_scheduler.get_jobs()
+    status += f"📊 Запланировано задач: {len(jobs)}\n"
+    
+    for job in jobs:
+        next_run = job.next_run_time.strftime("%Y-%m-%d %H:%M:%S") if job.next_run_time else "Не запланировано"
+        status += f"  - {job.name}: {next_run}\n"
+    
+    return status
