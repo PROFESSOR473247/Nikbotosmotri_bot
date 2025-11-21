@@ -2,7 +2,7 @@ import logging
 import os
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from database import db
 
 logger = logging.getLogger(__name__)
@@ -140,6 +140,7 @@ def save_task(task_data):
         print(f"   Group: {group_name}")
         print(f"   Time: {time_str}")
         print(f"   Target Chat: {target_chat_id}")
+        print(f"   Is Test: {is_test}")
         
         cursor.execute('''
             INSERT INTO tasks (id, template_id, template_name, template_text, template_image, 
@@ -378,8 +379,9 @@ def format_task_info(task):
         task_time = safe_get_task_value(task, 'time', 'Не указано')
         has_image = '✅ Есть' if task.get('template_image') else '❌ Нет'
         is_active = '✅ Активна' if task.get('is_active', True) else '❌ Неактивна'
+        is_test = '🧪 Тестовая' if task.get('is_test', False) else '📅 Регулярная'
         
-        info = f"**{task_name}**\n"
+        info = f"**{task_name}** ({is_test})\n"
         info += f"📄 Текст: {task_text[:100]}...\n"
         info += f"🖼️ Изображение: {has_image}\n"
         info += f"⏰ Время: {task_time} (МСК)\n"
@@ -410,8 +412,9 @@ def format_task_list_info(tasks):
             task_group = safe_get_task_value(task, 'group_name', 'Не указана')
             task_time = safe_get_task_value(task, 'time', 'Не указано')
             task_text = safe_get_task_value(task, 'template_text', '')
+            is_test = "🧪" if task.get('is_test', False) else "📅"
             
-            message += f"{i}. **{task_name}** {has_image}\n"
+            message += f"{i}. **{task_name}** {has_image} {is_test}\n"
             message += f"   🏷️ Группа: {task_group}\n"
             message += f"   ⏰ Время: {task_time}\n"
             message += f"   📅 Дней: {days_count}\n"
@@ -511,11 +514,11 @@ def get_active_tasks_by_group(group_id):
         return {}
 
 def create_task_from_template(template_data, created_by, target_chat_id=None, is_test=False):
-    """Создает задачу из шаблона"""
+    """Создает задачу из шаблона - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     logger.info("🔄 Начало создания задачи из шаблона...")
     try:
-        print(f"🔄 Создание задачи из шаблона: {template.get('name')}")
-        print(f"📊 Данные шаблона: {template}")
+        print(f"🔄 Создание задачи из шаблона: {template_data.get('name')}")
+        print(f"📊 Данные шаблона: {template_data}")
         print(f"👤 Создатель: {created_by}")
         print(f"💬 Целевой чат: {target_chat_id}")
         print(f"🧪 Тестовая: {is_test}")
@@ -524,31 +527,30 @@ def create_task_from_template(template_data, created_by, target_chat_id=None, is
         if is_test:
             # Тестовые задачи выполняются через 5 секунд
             task_data = {
-                'template_id': template.get('id'),
-                'template_name': template.get('name', 'Без названия'),
-                'template_text': template.get('text', ''),
-                'template_image': template.get('image'),
-                'group_name': template.get('group', ''),
+                'template_id': template_data.get('id'),
+                'template_name': template_data.get('name', 'Без названия'),
+                'template_text': template_data.get('text', ''),
+                'template_image': template_data.get('image'),
+                'group_name': template_data.get('group', ''),
                 'time': None,  # Для тестовых задач время не важно
                 'days': [],    # Для тестовых задач дни не важны
                 'frequency': 'once',  # Однократное выполнение
                 'created_by': created_by,
                 'is_active': True,
                 'is_test': True,
-                'target_chat_id': target_chat_id,
-                'test_execution_time': (datetime.now() + timedelta(seconds=5)).strftime("%Y-%m-%d %H:%M:%S")
+                'target_chat_id': target_chat_id
             }
         else:
             # Обычные задачи используют настройки из шаблона
             task_data = {
-                'template_id': template.get('id'),
-                'template_name': template.get('name', 'Без названия'),
-                'template_text': template.get('text', ''),
-                'template_image': template.get('image'),
-                'group_name': template.get('group', ''),
-                'time': template.get('time', ''),
-                'days': template.get('days', []),
-                'frequency': template.get('frequency', 'weekly'),
+                'template_id': template_data.get('id'),
+                'template_name': template_data.get('name', 'Без названия'),
+                'template_text': template_data.get('text', ''),
+                'template_image': template_data.get('image'),
+                'group_name': template_data.get('group', ''),
+                'time': template_data.get('time', ''),
+                'days': template_data.get('days', []),
+                'frequency': template_data.get('frequency', 'weekly'),
                 'created_by': created_by,
                 'is_active': True,
                 'is_test': False,
@@ -560,12 +562,24 @@ def create_task_from_template(template_data, created_by, target_chat_id=None, is
         # Создаем задачу
         success, task_id = create_task(task_data)
         
-        if success and is_test:
-            # Для тестовых задач сразу планируем выполнение через 5 секунд
-            from task_scheduler import schedule_test_task
-            schedule_test_task(task_id, task_data)
-        
         if success:
+            if is_test:
+                # Для тестовых задач сразу планируем выполнение через 5 секунд
+                from task_scheduler_fixed import schedule_test_task
+                schedule_success = schedule_test_task(task_id, task_data)
+                if schedule_success:
+                    print(f"✅ Тестовая задача запланирована на выполнение через 5 секунд")
+                else:
+                    print(f"❌ Ошибка планирования тестовой задачи")
+            else:
+                # Для обычных задач планируем по расписанию
+                from task_scheduler_fixed import schedule_task
+                schedule_success = schedule_task(task_id, task_data)
+                if schedule_success:
+                    print(f"✅ Обычная задача запланирована по расписанию")
+                else:
+                    print(f"❌ Ошибка планирования обычной задачи")
+            
             print(f"✅ Задача успешно создана: {task_id}")
         else:
             print("❌ Ошибка при вызове create_task")
@@ -577,8 +591,6 @@ def create_task_from_template(template_data, created_by, target_chat_id=None, is
         import traceback
         traceback.print_exc()
         return False, None
-        
-        # ===== ФУНКЦИИ ДЛЯ ПЛАНИРОВЩИКА =====
 
 def update_task_execution_time(task_id):
     """Обновляет время последнего выполнения задачи"""
