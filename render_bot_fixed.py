@@ -32,10 +32,12 @@ def run_http_server():
 
 async def run_bot():
     """Запускает бота - основная асинхронная функция"""
+    from telegram.ext import Application
+    from config import BOT_TOKEN
+    
+    application = None
+    
     try:
-        from telegram.ext import Application
-        from config import BOT_TOKEN
-        
         logger.info("🚀 Инициализация бота...")
         
         # Инициализация сервисов
@@ -112,18 +114,33 @@ async def run_bot():
         
         logger.info("✅ Бот запущен и готов к работе!")
         
-        # ЗАПУСКАЕМ POLLING ПРАВИЛЬНО - этот вызов БЛОКИРУЮЩИЙ и должен быть awaited
-        await application.run_polling(
+        # ЯВНОЕ УПРАВЛЕНИЕ APPLICATION - чтобы все корутины были properly awaited
+        await application.initialize()
+        await application.start()
+        await application.updater.start_polling(
             drop_pending_updates=True,
-            allowed_updates=['message', 'callback_query'],
-            close_loop=False
+            allowed_updates=['message', 'callback_query']
         )
+        
+        # Бесконечный цикл ожидания
+        while True:
+            await asyncio.sleep(3600)  # Спим 1 час
         
     except asyncio.CancelledError:
         logger.info("🛑 Бот остановлен")
     except Exception as e:
         logger.error(f"❌ Критическая ошибка бота: {e}")
         raise
+    finally:
+        # КОРРЕКТНАЯ ОСТАНОВКА - все корутины properly awaited
+        if application:
+            try:
+                await application.updater.stop()
+                await application.stop()
+                await application.shutdown()
+                logger.info("✅ Бот корректно остановлен")
+            except Exception as e:
+                logger.error(f"❌ Ошибка при остановке бота: {e}")
 
 def start_bot():
     """Запускает бота в отдельном event loop"""
@@ -140,7 +157,8 @@ def start_bot():
         logger.error(f"❌ Ошибка при запуске бота: {e}")
     finally:
         # Закрываем loop после завершения работы бота
-        loop.close()
+        if not loop.is_closed():
+            loop.close()
         logger.info("✅ Event loop бота закрыт")
 
 def main():
@@ -153,7 +171,6 @@ def main():
     logger.info("✅ HTTP сервер запущен")
     
     # Запускаем бота в основном потоке
-    # На Render главный поток должен быть занят работой бота
     start_bot()
 
 if __name__ == '__main__':
