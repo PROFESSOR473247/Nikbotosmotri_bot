@@ -1,10 +1,11 @@
-import json
+import logging
 import os
+import json
 import uuid
-import shutilimport logging
-logger = logging.getLogger(__name__)
-from datetime import datetime, timedelta
+from datetime import datetime
 from database import db
+
+logger = logging.getLogger(__name__)
 
 # Дни недели для отображения
 DAYS_OF_WEEK = {
