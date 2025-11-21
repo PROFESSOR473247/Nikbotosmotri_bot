@@ -119,56 +119,82 @@ async def setup_application():
     
     return application
 
-async def run_bot():
-    """Запускает бота"""
-    try:
-        # Инициализируем сервисы
-        initialize_services()
+class BotManager:
+    """Управляет жизненным циклом бота с защитой от сигналов"""
+    
+    def __init__(self):
+        self.application = None
+        self.is_running = False
+        self.shutdown_requested = False
         
-        # Создаем приложение
-        application = await setup_application()
-        
-        # Инициализируем планировщик
-        from task_scheduler import init_scheduler, start_scheduler
-        init_scheduler(application)
-        start_scheduler()
-        logger.info("✅ Планировщик задач инициализирован и запущен")
-
-        logger.info("✅ Бот запущен и готов к работе!")
-        
-        # Запускаем polling с правильной обработкой остановки
-        await application.initialize()
-        await application.start()
-        await application.updater.start_polling(
-            drop_pending_updates=True,
-            allowed_updates=['message', 'callback_query']
-        )
-        
-        # Ждем остановки
-        while True:
-            await asyncio.sleep(1)
+    async def start(self):
+        """Запускает бота"""
+        if self.is_running:
+            return
             
-    except asyncio.CancelledError:
-        logger.info("🛑 Получен сигнал остановки")
-    except Exception as e:
-        logger.error(f"❌ Критическая ошибка при запуске бота: {e}")
-        raise
-    finally:
-        # Останавливаем приложение
         try:
-            if 'application' in locals():
-                await application.updater.stop()
-                await application.stop()
-                await application.shutdown()
-                logger.info("✅ Бот остановлен корректно")
+            # Инициализируем сервисы
+            initialize_services()
+            
+            # Создаем приложение
+            self.application = await setup_application()
+            
+            # Инициализируем планировщик
+            from task_scheduler import init_scheduler, start_scheduler
+            init_scheduler(self.application)
+            start_scheduler()
+            logger.info("✅ Планировщик задач инициализирован и запущен")
+
+            logger.info("✅ Бот запущен и готов к работе!")
+            self.is_running = True
+            
+            # Запускаем polling
+            await self.application.run_polling(
+                drop_pending_updates=True,
+                allowed_updates=['message', 'callback_query'],
+                close_loop=False,
+                stop_signals=[]  # Отключаем обработку сигналов ботом
+            )
+            
+        except asyncio.CancelledError:
+            logger.info("🛑 Получен сигнал отмены")
         except Exception as e:
-            logger.error(f"❌ Ошибка при остановке бота: {e}")
+            logger.error(f"❌ Критическая ошибка при запуске бота: {e}")
+            raise
+            
+    async def stop(self):
+        """Останавливает бота gracefully"""
+        if self.application and self.is_running:
+            logger.info("🛑 Остановка бота...")
+            self.is_running = False
+            self.shutdown_requested = True
+            
+            try:
+                # Останавливаем планировщик
+                from task_scheduler import stop_scheduler
+                stop_scheduler()
+                
+                # Останавливаем приложение
+                await self.application.stop()
+                await self.application.shutdown()
+                
+                logger.info("✅ Бот остановлен корректно")
+            except Exception as e:
+                logger.error(f"❌ Ошибка при остановке бота: {e}")
+
+# Глобальный экземпляр менеджера
+bot_manager = BotManager()
 
 def signal_handler(signum, frame):
     """Обработчик сигналов для graceful shutdown"""
-    logger.info(f"🛑 Получен сигнал {signum}, завершаем работу...")
-    # Завершаем процесс
-    sys.exit(0)
+    logger.info(f"🛑 Получен сигнал {signum}, планируем остановку...")
+    
+    # Устанавливаем флаг остановки, но не завершаем процесс сразу
+    bot_manager.shutdown_requested = True
+    
+    # Запускаем асинхронную остановку в event loop
+    if bot_manager.is_running:
+        asyncio.create_task(bot_manager.stop())
 
 def main():
     """Основная функция запуска"""
@@ -189,7 +215,7 @@ def main():
     
     try:
         # Запускаем бота
-        bot_task = loop.create_task(run_bot())
+        bot_task = loop.create_task(bot_manager.start())
         loop.run_until_complete(bot_task)
         
     except KeyboardInterrupt:
@@ -198,7 +224,7 @@ def main():
         logger.error(f"❌ Неожиданная ошибка: {e}")
     finally:
         # Останавливаем loop
-        try:
+        if not loop.is_closed():
             # Отменяем все задачи
             pending = asyncio.all_tasks(loop)
             for task in pending:
@@ -210,8 +236,6 @@ def main():
             
             loop.close()
             logger.info("✅ Event loop закрыт")
-        except Exception as e:
-            logger.error(f"❌ Ошибка при закрытии event loop: {e}")
 
 if __name__ == '__main__':
     main()
