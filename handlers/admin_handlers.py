@@ -22,7 +22,7 @@ from authorized_users import is_admin
     DELETE_CHAT_SELECT, DELETE_CHAT_CONFIRM
 ) = range(24)
 
-# ===== ОСНОВНЫЕ ФУНКЦИИ АДМИНИСТРИРОВАНИЯ =====
+# ==== ОСНОВНЫЕ ФУНКЦИИ АДМИНИСТРИРОВАНИЯ =====
 
 async def admin_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Главное меню администрирования"""
