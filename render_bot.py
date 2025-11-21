@@ -5,6 +5,11 @@ import signal
 import sys
 from threading import Thread
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from telegram import Update
+from telegram.ext import (
+    Application, CommandHandler, MessageHandler, filters, 
+    ContextTypes, ConversationHandler
+)
 
 # Настройка логирования ДО всех импортов
 logging.basicConfig(
