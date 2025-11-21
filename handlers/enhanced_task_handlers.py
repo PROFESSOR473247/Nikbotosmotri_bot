@@ -14,7 +14,7 @@ from template_manager import (
     get_user_accessible_groups, get_templates_by_group,
     get_template_by_name_and_group
 )
-from task_manager_fixed import (
+from task_manager import (
     create_task_from_template, get_active_tasks_by_group,
     deactivate_task, format_task_info, get_user_accessible_tasks
 )
