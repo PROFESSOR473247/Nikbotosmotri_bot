@@ -389,6 +389,9 @@ def format_task_info(task):
         info += f"🔄 Периодичность: {frequency}\n"
         info += f"📊 Статус: {is_active}\n"
         
+        if task.get('target_chat_id'):
+            info += f"💬 Чат: {task['target_chat_id']}\n"
+        
         if task.get('last_executed'):
             info += f"⏱️ Последний запуск: {task['last_executed']}\n"
         
@@ -514,7 +517,7 @@ def get_active_tasks_by_group(group_id):
         return {}
 
 def create_task_from_template(template_data, created_by, target_chat_id=None, is_test=False):
-    """Создает задачу из шаблона - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+    """Создает задачу из шаблона"""
     logger.info("🔄 Начало создания задачи из шаблона...")
     try:
         print(f"🔄 Создание задачи из шаблона: {template_data.get('name')}")
