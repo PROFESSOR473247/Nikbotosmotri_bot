@@ -1,12 +1,10 @@
 import logging
 import os
 import asyncio
-import signal
-import sys
 from threading import Thread
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# Настройка логирования ДО всех импортов
+# Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
@@ -27,215 +25,106 @@ def run_http_server():
     port = int(os.environ.get('PORT', 10000))
     server = HTTPServer(('0.0.0.0', port), HealthHandler)
     logger.info(f"✅ HTTP server listening on port {port}")
-    try:
-        server.serve_forever()
-    except Exception as e:
-        logger.error(f"❌ Ошибка HTTP сервера: {e}")
+    server.serve_forever()
 
-def initialize_services():
-    """Инициализирует все сервисы приложения"""
-    logger.info("🔍 Инициализация сервисов...")
-    
+async def run_bot():
+    """Запускает бота"""
     try:
+        from telegram.ext import Application
+        from config import BOT_TOKEN
+        
+        logger.info("🚀 Инициализация бота...")
+        
+        # Инициализация сервисов
         from database import db
         db.init_database()
         logger.info("✅ База данных инициализирована")
         
-        # Обновляем структуру базы данных
+        # Обновление структуры БД
         try:
             from database_updater import update_database_structure
             update_database_structure()
-            logger.info("✅ Структура базы данных проверена и обновлена")
+            logger.info("✅ Структура БД обновлена")
         except Exception as e:
-            logger.error(f"⚠️ Ошибка обновления структуры базы данных: {e}")
+            logger.error(f"⚠️ Ошибка обновления БД: {e}")
         
-        # Инициализируем файлы шаблонов и задач
+        # Инициализация файлов
         try:
             from template_manager import init_files
             from task_manager import init_task_files
             init_files()
             init_task_files()
-            logger.info("✅ Менеджер шаблонов и задач инициализирован")
+            logger.info("✅ Файлы инициализированы")
         except Exception as e:
-            logger.error(f"⚠️ Ошибка инициализации: {e}")
-            
+            logger.error(f"⚠️ Ошибка инициализации файлов: {e}")
+        
+        # Создаем приложение
+        application = Application.builder().token(BOT_TOKEN).build()
+        
+        # Регистрируем обработчики
+        from telegram.ext import CommandHandler, MessageHandler, filters
+        from handlers.start_handlers import start, help_command, my_id, now, update_menu
+        from handlers.admin_handlers import admin_stats, check_access
+        from handlers.basic_handlers import handle_text, cancel
+        from handlers.template_handlers import get_template_conversation_handler
+        from handlers.enhanced_task_handlers import get_enhanced_task_conversation_handler
+        from handlers.admin_handlers import get_admin_conversation_handler
+        
+        # ConversationHandler
+        application.add_handler(get_admin_conversation_handler())
+        application.add_handler(get_template_conversation_handler())
+        application.add_handler(get_enhanced_task_conversation_handler())
+        
+        # Команды
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("help", help_command))
+        application.add_handler(CommandHandler("my_id", my_id))
+        application.add_handler(CommandHandler("now", now))
+        application.add_handler(CommandHandler("update_menu", update_menu))
+        application.add_handler(CommandHandler("admin_stats", admin_stats))
+        application.add_handler(CommandHandler("check_access", check_access))
+        application.add_handler(CommandHandler("cancel", cancel))
+        
+        # Текстовый обработчик
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+        
+        logger.info("✅ Обработчики зарегистрированы")
+        
+        # Инициализируем планировщик
+        from task_scheduler import init_scheduler, start_scheduler
+        init_scheduler(application)
+        start_scheduler()
+        logger.info("✅ Планировщик запущен")
+        
+        logger.info("✅ Бот запущен и готов к работе!")
+        
+        # Запускаем polling
+        await application.run_polling(
+            drop_pending_updates=True,
+            allowed_updates=['message', 'callback_query']
+        )
+        
     except Exception as e:
-        logger.error(f"❌ Ошибка инициализации сервисов: {e}")
+        logger.error(f"❌ Ошибка бота: {e}")
         raise
 
-async def setup_application():
-    """Создает и настраивает приложение бота"""
-    from telegram.ext import Application
-    from config import BOT_TOKEN
-    
-    # Создаем приложение
-    application = Application.builder().token(BOT_TOKEN).build()
-    
-    # Настраиваем обработчик ошибок
-    async def error_handler(update, context):
-        try:
-            raise context.error
-        except Exception as e:
-            logger.error(f"❌ Ошибка в обработчике: {e}")
-    
-    application.add_error_handler(error_handler)
-    
-    # Регистрируем обработчики
-    logger.info("🔄 Регистрация обработчиков...")
-    
-    from telegram.ext import CommandHandler, MessageHandler, filters
-    from handlers.start_handlers import start, help_command, my_id, now, update_menu
-    from handlers.admin_handlers import admin_stats, check_access
-    from handlers.basic_handlers import handle_text, cancel
-    from handlers.template_handlers import get_template_conversation_handler
-    from handlers.enhanced_task_handlers import get_enhanced_task_conversation_handler
-    from handlers.admin_handlers import get_admin_conversation_handler
-    
-    # ConversationHandler (самые специфичные)
-    admin_conv_handler = get_admin_conversation_handler()
-    template_conv_handler = get_template_conversation_handler()
-    task_conv_handler = get_enhanced_task_conversation_handler()
-
-    application.add_handler(admin_conv_handler)
-    application.add_handler(template_conv_handler)
-    application.add_handler(task_conv_handler)
-
-    # Команды
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("my_id", my_id))
-    application.add_handler(CommandHandler("now", now))
-    application.add_handler(CommandHandler("update_menu", update_menu))
-    application.add_handler(CommandHandler("admin_stats", admin_stats))
-    application.add_handler(CommandHandler("check_access", check_access))
-
-    # Обработчик отмены
-    application.add_handler(CommandHandler("cancel", cancel))
-
-    # Общий текстовый обработчик (последний)
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-
-    logger.info("✅ Все обработчики зарегистрированы")
-    
-    return application
-
-class BotManager:
-    """Управляет жизненным циклом бота с защитой от сигналов"""
-    
-    def __init__(self):
-        self.application = None
-        self.is_running = False
-        self.shutdown_requested = False
-        
-    async def start(self):
-        """Запускает бота"""
-        if self.is_running:
-            return
-            
-        try:
-            # Инициализируем сервисы
-            initialize_services()
-            
-            # Создаем приложение
-            self.application = await setup_application()
-            
-            # Инициализируем планировщик
-            from task_scheduler import init_scheduler, start_scheduler
-            init_scheduler(self.application)
-            start_scheduler()
-            logger.info("✅ Планировщик задач инициализирован и запущен")
-
-            logger.info("✅ Бот запущен и готов к работе!")
-            self.is_running = True
-            
-            # Запускаем polling
-            await self.application.run_polling(
-                drop_pending_updates=True,
-                allowed_updates=['message', 'callback_query'],
-                close_loop=False,
-                stop_signals=[]  # Отключаем обработку сигналов ботом
-            )
-            
-        except asyncio.CancelledError:
-            logger.info("🛑 Получен сигнал отмены")
-        except Exception as e:
-            logger.error(f"❌ Критическая ошибка при запуске бота: {e}")
-            raise
-            
-    async def stop(self):
-        """Останавливает бота gracefully"""
-        if self.application and self.is_running:
-            logger.info("🛑 Остановка бота...")
-            self.is_running = False
-            self.shutdown_requested = True
-            
-            try:
-                # Останавливаем планировщик
-                from task_scheduler import stop_scheduler
-                stop_scheduler()
-                
-                # Останавливаем приложение
-                await self.application.stop()
-                await self.application.shutdown()
-                
-                logger.info("✅ Бот остановлен корректно")
-            except Exception as e:
-                logger.error(f"❌ Ошибка при остановке бота: {e}")
-
-# Глобальный экземпляр менеджера
-bot_manager = BotManager()
-
-def signal_handler(signum, frame):
-    """Обработчик сигналов для graceful shutdown"""
-    logger.info(f"🛑 Получен сигнал {signum}, планируем остановку...")
-    
-    # Устанавливаем флаг остановки, но не завершаем процесс сразу
-    bot_manager.shutdown_requested = True
-    
-    # Запускаем асинхронную остановку в event loop
-    if bot_manager.is_running:
-        asyncio.create_task(bot_manager.stop())
-
 def main():
-    """Основная функция запуска"""
-    logger.info("🚀 Запуск бота для Render...")
+    """Основная функция"""
+    logger.info("🚀 Запуск системы...")
     
-    # Регистрируем обработчики сигналов
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-    
-    # Запускаем HTTP сервер в отдельном потоке
+    # Запускаем HTTP сервер
     http_thread = Thread(target=run_http_server, daemon=True)
     http_thread.start()
     logger.info("✅ HTTP сервер запущен")
     
-    # Создаем и запускаем event loop
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
+    # Запускаем бота в основном потоке
+    # На Render используем простой подход
     try:
-        # Запускаем бота
-        bot_task = loop.create_task(bot_manager.start())
-        loop.run_until_complete(bot_task)
-        
+        asyncio.run(run_bot())
     except KeyboardInterrupt:
-        logger.info("🛑 Бот остановлен пользователем")
+        logger.info("🛑 Остановлено пользователем")
     except Exception as e:
-        logger.error(f"❌ Неожиданная ошибка: {e}")
-    finally:
-        # Останавливаем loop
-        if not loop.is_closed():
-            # Отменяем все задачи
-            pending = asyncio.all_tasks(loop)
-            for task in pending:
-                task.cancel()
-            
-            # Ждем завершения задач
-            if pending:
-                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-            
-            loop.close()
-            logger.info("✅ Event loop закрыт")
+        logger.error(f"❌ Ошибка: {e}")
 
 if __name__ == '__main__':
     main()
