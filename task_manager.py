@@ -565,7 +565,7 @@ def create_task_from_template(template_data, created_by, target_chat_id=None, is
         if success:
             if is_test:
                 # Для тестовых задач сразу планируем выполнение через 5 секунд
-                from task_scheduler_fixed import schedule_test_task
+                from task_scheduler import schedule_test_task
                 schedule_success = schedule_test_task(task_id, task_data)
                 if schedule_success:
                     print(f"✅ Тестовая задача запланирована на выполнение через 5 секунд")
@@ -573,7 +573,7 @@ def create_task_from_template(template_data, created_by, target_chat_id=None, is
                     print(f"❌ Ошибка планирования тестовой задачи")
             else:
                 # Для обычных задач планируем по расписанию
-                from task_scheduler_fixed import schedule_task
+                from task_scheduler import schedule_task
                 schedule_success = schedule_task(task_id, task_data)
                 if schedule_success:
                     print(f"✅ Обычная задача запланирована по расписанию")
