@@ -1,43 +1,31 @@
 import logging
-import asyncio
 import os
-from datetime import datetime, timedelta
-import pytz
+import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from telegram import Update
-from telegram.ext import ContextTypes
+from apscheduler.triggers.date import DateTrigger
+import pytz
+from datetime import datetime, timedelta
+from telegram.error import TelegramError
 
-from task_manager import (
-    get_all_active_tasks, update_task_execution_time,
-    calculate_next_execution, get_task_target_chat
-)
-from template_manager import get_template_by_id
-from database_tasks import update_task_in_db
-
-# Глобальные переменные
+# Глобальный планировщик
 task_scheduler = None
-application = None
+bot_instance = None
 
-# Настройка логирования
 logger = logging.getLogger(__name__)
 
-def init_scheduler(app):
+def init_scheduler(application):
     """Инициализирует планировщик задач"""
-    global task_scheduler, application
-    application = app
+    global task_scheduler, bot_instance
     
-    print("🔄 Инициализация планировщика задач...")
+    if task_scheduler is None:
+        task_scheduler = AsyncIOScheduler()
+        bot_instance = application.bot
+        logger.info("✅ Планировщик задач инициализирован")
     
-    # Создаем планировщик
-    task_scheduler = AsyncIOScheduler()
-    task_scheduler.start()
-    
-    # Загружаем и планируем все активные задачи
-    schedule_all_tasks()
-    
-    print("✅ Планировщик задач инициализирован")
     return task_scheduler
+
+# ... остальной код task_scheduler.py остается без изменений
 
 def schedule_all_tasks():
     """Планирует все активные задачи из базы данных"""
