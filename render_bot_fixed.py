@@ -83,7 +83,7 @@ async def run_bot():
         from handlers.admin_handlers import admin_stats, check_access
         from handlers.basic_handlers import handle_text, cancel
         from handlers.template_handlers import get_template_conversation_handler
-        from enhanced_task_handlers_fixed import get_enhanced_task_conversation_handler
+        from handlers.enhanced_task_handlers import get_enhanced_task_conversation_handler
         from handlers.admin_handlers import get_admin_conversation_handler
         
         # ConversationHandler
@@ -107,7 +107,7 @@ async def run_bot():
         logger.info("✅ Обработчики зарегистрированы")
         
         # Инициализируем планировщик
-        from task_scheduler_fixed import init_scheduler, start_scheduler
+        from task_scheduler import init_scheduler, start_scheduler
         init_scheduler(application)
         start_scheduler()
         logger.info("✅ Планировщик запущен")
