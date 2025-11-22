@@ -33,7 +33,7 @@ class DatabaseManager:
         try:
             cursor = conn.cursor()
             
-            # ===== ТАБЛИЦА ШАБЛОНОВ ====
+            # ==== ТАБЛИЦА ШАБЛОНОВ ====
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS templates (
                     id VARCHAR(20) PRIMARY KEY,
