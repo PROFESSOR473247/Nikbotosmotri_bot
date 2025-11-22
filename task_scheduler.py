@@ -35,6 +35,31 @@ def init_scheduler(application):
     
     return task_scheduler
 
+def validate_image_path(image_path):
+    """Проверяет существование файла изображения и возвращает корректный путь"""
+    if not image_path:
+        return None
+    
+    # Проверяем существование файла
+    if os.path.exists(image_path):
+        return image_path
+    
+    # Пробуем найти файл в разных директориях
+    possible_paths = [
+        image_path,
+        os.path.join('images', os.path.basename(image_path)),
+        os.path.join('task_images', os.path.basename(image_path)),
+        image_path.replace('\\', '/'),  # Для Windows путей
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            logger.info(f"✅ Изображение найдено по альтернативному пути: {path}")
+            return path
+    
+    logger.warning(f"⚠️ Файл изображения не найден: {image_path}")
+    return None
+
 async def execute_task(task_id, task_data):
     """Выполняет задачу - отправляет сообщение в указанный чат"""
     global bot_instance
@@ -45,7 +70,6 @@ async def execute_task(task_id, task_data):
         # Определяем чат для отправки
         target_chat_id = task_data.get('target_chat_id')
         
-        # Если целевой чат не указан, используем чат создателя
         if not target_chat_id:
             target_chat_id = task_data.get('created_by')
             logger.info(f"⚠️ Целевой чат не указан, отправляем создателю: {target_chat_id}")
@@ -58,17 +82,15 @@ async def execute_task(task_id, task_data):
         
         # ПОДГОТАВЛИВАЕМ СООБЩЕНИЕ
         message_text = task_data.get('template_text', '')
-        image_path = task_data.get('template_image')
+        image_path = validate_image_path(task_data.get('template_image'))  # ВАЛИДИРУЕМ ПУТЬ
         
         logger.info(f"📊 Данные для отправки: текст='{message_text[:50]}...', изображение='{image_path}'")
         
         # ПРОБУЕМ РАЗНЫЕ ФОРМАТЫ ID ДЛЯ ЧАТОВ
         chat_ids_to_try = [target_chat_id]
         
-        # Если ID положительное, пробуем с минусом (для супергрупп)
         if target_chat_id > 0:
             chat_ids_to_try.append(-target_chat_id)
-        # Если ID отрицательное, пробуем без минуса
         else:
             chat_ids_to_try.append(abs(target_chat_id))
         
@@ -78,7 +100,7 @@ async def execute_task(task_id, task_data):
         for chat_id in chat_ids_to_try:
             try:
                 # ПРОВЕРЯЕМ И ОТПРАВЛЯЕМ ИЗОБРАЖЕНИЕ С ТЕКСТОМ
-                if image_path and os.path.exists(image_path):
+                if image_path:
                     logger.info(f"🖼️ Попытка отправки изображения: {image_path}")
                     with open(image_path, 'rb') as photo:
                         await bot_instance.send_photo(
@@ -88,10 +110,7 @@ async def execute_task(task_id, task_data):
                         )
                     logger.info(f"✅ Отправлено фото + текст в чат {chat_id}")
                 else:
-                    # Если изображения нет или файл не существует, отправляем только текст
-                    if image_path:
-                        logger.warning(f"⚠️ Файл изображения не найден: {image_path}")
-                    
+                    # Если изображения нет, отправляем только текст
                     await bot_instance.send_message(
                         chat_id=chat_id,
                         text=message_text
@@ -126,7 +145,6 @@ async def execute_task(task_id, task_data):
             logger.info(f"✅ Задача выполнена: {task_data['template_name']}")
         else:
             logger.error(f"❌ Не удалось отправить сообщение ни в один вариант чата. Последняя ошибка: {last_error}")
-            # Деактивируем задачу при неудаче
             deactivate_task(task_id)
             unschedule_task(task_id)
         
