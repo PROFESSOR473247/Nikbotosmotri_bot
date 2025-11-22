@@ -2,68 +2,16 @@ import logging
 import os
 import json
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from database import db
+from task_models import TaskData, TemplateData
+from task_calculators import TaskScheduleCalculator, TaskFormatter
+from task_validators import TaskValidator
 
 logger = logging.getLogger(__name__)
 
-# Дни недели для отображения
-DAYS_OF_WEEK = {
-    '0': 'Понедельник', '1': 'Вторник', '2': 'Среда',
-    '3': 'Четверг', '4': 'Пятница', '5': 'Суббота', '6': 'Воскресенье'
-}
-
-# Типы периодичности
-FREQUENCY_TYPES = {
-    "weekly": "1 в неделю",
-    "2_per_month": "2 в месяц", 
-    "monthly": "1 в месяц"
-}
-
 # Директория для изображений задач
 TASK_IMAGES_DIR = "task_images"
-
-# ===== ЗАЩИТНЫЕ ФУНКЦИИ =====
-
-def safe_get_day_name(day):
-    """Безопасно возвращает название дня недели"""
-    try:
-        if isinstance(day, int):
-            day = str(day)
-        return DAYS_OF_WEEK.get(day, f"День {day}")
-    except Exception as e:
-        print(f"⚠️ Ошибка получения названия дня {day}: {e}")
-        return f"День {day}"
-
-def safe_format_days_list(days):
-    """Безопасно форматирует список дней"""
-    try:
-        if not days:
-            return []
-        if not isinstance(days, list):
-            return []
-        return [safe_get_day_name(day) for day in days]
-    except Exception as e:
-        print(f"⚠️ Ошибка форматирования дней {days}: {e}")
-        return []
-
-def safe_get_frequency_name(frequency):
-    """Безопасно возвращает название периодичности"""
-    try:
-        return FREQUENCY_TYPES.get(frequency, frequency)
-    except Exception as e:
-        print(f"⚠️ Ошибка получения периодичности {frequency}: {e}")
-        return frequency
-
-def safe_get_task_value(task, key, default=""):
-    """Безопасно получает значение из задачи"""
-    try:
-        return task.get(key, default)
-    except Exception as e:
-        print(f"⚠️ Ошибка получения значения {key} из задачи: {e}")
-        return default
-
-# ===== ОСНОВНЫЕ ФУНКЦИИ =====
 
 def init_task_files():
     """Инициализирует файлы и директории для задач"""
@@ -100,182 +48,46 @@ def init_database():
 
 def save_task(task_data):
     """Сохраняет задачу в базу данных"""
-    print(f"💾 Попытка сохранения задачи в базу данных: {task_data.get('template_name')}")
-    
-    conn = db.get_connection()
-    if not conn:
-        print("❌ Не удалось подключиться к базе данных для сохранения задачи")
-        return False
-        
     try:
-        cursor = conn.cursor()
-        
-        # Подготавливаем данные
-        task_id = task_data.get('id')
-        template_id = task_data.get('template_id')
-        template_name = task_data.get('template_name', '')
-        template_text = task_data.get('template_text', '')
-        template_image = task_data.get('template_image')
-        group_name = task_data.get('group_name', '')
-        time_str = task_data.get('time', '')
-        
-        # Обрабатываем дни - гарантируем что это JSON строка
-        days_data = task_data.get('days', [])
-        if isinstance(days_data, list):
-            days_json = json.dumps(days_data, ensure_ascii=False)
+        if isinstance(task_data, TaskData):
+            return db.save_task(task_data)
         else:
-            days_json = '[]'
+            # Конвертируем старый формат в новый
+            task = TaskData()
+            task.id = task_data.get('id')
+            task.template_id = task_data.get('template_id')
+            task.template_name = task_data.get('template_name', '')
+            task.template_text = task_data.get('template_text', '')
+            task.template_image = task_data.get('template_image')
+            task.group_name = task_data.get('group_name', '')
+            task.created_by = task_data.get('created_by')
+            task.created_at = task_data.get('created_at')
+            task.is_active = task_data.get('is_active', True)
+            task.is_test = task_data.get('is_test', False)
+            task.last_executed = task_data.get('last_executed')
+            task.next_execution = task_data.get('next_execution')
+            task.target_chat_id = task_data.get('target_chat_id')
             
-        frequency = task_data.get('frequency', '')
-        created_by = task_data.get('created_by')
-        is_active = task_data.get('is_active', True)
-        is_test = task_data.get('is_test', False)
-        last_executed = task_data.get('last_executed')
-        next_execution = task_data.get('next_execution')
-        target_chat_id = task_data.get('target_chat_id')
-        
-        print(f"📊 Данные задачи для сохранения:")
-        print(f"   ID: {task_id}")
-        print(f"   Name: {template_name}")
-        print(f"   Group: {group_name}")
-        print(f"   Time: {time_str}")
-        print(f"   Target Chat: {target_chat_id}")
-        print(f"   Is Test: {is_test}")
-        
-        cursor.execute('''
-            INSERT INTO tasks (id, template_id, template_name, template_text, template_image, 
-                             group_name, time, days, frequency, created_by, is_active, is_test, 
-                             last_executed, next_execution, target_chat_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (id) DO UPDATE SET
-                template_id = EXCLUDED.template_id,
-                template_name = EXCLUDED.template_name,
-                template_text = EXCLUDED.template_text,
-                template_image = EXCLUDED.template_image,
-                group_name = EXCLUDED.group_name,
-                time = EXCLUDED.time,
-                days = EXCLUDED.days,
-                frequency = EXCLUDED.frequency,
-                created_by = EXCLUDED.created_by,
-                is_active = EXCLUDED.is_active,
-                is_test = EXCLUDED.is_test,
-                last_executed = EXCLUDED.last_executed,
-                next_execution = EXCLUDED.next_execution,
-                target_chat_id = EXCLUDED.target_chat_id
-        ''', (
-            task_id,
-            template_id,
-            template_name,
-            template_text,
-            template_image,
-            group_name,
-            time_str,
-            days_json,
-            frequency,
-            created_by,
-            is_active,
-            is_test,
-            last_executed,
-            next_execution,
-            target_chat_id
-        ))
-        
-        conn.commit()
-        
-        # Проверим что действительно сохранилось
-        cursor.execute('SELECT COUNT(*) FROM tasks WHERE id = %s', (task_id,))
-        count = cursor.fetchone()[0]
-        
-        cursor.close()
-        conn.close()
-        
-        if count > 0:
-            print(f"✅ Задача {task_id} успешно сохранена в базе данных (проверено: {count} записей)")
-            return True
-        else:
-            print(f"❌ Задача {task_id} не была сохранена в базу данных")
-            return False
-        
+            # Старые поля расписания конвертируем в новые
+            if task_data.get('time'):
+                task.schedule.times = [task_data['time']]
+            if task_data.get('days'):
+                task.schedule.week_days = task_data['days']
+                task.schedule.schedule_type = 'week_days'
+            if task_data.get('frequency'):
+                task.schedule.frequency = task_data['frequency']
+            
+            return db.save_task(task)
     except Exception as e:
         print(f"❌ Ошибка сохранения задачи: {e}")
-        import traceback
-        traceback.print_exc()
-        try:
-            conn.rollback()
-            conn.close()
-        except:
-            pass
         return False
 
 def load_tasks():
     """Загружает все задачи из базы данных"""
-    print("📂 Загрузка задач из базы данных...")
-    
-    conn = db.get_connection()
-    if not conn:
-        print("❌ Не удалось подключиться к базе данных для загрузки задач")
-        return {}
-        
     try:
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT * FROM tasks ORDER BY created_at DESC')
-        rows = cursor.fetchall()
-        
-        tasks = {}
-        for row in rows:
-            try:
-                # Обрабатываем дни
-                days_data = []
-                if row[7]:  # days field
-                    try:
-                        if isinstance(row[7], (str, bytes, bytearray)):
-                            days_data = json.loads(row[7])
-                        else:
-                            days_data = row[7]
-                    except Exception as e:
-                        print(f"⚠️ Ошибка парсинга дней для задачи {row[0]}: {e}")
-                        days_data = []
-                
-                task = {
-                    'id': row[0],
-                    'template_id': row[1],
-                    'template_name': row[2],
-                    'template_text': row[3],
-                    'template_image': row[4],
-                    'group_name': row[5],
-                    'time': row[6],
-                    'days': days_data,
-                    'frequency': row[8],
-                    'created_by': row[9],
-                    'created_at': row[10].strftime("%Y-%m-%d %H:%M:%S") if row[10] else None,
-                    'is_active': row[11],
-                    'is_test': row[12],
-                    'last_executed': row[13].strftime("%Y-%m-%d %H:%M:%S") if row[13] else None,
-                    'next_execution': row[14].strftime("%Y-%m-%d %H:%M:%S") if row[14] else None,
-                    'target_chat_id': row[15]
-                }
-                tasks[task['id']] = task
-                print(f"📥 Загружена задача: {task['template_name']} (ID: {task['id']})")
-                
-            except Exception as e:
-                print(f"❌ Ошибка обработки строки задачи: {e}")
-                continue
-        
-        cursor.close()
-        conn.close()
-        
-        print(f"✅ Загружено {len(tasks)} задач из базы данных")
-        return tasks
-        
+        return db.load_tasks()
     except Exception as e:
         print(f"❌ Ошибка загрузки задач: {e}")
-        import traceback
-        traceback.print_exc()
-        try:
-            conn.close()
-        except:
-            pass
         return {}
 
 def create_task(task_data):
@@ -283,19 +95,27 @@ def create_task(task_data):
     try:
         # Генерируем ID для задачи
         task_id = create_task_id()
-        task_data['id'] = task_id
+        
+        if isinstance(task_data, TaskData):
+            task_data.id = task_id
+        else:
+            task_data['id'] = task_id
         
         print(f"🆔 Сгенерирован ID задачи: {task_id}")
-        print(f"📦 Данные для сохранения: {task_data}")
         
         # Сохраняем в базу данных
         success = save_task(task_data)
         
         if success:
-            print(f"✅ Задача создана: {task_data.get('template_name', 'Без названия')} (ID: {task_id})")
+            print(f"✅ Задача создана: {task_data.template_name if isinstance(task_data, TaskData) else task_data.get('template_name', 'Без названия')} (ID: {task_id})")
+            
+            # Рассчитываем следующее выполнение
+            if isinstance(task_data, TaskData):
+                update_task_next_execution(task_id)
+            
             return True, task_id
         else:
-            print(f"❌ Ошибка создания задачи: {task_data.get('template_name', 'Без названия')}")
+            print(f"❌ Ошибка создания задачи")
             return False, None
     except Exception as e:
         print(f"❌ Ошибка создания задачи: {e}")
@@ -310,7 +130,7 @@ def get_all_active_tasks():
         active_tasks = {}
         
         for task_id, task in all_tasks.items():
-            if task.get('is_active', True):
+            if task.is_active:
                 active_tasks[task_id] = task
         
         return active_tasks
@@ -330,19 +150,7 @@ def get_task_by_id(task_id):
 def delete_task(task_id):
     """Удаляет задачу"""
     try:
-        conn = db.get_connection()
-        if not conn:
-            return False
-            
-        cursor = conn.cursor()
-        cursor.execute('DELETE FROM tasks WHERE id = %s', (task_id,))
-        conn.commit()
-        cursor.close()
-        conn.close()
-        
-        print(f"✅ Задача {task_id} удалена из базы данных")
-        return True
-        
+        return db.delete_task(task_id)
     except Exception as e:
         print(f"❌ Ошибка удаления задачи {task_id}: {e}")
         return False
@@ -360,7 +168,7 @@ def get_user_accessible_tasks(user_id):
         # Фильтруем задачи по доступным группам
         user_tasks = {}
         for task_id, task in all_tasks.items():
-            if task.get('group_name') in accessible_groups:
+            if task.group_name in accessible_groups:
                 user_tasks[task_id] = task
         
         return user_tasks
@@ -371,31 +179,7 @@ def get_user_accessible_tasks(user_id):
 def format_task_info(task):
     """Форматирует информацию о задаче для отображения"""
     try:
-        days_names = safe_format_days_list(task.get('days', []))
-        frequency = safe_get_frequency_name(task.get('frequency', 'Не указана'))
-        
-        task_name = safe_get_task_value(task, 'template_name', 'Без названия')
-        task_text = safe_get_task_value(task, 'template_text', '')
-        task_time = safe_get_task_value(task, 'time', 'Не указано')
-        has_image = '✅ Есть' if task.get('template_image') else '❌ Нет'
-        is_active = '✅ Активна' if task.get('is_active', True) else '❌ Неактивна'
-        is_test = '🧪 Тестовая' if task.get('is_test', False) else '📅 Регулярная'
-        
-        info = f"**{task_name}** ({is_test})\n"
-        info += f"📄 Текст: {task_text[:100]}...\n"
-        info += f"🖼️ Изображение: {has_image}\n"
-        info += f"⏰ Время: {task_time} (МСК)\n"
-        info += f"📅 Дни: {', '.join(days_names) if days_names else 'Не указаны'}\n"
-        info += f"🔄 Периодичность: {frequency}\n"
-        info += f"📊 Статус: {is_active}\n"
-        
-        if task.get('target_chat_id'):
-            info += f"💬 Чат: {task['target_chat_id']}\n"
-        
-        if task.get('last_executed'):
-            info += f"⏱️ Последний запуск: {task['last_executed']}\n"
-        
-        return info
+        return TaskFormatter.format_task_info(task)
     except Exception as e:
         print(f"❌ Ошибка форматирования информации о задаче: {e}")
         return "❌ Ошибка загрузки информации о задаче"
@@ -406,24 +190,13 @@ def format_task_list_info(tasks):
         if not tasks:
             return "📭 Активных задач нет"
         
-        message = "📋 **Список активных задач:**\n\n"
-        
-        for i, (task_id, task) in enumerate(tasks.items(), 1):
-            days_count = len(safe_get_task_value(task, 'days', []))
-            has_image = "🖼️" if task.get('template_image') else ""
-            task_name = safe_get_task_value(task, 'template_name', 'Без названия')
-            task_group = safe_get_task_value(task, 'group_name', 'Не указана')
-            task_time = safe_get_task_value(task, 'time', 'Не указано')
-            task_text = safe_get_task_value(task, 'template_text', '')
-            is_test = "🧪" if task.get('is_test', False) else "📅"
+        # Конвертируем словарь в список если нужно
+        if isinstance(tasks, dict):
+            tasks_list = list(tasks.values())
+        else:
+            tasks_list = tasks
             
-            message += f"{i}. **{task_name}** {has_image} {is_test}\n"
-            message += f"   🏷️ Группа: {task_group}\n"
-            message += f"   ⏰ Время: {task_time}\n"
-            message += f"   📅 Дней: {days_count}\n"
-            message += f"   📄 Текст: {task_text[:50]}...\n\n"
-        
-        return message
+        return TaskFormatter.format_task_list_info(tasks_list)
     except Exception as e:
         print(f"❌ Ошибка форматирования списка задач: {e}")
         return "❌ Ошибка загрузки списка задач"
@@ -439,8 +212,18 @@ def create_task_id():
 def update_task(task_id, task_data):
     """Обновляет задачу"""
     try:
-        task_data['id'] = task_id
-        return save_task(task_data)
+        if isinstance(task_data, TaskData):
+            task_data.id = task_id
+        else:
+            task_data['id'] = task_id
+            
+        success = db.update_task(task_id, task_data)
+        
+        if success:
+            # Обновляем следующее выполнение
+            update_task_next_execution(task_id)
+        
+        return success
     except Exception as e:
         print(f"❌ Ошибка обновления задачи {task_id}: {e}")
         return False
@@ -452,7 +235,7 @@ def update_task_field(task_id, field_name, field_value):
         if not task:
             return False, "Задача не найдена"
         
-        task[field_name] = field_value
+        setattr(task, field_name, field_value)
         success = update_task(task_id, task)
         if success:
             return True, f"Поле {field_name} успешно обновлено"
@@ -493,7 +276,7 @@ def get_tasks_by_group(group_id):
         group_tasks = {}
         
         for task_id, task in tasks.items():
-            if task.get('group_name') == group_id:
+            if task.group_name == group_id:
                 group_tasks[task_id] = task
         
         return group_tasks
@@ -508,7 +291,7 @@ def get_active_tasks_by_group(group_id):
         group_tasks = {}
         
         for task_id, task in active_tasks.items():
-            if task.get('group_name') == group_id:
+            if task.group_name == group_id:
                 group_tasks[task_id] = task
         
         return group_tasks
@@ -517,68 +300,51 @@ def get_active_tasks_by_group(group_id):
         return {}
 
 def create_task_from_template(template_data, created_by, target_chat_id=None, is_test=False):
-    """Создает задачу из шаблона"""
+    """Создает задачу из шаблона (для обратной совместимости)"""
     logger.info("🔄 Начало создания задачи из шаблона...")
     try:
         print(f"🔄 Создание задачи из шаблона: {template_data.get('name')}")
-        print(f"📊 Данные шаблона: {template_data}")
-        print(f"👤 Создатель: {created_by}")
-        print(f"💬 Целевой чат: {target_chat_id}")
-        print(f"🧪 Тестовая: {is_test}")
+        
+        # Создаем объект задачи
+        task = TaskData()
+        task.template_id = template_data.get('id')
+        task.template_name = template_data.get('name', 'Без названия')
+        task.template_text = template_data.get('text', '')
+        task.template_image = template_data.get('image')
+        task.group_name = template_data.get('group', '')
+        task.created_by = created_by
+        task.is_active = True
+        task.is_test = is_test
+        task.target_chat_id = target_chat_id
         
         # Для тестовых задач устанавливаем специальные параметры
         if is_test:
-            # Тестовые задачи выполняются через 5 секунд
-            task_data = {
-                'template_id': template_data.get('id'),
-                'template_name': template_data.get('name', 'Без названия'),
-                'template_text': template_data.get('text', ''),
-                'template_image': template_data.get('image'),  # ВАЖНО: передаем путь к изображению
-                'group_name': template_data.get('group', ''),
-                'time': None,  # Для тестовых задач время не важно
-                'days': [],    # Для тестовых задач дни не важны
-                'frequency': 'once',  # Однократное выполнение
-                'created_by': created_by,
-                'is_active': True,
-                'is_test': True,
-                'target_chat_id': target_chat_id
-            }
+            task.schedule.times = ['12:00']  # Время по умолчанию для тестов
+            task.schedule.schedule_type = 'week_days'
+            task.schedule.week_days = [0]  # Понедельник по умолчанию
+            task.schedule.frequency = 'weekly'
         else:
-            # Обычные задачи используют настройки из шаблона
-            task_data = {
-                'template_id': template_data.get('id'),
-                'template_name': template_data.get('name', 'Без названия'),
-                'template_text': template_data.get('text', ''),
-                'template_image': template_data.get('image'),  # ВАЖНО: передаем путь к изображению
-                'group_name': template_data.get('group', ''),
-                'time': template_data.get('time', ''),
-                'days': template_data.get('days', []),
-                'frequency': template_data.get('frequency', 'weekly'),
-                'created_by': created_by,
-                'is_active': True,
-                'is_test': False,
-                'target_chat_id': target_chat_id
-            }
+            # Обычные задачи - расписание будет установлено позже
+            pass
         
-        print(f"📦 Данные для сохранения задачи: {task_data}")
-        print(f"🖼️ Путь к изображению: {task_data.get('template_image')}")
+        print(f"📦 Данные для сохранения задачи: {task.template_name}")
         
         # Создаем задачу
-        success, task_id = create_task(task_data)
+        success, task_id = create_task(task)
         
         if success:
             if is_test:
-                # Для тестовых задач сразу планируем выполнение через 5 секунд
+                # Для тестовых задач сразу планируем выполнение
                 from task_scheduler import schedule_test_task
-                schedule_success = schedule_test_task(task_id, task_data)
+                schedule_success = schedule_test_task(task_id, task)
                 if schedule_success:
-                    print(f"✅ Тестовая задача запланирована на выполнение через 5 секунд")
+                    print(f"✅ Тестовая задача запланирована на выполнение")
                 else:
                     print(f"❌ Ошибка планирования тестовой задачи")
             else:
                 # Для обычных задач планируем по расписанию
                 from task_scheduler import schedule_task
-                schedule_success = schedule_task(task_id, task_data)
+                schedule_success = schedule_task(task_id, task)
                 if schedule_success:
                     print(f"✅ Обычная задача запланирована по расписанию")
                 else:
@@ -605,34 +371,69 @@ def update_task_execution_time(task_id):
         print(f"❌ Ошибка обновления времени выполнения задачи {task_id}: {e}")
         return False
 
-def calculate_next_execution(task):
-    """Рассчитывает следующее время выполнения задачи"""
+def update_task_next_execution(task_id):
+    """Обновляет следующее время выполнения задачи"""
     try:
-        from datetime import datetime, timedelta
+        task = get_task_by_id(task_id)
+        if not task:
+            return False
         
-        if not task.get('days') or not task.get('time'):
-            return None
-            
-        current_time = datetime.now()
-        current_weekday = current_time.weekday()
-        task_days = [int(day) for day in task['days']]
+        next_execution = TaskScheduleCalculator.calculate_next_execution(task)
+        if next_execution:
+            task.next_execution = next_execution.strftime("%Y-%m-%d %H:%M:%S")
+            return update_task(task_id, task)
         
-        # Находим следующий день выполнения
-        for day_offset in range(1, 8):
-            next_day = (current_weekday + day_offset) % 7
-            if str(next_day) in task_days:
-                next_date = current_time + timedelta(days=day_offset)
-                
-                # Устанавливаем время выполнения
-                hour, minute = map(int, task['time'].split(':'))
-                next_execution = next_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
-                
-                return next_execution.strftime("%Y-%m-%d %H:%M:%S")
-        
-        return None
+        return False
     except Exception as e:
-        print(f"❌ Ошибка расчета следующего выполнения задачи: {e}")
-        return None
+        print(f"❌ Ошибка обновления следующего выполнения задачи {task_id}: {e}")
+        return False
+
+def create_task_with_schedule(template_data, created_by, target_chat_id, schedule_data):
+    """Создает задачу с полным расписанием"""
+    try:
+        # Создаем объект задачи
+        task = TaskData()
+        task.template_id = template_data.get('id')
+        task.template_name = template_data.get('name', 'Без названия')
+        task.template_text = template_data.get('text', '')
+        task.template_image = template_data.get('image')
+        task.group_name = template_data.get('group', '')
+        task.created_by = created_by
+        task.is_active = True
+        task.is_test = False
+        task.target_chat_id = target_chat_id
+        
+        # Устанавливаем расписание
+        task.schedule.schedule_type = schedule_data.get('schedule_type')
+        task.schedule.times = schedule_data.get('times', [])
+        task.schedule.week_days = schedule_data.get('week_days', [])
+        task.schedule.month_days = schedule_data.get('month_days', [])
+        task.schedule.frequency = schedule_data.get('frequency', 'weekly')
+        
+        print(f"📦 Создание задачи с расписанием: {task.template_name}")
+        print(f"   Тип расписания: {task.schedule.schedule_type}")
+        print(f"   Время: {task.schedule.times}")
+        print(f"   Частота: {task.schedule.frequency}")
+        
+        # Создаем задачу
+        success, task_id = create_task(task)
+        
+        if success:
+            # Планируем задачу
+            from task_scheduler import schedule_task
+            schedule_success = schedule_task(task_id, task)
+            if schedule_success:
+                print(f"✅ Задача запланирована по расписанию")
+            else:
+                print(f"❌ Ошибка планирования задачи")
+        
+        return success, task_id
+        
+    except Exception as e:
+        print(f"❌ Ошибка создания задачи с расписанием: {e}")
+        import traceback
+        traceback.print_exc()
+        return False, None
 
 # Инициализация при импорте
 print("📥 Task_manager загружен")
