@@ -81,56 +81,56 @@ class TaskValidator:
         """Валидирует дни недели"""
         if not days:
             return False, "Не выбрано ни одного дня недели"
-        
+        
         for day in days:
             if day not in range(7):
                 return False, f"Неверный день недели: {day}"
-        
+        
         return True, ""
-    
+    
     @staticmethod
     def validate_frequency(frequency: str) -> Tuple[bool, str]:
         """Валидирует периодичность"""
         valid_frequencies = ['weekly', 'biweekly', 'monthly']
         if frequency not in valid_frequencies:
             return False, f"Неверная периодичность. Допустимо: {', '.join(valid_frequencies)}"
-        
+        
         return True, ""
-    
+    
     @staticmethod
     def validate_schedule_type(schedule_type: str) -> Tuple[bool, str]:
         """Валидирует тип расписания"""
         if schedule_type not in ['week_days', 'month_days']:
             return False, "Неверный тип расписания"
-        
+        
         return True, ""
 
 class TimeCalculator:
     """Калькулятор времени для задач"""
-    
+    
     @staticmethod
     def parse_time(time_str: str) -> Tuple[int, int]:
         """Парсит время из строки в (часы, минуты)"""
         hours, minutes = map(int, time_str.split(':'))
         return hours, minutes
-    
+    
     @staticmethod
     def format_time_until_next_execution(next_execution) -> str:
         """Форматирует время до следующего выполнения"""
         if not next_execution:
             return "Не запланировано"
-        
+        
         from datetime import datetime
         now = datetime.now()
-        
+        
         if next_execution <= now:
             return "Сейчас"
-        
+        
         delta = next_execution - now
         days = delta.days
         hours = delta.seconds // 3600
         minutes = (delta.seconds % 3600) // 60
-        
+        
         if days > 0:
             return f"{days}д {hours}ч {minutes}м"
         elif hours > 0:
