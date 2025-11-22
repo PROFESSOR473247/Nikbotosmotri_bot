@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 from telegram.error import TelegramError
 
 from task_manager import get_all_active_tasks, update_task_execution_time, deactivate_task
+from task_models import TaskData
+from task_calculators import TaskScheduleCalculator
 
 # Глобальный планировщик
 task_scheduler = None
@@ -65,13 +67,13 @@ async def execute_task(task_id, task_data):
     global bot_instance
     
     try:
-        logger.info(f"🔄 Выполнение задачи: {task_data['template_name']} (ID: {task_id})")
+        logger.info(f"🔄 Выполнение задачи: {task_data.template_name} (ID: {task_id})")
         
         # Определяем чат для отправки
-        target_chat_id = task_data.get('target_chat_id')
+        target_chat_id = task_data.target_chat_id
         
         if not target_chat_id:
-            target_chat_id = task_data.get('created_by')
+            target_chat_id = task_data.created_by
             logger.info(f"⚠️ Целевой чат не указан, отправляем создателю: {target_chat_id}")
         
         if not target_chat_id:
@@ -81,8 +83,8 @@ async def execute_task(task_id, task_data):
         logger.info(f"📨 Попытка отправки в чат: {target_chat_id}")
         
         # ПОДГОТАВЛИВАЕМ СООБЩЕНИЕ
-        message_text = task_data.get('template_text', '')
-        image_path = validate_image_path(task_data.get('template_image'))  # ВАЛИДИРУЕМ ПУТЬ
+        message_text = task_data.template_text
+        image_path = validate_image_path(task_data.template_image)
         
         logger.info(f"📊 Данные для отправки: текст='{message_text[:50]}...', изображение='{image_path}'")
         
@@ -133,8 +135,12 @@ async def execute_task(task_id, task_data):
             # Обновляем время выполнения
             update_task_execution_time(task_id)
             
+            # Обновляем следующее выполнение
+            from task_manager import update_task_next_execution
+            update_task_next_execution(task_id)
+            
             # ДЛЯ ТЕСТОВЫХ ЗАДАЧ: деактивируем после выполнения
-            if task_data.get('is_test', False):
+            if task_data.is_test:
                 success_deactivate, message = deactivate_task(task_id)
                 if success_deactivate:
                     logger.info(f"✅ Тестовая задача {task_id} деактивирована после выполнения")
@@ -142,7 +148,7 @@ async def execute_task(task_id, task_data):
                 else:
                     logger.error(f"❌ Ошибка деактивации тестовой задачи {task_id}: {message}")
             
-            logger.info(f"✅ Задача выполнена: {task_data['template_name']}")
+            logger.info(f"✅ Задача выполнена: {task_data.template_name}")
         else:
             logger.error(f"❌ Не удалось отправить сообщение ни в один вариант чата. Последняя ошибка: {last_error}")
             deactivate_task(task_id)
@@ -207,7 +213,7 @@ def schedule_existing_tasks():
     scheduled_count = 0
     
     for task_id, task in active_tasks.items():
-        if task.get('is_active', True) and not task.get('is_test', False):
+        if task.is_active and not task.is_test:
             success = schedule_task(task_id, task)
             if success:
                 scheduled_count += 1
@@ -250,35 +256,61 @@ def schedule_task(task_id, task_data):
         return False
     
     try:
-        time_str = task_data.get('time')
-        days = task_data.get('days', [])
-        
-        if not time_str or not days:
-            logger.warning(f"⚠️ Не могу запланировать задачу {task_id}: нет времени или дней")
+        if not task_data.schedule.times:
+            logger.warning(f"⚠️ Не могу запланировать задачу {task_id}: нет времени")
             return False
         
-        # Парсим время
-        hour, minute = map(int, time_str.split(':'))
+        # Создаем триггеры для каждого времени
+        for time_str in task_data.schedule.times:
+            hour, minute = map(int, time_str.split(':'))
+            
+            if task_data.schedule.schedule_type == 'week_days':
+                # Расписание по дням недели
+                if not task_data.schedule.week_days:
+                    logger.warning(f"⚠️ Не могу запланировать задачу {task_id}: нет дней недели")
+                    return False
+                
+                days_str = ','.join(map(str, task_data.schedule.week_days))
+                
+                trigger = CronTrigger(
+                    day_of_week=days_str,
+                    hour=hour,
+                    minute=minute,
+                    timezone=pytz.timezone('Europe/Moscow')
+                )
+                
+            elif task_data.schedule.schedule_type == 'month_days':
+                # Расписание по числам месяца
+                if not task_data.schedule.month_days:
+                    logger.warning(f"⚠️ Не могу запланировать задачу {task_id}: нет чисел месяца")
+                    return False
+                
+                days_str = ','.join(map(str, task_data.schedule.month_days))
+                
+                trigger = CronTrigger(
+                    day=days_str,
+                    hour=hour,
+                    minute=minute,
+                    timezone=pytz.timezone('Europe/Moscow')
+                )
+                
+            else:
+                logger.warning(f"⚠️ Неизвестный тип расписания для задачи {task_id}")
+                return False
+            
+            # Добавляем задачу в планировщик с уникальным ID для каждого времени
+            job_id = f"{task_id}_{time_str.replace(':', '')}"
+            
+            task_scheduler.add_job(
+                execute_task,
+                trigger=trigger,
+                args=[task_id, task_data],
+                id=job_id,
+                name=f"task_{task_id}_{time_str}",
+                replace_existing=True
+            )
         
-        # Создаем cron триггер для указанных дней
-        trigger = CronTrigger(
-            day_of_week=','.join(map(str, days)),
-            hour=hour,
-            minute=minute,
-            timezone=pytz.timezone('Europe/Moscow')
-        )
-        
-        # Добавляем задачу в планировщик
-        task_scheduler.add_job(
-            execute_task,
-            trigger=trigger,
-            args=[task_id, task_data],
-            id=task_id,
-            name=f"task_{task_id}",
-            replace_existing=True
-        )
-        
-        logger.info(f"✅ Задача запланирована: {task_data['template_name']} на {time_str} в дни {days}")
+        logger.info(f"✅ Задача запланирована: {task_data.template_name}")
         return True
         
     except Exception as e:
@@ -293,21 +325,19 @@ def unschedule_task(task_id):
         return False
     
     try:
-        # Пытаемся удалить обычную задачу
-        if task_scheduler.get_job(task_id):
-            task_scheduler.remove_job(task_id)
-            logger.info(f"✅ Задача {task_id} удалена из планировщика")
-            return True
+        # Удаляем все задания для этой задачи
+        jobs_removed = 0
+        for job in task_scheduler.get_jobs():
+            if job.id.startswith(task_id) or job.id.startswith(f"test_{task_id}"):
+                task_scheduler.remove_job(job.id)
+                jobs_removed += 1
         
-        # Пытаемся удалить тестовую задачу
-        test_job_id = f"test_{task_id}"
-        if task_scheduler.get_job(test_job_id):
-            task_scheduler.remove_job(test_job_id)
-            logger.info(f"✅ Тестовая задача {task_id} удалена из планировщика")
+        if jobs_removed > 0:
+            logger.info(f"✅ Задача {task_id} удалена из планировщика ({jobs_removed} заданий)")
             return True
-            
-        logger.warning(f"⚠️ Задача {task_id} не найдена в планировщике")
-        return False
+        else:
+            logger.warning(f"⚠️ Задача {task_id} не найдена в планировщике")
+            return False
             
     except Exception as e:
         logger.error(f"❌ Ошибка удаления задачи {task_id}: {e}")
