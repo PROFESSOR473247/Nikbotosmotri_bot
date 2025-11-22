@@ -16,12 +16,12 @@ from template_manager import (
     get_template_by_name_and_group
 )
 from task_manager import (
-    create_task_with_schedule, get_active_tasks_by_group,
+    create_task_from_template, get_active_tasks_by_group,
     deactivate_task, format_task_info, get_user_accessible_tasks,
-    format_task_list_info
+    format_task_list_info, create_task_with_schedule
 )
-from task_models import TaskData, TemplateData
-from task_validators import TaskValidator, TimeCalculator
+from task_models import TaskData
+from task_validators import TaskValidator
 from auth_manager import auth_manager
 from chat_access_manager import chat_access_manager
 
@@ -602,8 +602,7 @@ async def enhanced_create_task_confirm(update: Update, context: ContextTypes.DEF
         )
         return CREATE_TASK_CONFIRM
 
-# ===== ОСТАЛЬНЫЕ ФУНКЦИИ (деактивация, тестирование, статус) =====
-# Эти функции остаются в основном без изменений, но используют новые модели
+# ===== ОСТАЛЬНЫЕ ФУНКЦИИ =====
 
 async def show_tasks_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает статус всех активных задач"""
@@ -804,7 +803,7 @@ async def enhanced_deactivate_task_confirm(update: Update, context: ContextTypes
         )
         return DEACTIVATE_TASK_CONFIRM
     
-# Очищаем временные данные
+    # Очищаем временные данные
     context.user_data.clear()
     return TASKS_MAIN
 
@@ -924,7 +923,6 @@ async def enhanced_test_task_confirm(update: Update, context: ContextTypes.DEFAU
     if user_choice == "✅ Подтвердить":
         try:
             # Создаем тестовую задачу
-            from task_manager import create_task_from_template
             success, task_id = create_task_from_template(
                 template_data=template,
                 created_by=task_data['created_by'],
