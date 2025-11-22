@@ -1,442 +1,742 @@
-import logging
-import os
+"""
+Менеджер шаблонов с упрощенной структурой
+Шаблоны теперь содержат только базовую информацию без расписания
+"""
+
 import json
+import os
 import uuid
+import shutil
 from datetime import datetime
 from database import db
-from task_models import TaskData, TemplateData
-from task_calculators import TaskScheduleCalculator, TaskFormatter
-from task_validators import TaskValidator
 
-logger = logging.getLogger(__name__)
+# Директория для изображений
+IMAGES_DIR = "images"
 
-# Директория для изображений задач
-TASK_IMAGES_DIR = "task_images"
+# ===== ЗАЩИТНЫЕ ФУНКЦИИ =====
 
-def init_task_files():
-    """Инициализирует файлы и директории для задач"""
+def safe_get_template_value(template, key, default=""):
+    """Безопасно получает значение из шаблона"""
+    try:
+        return template.get(key, default)
+    except Exception as e:
+        print(f"⚠️ Ошибка получения значения {key} из шаблона: {e}")
+        return default
+
+# ===== ОСНОВНЫЕ ФУНКЦИИ =====
+
+def init_files():
+    """Инициализирует файлы шаблонов и директории"""
     try:
         data_dir = "data"
         if not os.path.exists(data_dir):
             os.makedirs(data_dir)
         
-        # Создаем директорию для изображений задач
-        if not os.path.exists(TASK_IMAGES_DIR):
-            os.makedirs(TASK_IMAGES_DIR)
+        # Создаем директорию для изображений
+        if not os.path.exists(IMAGES_DIR):
+            os.makedirs(IMAGES_DIR)
         
-        task_files = ['tasks.json']
-        for file in task_files:
+        template_files = ['templates.json']
+        for file in template_files:
             file_path = os.path.join(data_dir, file)
             if not os.path.exists(file_path):
                 with open(file_path, 'w', encoding='utf-8') as f:
                     json.dump({}, f, ensure_ascii=False, indent=2)
         
-        print("✅ Файлы и директории задач инициализированы")
+        print("✅ Файлы шаблонов и директории инициализированы")
         return True
     except Exception as e:
-        print(f"❌ Ошибка инициализации файлов задач: {e}")
+        print(f"❌ Ошибка инициализации файлов: {e}")
         return False
 
 def init_database():
-    """Инициализирует базу данных для задач"""
+    """Инициализирует базу данных для шаблонов"""
     try:
-        print("🔄 Инициализация базы данных в task_manager...")
+        print("🔄 Инициализация базы данных в template_manager...")
         return db.init_database()
     except Exception as e:
         print(f"❌ Ошибка инициализации базы данных: {e}")
         return False
 
-def save_task(task_data):
-    """Сохраняет задачу в базу данных"""
-    try:
-        if isinstance(task_data, TaskData):
-            return db.save_task(task_data)
-        else:
-            # Конвертируем старый формат в новый
-            task = TaskData()
-            task.id = task_data.get('id')
-            task.template_id = task_data.get('template_id')
-            task.template_name = task_data.get('template_name', '')
-            task.template_text = task_data.get('template_text', '')
-            task.template_image = task_data.get('template_image')
-            task.group_name = task_data.get('group_name', '')
-            task.created_by = task_data.get('created_by')
-            task.created_at = task_data.get('created_at')
-            task.is_active = task_data.get('is_active', True)
-            task.is_test = task_data.get('is_test', False)
-            task.last_executed = task_data.get('last_executed')
-            task.next_execution = task_data.get('next_execution')
-            task.target_chat_id = task_data.get('target_chat_id')
-            
-            # Старые поля расписания конвертируем в новые
-            if task_data.get('time'):
-                task.schedule.times = [task_data['time']]
-            if task_data.get('days'):
-                task.schedule.week_days = task_data['days']
-                task.schedule.schedule_type = 'week_days'
-            if task_data.get('frequency'):
-                task.schedule.frequency = task_data['frequency']
-            
-            return db.save_task(task)
-    except Exception as e:
-        print(f"❌ Ошибка сохранения задачи: {e}")
+def save_template(template_data):
+    """Сохраняет шаблон в базу данных (упрощенный)"""
+    print(f"💾 Попытка сохранения шаблона в базу данных: {template_data.get('name')}")
+    
+    conn = db.get_connection()
+    if not conn:
+        print("❌ Не удалось подключиться к базе данных для сохранения шаблона")
         return False
-
-def load_tasks():
-    """Загружает все задачи из базы данных"""
+        
     try:
-        return db.load_tasks()
-    except Exception as e:
-        print(f"❌ Ошибка загрузки задач: {e}")
-        return {}
-
-def create_task(task_data):
-    """Создает новую задачу"""
-    try:
-        # Генерируем ID для задачи
-        task_id = create_task_id()
+        cursor = conn.cursor()
         
-        if isinstance(task_data, TaskData):
-            task_data.id = task_id
+        # Подготавливаем данные (упрощенные)
+        template_id = template_data.get('id')
+        name = template_data.get('name', '')
+        group_name = template_data.get('group', '')
+        text = template_data.get('text', '')
+        image_path = template_data.get('image')
+        created_by = template_data.get('created_by')
+        
+        print(f"📊 Данные для сохранения шаблона:")
+        print(f"   ID: {template_id}")
+        print(f"   Name: {name}")
+        print(f"   Group: {group_name}")
+        print(f"   Text: {text[:50]}...")
+        print(f"   Created_by: {created_by}")
+        
+        cursor.execute('''
+            INSERT INTO templates (id, name, group_name, text, image_path, created_by)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (id) DO UPDATE SET
+                name = EXCLUDED.name,
+                group_name = EXCLUDED.group_name,
+                text = EXCLUDED.text,
+                image_path = EXCLUDED.image_path,
+                created_by = EXCLUDED.created_by
+        ''', (
+            template_id,
+            name,
+            group_name,
+            text,
+            image_path,
+            created_by
+        ))
+        
+        conn.commit()
+        
+        # Проверим что действительно сохранилось
+        cursor.execute('SELECT COUNT(*) FROM templates WHERE id = %s', (template_id,))
+        count = cursor.fetchone()[0]
+        
+        cursor.close()
+        conn.close()
+        
+        if count > 0:
+            print(f"✅ Шаблон {template_id} успешно сохранен в базе данных (проверено: {count} записей)")
+            return True
         else:
-            task_data['id'] = task_id
+            print(f"❌ Шаблон {template_id} не был сохранен в базу данных")
+            return False
         
-        print(f"🆔 Сгенерирован ID задачи: {task_id}")
-        
-        # Сохраняем в базу данных
-        success = save_task(task_data)
-        
-        if success:
-            print(f"✅ Задача создана: {task_data.template_name if isinstance(task_data, TaskData) else task_data.get('template_name', 'Без названия')} (ID: {task_id})")
-            
-            # Рассчитываем следующее выполнение
-            if isinstance(task_data, TaskData):
-                update_task_next_execution(task_id)
-            
-            return True, task_id
-        else:
-            print(f"❌ Ошибка создания задачи")
-            return False, None
     except Exception as e:
-        print(f"❌ Ошибка создания задачи: {e}")
+        print(f"❌ Ошибка сохранения шаблона: {e}")
         import traceback
         traceback.print_exc()
-        return False, None
-
-def get_all_active_tasks():
-    """Возвращает все активные задачи"""
-    try:
-        all_tasks = load_tasks()
-        active_tasks = {}
-        
-        for task_id, task in all_tasks.items():
-            if task.is_active:
-                active_tasks[task_id] = task
-        
-        return active_tasks
-    except Exception as e:
-        print(f"❌ Ошибка получения активных задач: {e}")
-        return {}
-
-def get_task_by_id(task_id):
-    """Возвращает задачу по ID"""
-    try:
-        tasks = load_tasks()
-        return tasks.get(task_id)
-    except Exception as e:
-        print(f"❌ Ошибка получения задачи по ID {task_id}: {e}")
-        return None
-
-def delete_task(task_id):
-    """Удаляет задачу"""
-    try:
-        return db.delete_task(task_id)
-    except Exception as e:
-        print(f"❌ Ошибка удаления задачи {task_id}: {e}")
+        try:
+            conn.rollback()
+            conn.close()
+        except:
+            pass
         return False
 
-def get_user_accessible_tasks(user_id):
-    """Возвращает задачи, доступные пользователю"""
+def load_templates():
+    """Загружает все шаблоны из базы данных"""
+    print("📂 Загрузка шаблонов из базы данных...")
+    
+    conn = db.get_connection()
+    if not conn:
+        print("❌ Не удалось подключиться к базе данных для загрузки шаблонов")
+        return {}
+        
     try:
-        # Получаем доступные группы пользователя
-        from template_manager import get_user_accessible_groups
-        accessible_groups = get_user_accessible_groups(user_id)
+        cursor = conn.cursor()
         
-        # Получаем все активные задачи
-        all_tasks = get_all_active_tasks()
+        cursor.execute('SELECT * FROM templates ORDER BY created_at DESC')
+        rows = cursor.fetchall()
         
-        # Фильтруем задачи по доступным группам
-        user_tasks = {}
-        for task_id, task in all_tasks.items():
-            if task.group_name in accessible_groups:
-                user_tasks[task_id] = task
+        templates = {}
+        for row in rows:
+            try:
+                template = {
+                    'id': row[0],
+                    'name': row[1],
+                    'group': row[2],
+                    'text': row[3],
+                    'image': row[4],
+                    'created_by': row[5],
+                    'created_at': row[6].strftime("%Y-%m-%d %H:%M:%S") if row[6] else None
+                }
+                templates[template['id']] = template
+                print(f"📥 Загружен шаблон: {template['name']} (ID: {template['id']})")
+                
+            except Exception as e:
+                print(f"❌ Ошибка обработки строки шаблона: {e}")
+                continue
         
-        return user_tasks
+        cursor.close()
+        conn.close()
+        
+        print(f"✅ Загружено {len(templates)} шаблонов из базы данных")
+        return templates
+        
     except Exception as e:
-        print(f"❌ Ошибка получения доступных задач для пользователя {user_id}: {e}")
+        print(f"❌ Ошибка загрузки шаблонов: {e}")
+        import traceback
+        traceback.print_exc()
+        try:
+            conn.close()
+        except:
+            pass
         return {}
 
-def format_task_info(task):
-    """Форматирует информацию о задаче для отображения"""
-    try:
-        return TaskFormatter.format_task_info(task)
-    except Exception as e:
-        print(f"❌ Ошибка форматирования информации о задаче: {e}")
-        return "❌ Ошибка загрузки информации о задаче"
+def get_all_templates():
+    """Возвращает все шаблоны"""
+    return load_templates()
 
-def format_task_list_info(tasks):
-    """Форматирует список задач для отображения"""
-    try:
-        if not tasks:
-            return "📭 Активных задач нет"
+def load_groups():
+    """Загружает группы из базы данных"""
+    print("📂 Загрузка групп из базы данных...")
+    
+    conn = db.get_connection()
+    if not conn:
+        print("❌ Не удалось подключиться к базе данных для загрузки групп")
+        return {"groups": {}}
         
-        # Конвертируем словарь в список если нужно
-        if isinstance(tasks, dict):
-            tasks_list = list(tasks.values())
-        else:
-            tasks_list = tasks
+    try:
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT * FROM template_groups')
+        rows = cursor.fetchall()
+        
+        groups = {"groups": {}}
+        for row in rows:
+            # Исправляем обработку JSON данных
+            allowed_users = []
+            if row[2]:
+                try:
+                    if isinstance(row[2], (str, bytes, bytearray)):
+                        allowed_users = json.loads(row[2])
+                    else:
+                        allowed_users = row[2]  # Уже список
+                except:
+                    allowed_users = []
             
-        return TaskFormatter.format_task_list_info(tasks_list)
+            groups["groups"][row[0]] = {
+                "name": row[1],
+                "allowed_users": allowed_users
+            }
+            print(f"📥 Загружена группа: {row[1]} (ID: {row[0]})")
+        
+        cursor.close()
+        conn.close()
+        
+        print(f"✅ Загружено {len(groups['groups'])} групп из базы данных")
+        return groups
+        
     except Exception as e:
-        print(f"❌ Ошибка форматирования списка задач: {e}")
-        return "❌ Ошибка загрузки списка задач"
+        print(f"❌ Ошибка загрузки групп: {e}")
+        try:
+            conn.close()
+        except:
+            pass
+        return {"groups": {}}
 
-def create_task_id():
-    """Создает уникальный ID для задачи"""
+def get_template_by_id(template_id):
+    """Возвращает шаблон по ID"""
+    try:
+        templates = load_templates()
+        return templates.get(template_id)
+    except Exception as e:
+        print(f"❌ Ошибка получения шаблона по ID {template_id}: {e}")
+        return None
+
+def delete_template(template_id):
+    """Удаляет шаблон"""
+    try:
+        return db.delete_template(template_id)
+    except Exception as e:
+        print(f"❌ Ошибка удаления шаблона {template_id}: {e}")
+        return False
+
+def delete_template_by_id(template_id):
+    """Удаляет шаблон по ID (алиас для delete_template)"""
+    return delete_template(template_id)
+
+def get_user_accessible_groups(user_id):
+    """Возвращает группы, доступные пользователю"""
+    try:
+        from authorized_users import get_user_access_groups
+        accessible_group_ids = get_user_access_groups(user_id)
+        
+        groups_data = load_groups()
+        accessible_groups = {}
+        
+        for group_id in accessible_group_ids:
+            if group_id in groups_data.get('groups', {}):
+                accessible_groups[group_id] = groups_data['groups'][group_id]
+        
+        return accessible_groups
+    except Exception as e:
+        print(f"❌ Ошибка получения доступных групп для пользователя {user_id}: {e}")
+        return {}
+
+def get_templates_by_group(group_id):
+    """Возвращает шаблоны определенной группы"""
+    try:
+        templates = load_templates()
+        group_templates = []
+        
+        for template_id, template in templates.items():
+            if template.get('group') == group_id:
+                group_templates.append((template_id, template))
+        
+        return group_templates
+    except Exception as e:
+        print(f"❌ Ошибка получения шаблонов группы {group_id}: {e}")
+        return []
+
+def format_template_info(template):
+    """Форматирует информацию о шаблоне для отображения"""
+    try:
+        template_name = safe_get_template_value(template, 'name', 'Без названия')
+        template_text = safe_get_template_value(template, 'text', '')
+        has_image = '✅ Есть' if template.get('image') else '❌ Нет'
+        
+        info = f"**{template_name}**\n"
+        info += f"📄 Текст: {template_text[:100]}...\n"
+        info += f"🖼️ Изображение: {has_image}\n"
+        info += f"🏷️ Группа: {template.get('group', 'Не указана')}\n"
+        
+        return info
+    except Exception as e:
+        print(f"❌ Ошибка форматирования информации о шаблоне: {e}")
+        return "❌ Ошибка загрузки информации о шаблоне"
+
+def format_template_list_info(templates):
+    """Форматирует список шаблонов для отображения"""
+    try:
+        if not templates:
+            return "📭 Шаблонов нет"
+        
+        message = "📋 **Список шаблонов:**\n\n"
+        
+        for i, (template_id, template) in enumerate(templates.items(), 1):
+            has_image = "🖼️" if template.get('image') else "❌"
+            template_name = safe_get_template_value(template, 'name', 'Без названия')
+            template_group = safe_get_template_value(template, 'group', 'Не указана')
+            template_text = safe_get_template_value(template, 'text', '')
+            
+            message += f"{i}. **{template_name}** {has_image}\n"
+            message += f"   🏷️ Группа: {template_group}\n"
+            message += f"   📄 Текст: {template_text[:50]}...\n\n"
+        
+        return message
+    except Exception as e:
+        print(f"❌ Ошибка форматирования списка шаблонов: {e}")
+        return "❌ Ошибка загрузки списка шаблонов"
+
+def format_template_preview(template):
+    """Форматирует превью шаблона"""
+    try:
+        template_name = safe_get_template_value(template, 'name', 'Без названия')
+        template_text = safe_get_template_value(template, 'text', '')
+        
+        preview = f"📝 **{template_name}**\n\n"
+        preview += f"📄 {template_text}\n\n"
+        
+        if template.get('image'):
+            preview += "🖼️ *Есть изображение*\n"
+        
+        preview += f"🏷️ Группа: {template.get('group', 'Не указана')}"
+        
+        return preview
+    except Exception as e:
+        print(f"❌ Ошибка форматирования превью шаблона: {e}")
+        return "❌ Ошибка загрузки превью шаблона"
+
+def create_template_id():
+    """Создает уникальный ID для шаблона"""
     try:
         return str(uuid.uuid4())[:8]
     except Exception as e:
-        print(f"❌ Ошибка создания ID задачи: {e}")
+        print(f"❌ Ошибка создания ID шаблона: {e}")
         return str(int(datetime.now().timestamp()))[-8:]
 
-def update_task(task_id, task_data):
-    """Обновляет задачу"""
+def create_template(template_data):
+    """Создает новый шаблон"""
     try:
-        if isinstance(task_data, TaskData):
-            task_data.id = task_id
-        else:
-            task_data['id'] = task_id
-            
-        success = db.update_task(task_id, task_data)
+        # Генерируем ID для шаблона
+        template_id = create_template_id()
+        template_data['id'] = template_id
+        
+        # Сохраняем в базу данных
+        success = save_template(template_data)
         
         if success:
-            # Обновляем следующее выполнение
-            update_task_next_execution(task_id)
-        
-        return success
+            print(f"✅ Шаблон создан: {template_data['name']} (ID: {template_id})")
+            return True, template_id
+        else:
+            print(f"❌ Ошибка создания шаблона: {template_data['name']}")
+            return False, None
     except Exception as e:
-        print(f"❌ Ошибка обновления задачи {task_id}: {e}")
+        print(f"❌ Ошибка создания шаблона: {e}")
+        return False, None
+
+def get_template_groups():
+    """Возвращает все группы шаблонов"""
+    try:
+        groups_data = load_groups()
+        return groups_data.get('groups', {})
+    except Exception as e:
+        print(f"❌ Ошибка получения групп шаблонов: {e}")
+        return {}
+
+def update_template(template_id, template_data):
+    """Обновляет шаблон"""
+    try:
+        template_data['id'] = template_id
+        return save_template(template_data)
+    except Exception as e:
+        print(f"❌ Ошибка обновления шаблона {template_id}: {e}")
         return False
 
-def update_task_field(task_id, field_name, field_value):
-    """Обновляет конкретное поле задачи"""
+def update_template_field(template_id, field_name, field_value):
+    """Обновляет конкретное поле шаблона"""
     try:
-        task = get_task_by_id(task_id)
-        if not task:
-            return False, "Задача не найдена"
+        template = get_template_by_id(template_id)
+        if not template:
+            return False, "Шаблон не найден"
         
-        setattr(task, field_name, field_value)
-        success = update_task(task_id, task)
-        if success:
-            return True, f"Поле {field_name} успешно обновлено"
-        else:
-            return False, f"Ошибка обновления поля {field_name}"
+        template[field_name] = field_value
+        return update_template(template_id, template)
     except Exception as e:
-        print(f"❌ Ошибка обновления поля {field_name} задачи {task_id}: {e}")
+        print(f"❌ Ошибка обновления поля {field_name} шаблона {template_id}: {e}")
         return False, f"Ошибка обновления: {e}"
 
-def activate_task(task_id):
-    """Активирует задачу"""
+def get_template_by_name_and_group(template_name, group_id):
+    """Возвращает шаблон по имени и группе"""
     try:
-        success = update_task_field(task_id, 'is_active', True)
-        if success:
-            return True, f"Задача {task_id} успешно активирована"
-        else:
-            return False, f"Ошибка активации задачи {task_id}"
+        templates = get_templates_by_group(group_id)
+        for template_id, template in templates:
+            if template.get('name') == template_name:
+                return template_id, template
+        return None, None
     except Exception as e:
-        print(f"❌ Ошибка активации задачи {task_id}: {e}")
-        return False, f"Ошибка активации: {e}"
+        print(f"❌ Ошибка поиска шаблона по имени {template_name} в группе {group_id}: {e}")
+        return None, None
 
-def deactivate_task(task_id):
-    """Деактивирует задачу"""
+def get_template_groups_for_user(user_id):
+    """Возвращает группы шаблонов с шаблонами для пользователя"""
     try:
-        success = update_task_field(task_id, 'is_active', False)
-        if success:
-            return True, f"Задача {task_id} успешно деактивирована"
-        else:
-            return False, f"Ошибка деактивации задачи {task_id}"
-    except Exception as e:
-        print(f"❌ Ошибка деактивации задачи {task_id}: {e}")
-        return False, f"Ошибка деактивации: {e}"
-
-def get_tasks_by_group(group_id):
-    """Возвращает задачи определенной группы"""
-    try:
-        tasks = get_all_active_tasks()
-        group_tasks = {}
+        accessible_groups = get_user_accessible_groups(user_id)
+        groups_with_templates = {}
         
-        for task_id, task in tasks.items():
-            if task.group_name == group_id:
-                group_tasks[task_id] = task
+        for group_id in accessible_groups:
+            templates = get_templates_by_group(group_id)
+            if templates:
+                groups_with_templates[group_id] = {
+                    'group_data': accessible_groups[group_id],
+                    'templates': templates
+                }
         
-        return group_tasks
+        return groups_with_templates
     except Exception as e:
-        print(f"❌ Ошибка получения задач группы {group_id}: {e}")
+        print(f"❌ Ошибка получения групп с шаблонами для пользователя {user_id}: {e}")
         return {}
 
-def get_active_tasks_by_group(group_id):
-    """Возвращает активные задачи определенной группы"""
+# ===== ФУНКЦИИ ДЛЯ РАБОТЫ С ИЗОБРАЖЕНИЯМИ =====
+
+def save_image(image_bytes, template_id):
+    """Сохраняет изображение для шаблона"""
     try:
-        active_tasks = get_all_active_tasks()
-        group_tasks = {}
+        # Создаем уникальное имя файла
+        file_extension = '.jpg'  # По умолчанию jpg
+        image_filename = f"{template_id}{file_extension}"
+        image_path = os.path.join(IMAGES_DIR, image_filename)
         
-        for task_id, task in active_tasks.items():
-            if task.group_name == group_id:
-                group_tasks[task_id] = task
+        # Сохраняем файл
+        with open(image_path, 'wb') as f:
+            f.write(image_bytes)
         
-        return group_tasks
+        print(f"✅ Изображение сохранено: {image_path}")
+        return image_path
+        
     except Exception as e:
-        print(f"❌ Ошибка получения активных задач группы {group_id}: {e}")
+        print(f"❌ Ошибка сохранения изображения: {e}")
+        return None
+
+def delete_image(image_path):
+    """Удаляет изображение"""
+    try:
+        if image_path and os.path.exists(image_path):
+            os.remove(image_path)
+            print(f"✅ Изображение удалено: {image_path}")
+            return True
+        return False
+    except Exception as e:
+        print(f"❌ Ошибка удаления изображения: {e}")
+        return False
+
+def get_image_path(template_id):
+    """Возвращает путь к изображению шаблона"""
+    try:
+        # Ищем файл с любым расширением
+        if not os.path.exists(IMAGES_DIR):
+            return None
+        
+        for filename in os.listdir(IMAGES_DIR):
+            if filename.startswith(template_id):
+                return os.path.join(IMAGES_DIR, filename)
+        
+        return None
+    except Exception as e:
+        print(f"❌ Ошибка получения пути изображения для шаблона {template_id}: {e}")
+        return None
+
+def validate_template_data(template_data):
+    """Проверяет данные шаблона на валидность"""
+    try:
+        required_fields = ['name', 'group', 'text']
+        for field in required_fields:
+            if not template_data.get(field):
+                return False, f"Отсутствует обязательное поле: {field}"
+        
+        return True, "OK"
+    except Exception as e:
+        print(f"❌ Ошибка валидации данных шаблона: {e}")
+        return False, f"Ошибка валидации: {e}"
+
+def get_template_by_name(template_name):
+    """Возвращает шаблон по имени"""
+    try:
+        templates = load_templates()
+        for template_id, template in templates.items():
+            if template.get('name') == template_name:
+                return template
+        return None
+    except Exception as e:
+        print(f"❌ Ошибка поиска шаблона по имени {template_name}: {e}")
+        return None
+
+def template_exists(template_name, group_id):
+    """Проверяет, существует ли шаблон с таким именем в группе"""
+    try:
+        templates = get_templates_by_group(group_id)
+        for template_id, template in templates:
+            if template.get('name') == template_name:
+                return True
+        return False
+    except Exception as e:
+        print(f"❌ Ошибка проверки существования шаблона {template_name}: {e}")
+        return False
+
+def get_templates_count():
+    """Возвращает количество шаблонов"""
+    try:
+        templates = load_templates()
+        return len(templates)
+    except Exception as e:
+        print(f"❌ Ошибка получения количества шаблонов: {e}")
+        return 0
+
+def get_templates_by_user(user_id):
+    """Возвращает шаблоны, созданные пользователем"""
+    try:
+        templates = load_templates()
+        user_templates = {}
+        
+        for template_id, template in templates.items():
+            if template.get('created_by') == user_id:
+                user_templates[template_id] = template
+        
+        return user_templates
+    except Exception as e:
+        print(f"❌ Ошибка получения шаблонов пользователя {user_id}: {e}")
         return {}
 
-def create_task_from_template(template_data, created_by, target_chat_id=None, is_test=False):
-    """Создает задачу из шаблона (для обратной совместимости)"""
-    logger.info("🔄 Начало создания задачи из шаблона...")
+def get_template_subgroups(group_id):
+    """Возвращает подгруппы для группы (для обратной совместимости)"""
+    # В текущей реализации подгрупп нет, возвращаем пустой список
+    return []
+
+def format_group_templates_info(group_id):
+    """Форматирует информацию о шаблонах группы"""
     try:
-        print(f"🔄 Создание задачи из шаблона: {template_data.get('name')}")
+        templates = get_templates_by_group(group_id)
         
-        # Создаем объект задачи
-        task = TaskData()
-        task.template_id = template_data.get('id')
-        task.template_name = template_data.get('name', 'Без названия')
-        task.template_text = template_data.get('text', '')
-        task.template_image = template_data.get('image')
-        task.group_name = template_data.get('group', '')
-        task.created_by = created_by
-        task.is_active = True
-        task.is_test = is_test
-        task.target_chat_id = target_chat_id
+        if not templates:
+            return f"📭 В этой группе нет шаблонов"
         
-        # Для тестовых задач устанавливаем специальные параметры
-        if is_test:
-            task.schedule.times = ['12:00']  # Время по умолчанию для тестов
-            task.schedule.schedule_type = 'week_days'
-            task.schedule.week_days = [0]  # Понедельник по умолчанию
-            task.schedule.frequency = 'weekly'
-        else:
-            # Обычные задачи - расписание будет установлено позже
-            pass
+        groups_data = load_groups()
+        group_name = groups_data['groups'].get(group_id, {}).get('name', group_id)
         
-        print(f"📦 Данные для сохранения задачи: {task.template_name}")
+        message = f"📋 **Шаблоны группы '{group_name}':**\n\n"
         
-        # Создаем задачу
-        success, task_id = create_task(task)
+        for i, (template_id, template) in enumerate(templates, 1):
+            has_image = "🖼️" if template.get('image') else "❌"
+            template_name = safe_get_template_value(template, 'name', 'Без названия')
+            template_text = safe_get_template_value(template, 'text', '')
+            
+            message += f"{i}. **{template_name}** {has_image}\n"
+            message += f"   📄 {template_text[:60]}...\n\n"
+        
+        return message
+    except Exception as e:
+        print(f"❌ Ошибка форматирования информации о группе {group_id}: {e}")
+        return f"❌ Ошибка загрузки информации о группе"
+
+def get_template_stats():
+    """Возвращает статистику по шаблонам"""
+    try:
+        templates = load_templates()
+        groups = get_template_groups()
+        
+        stats = {
+            'total_templates': len(templates),
+            'groups_count': len(groups),
+            'templates_with_images': 0
+        }
+        
+        for template in templates.values():
+            if template.get('image'):
+                stats['templates_with_images'] += 1
+        
+        return stats
+    except Exception as e:
+        print(f"❌ Ошибка получения статистики шаблонов: {e}")
+        return {
+            'total_templates': 0,
+            'groups_count': 0,
+            'templates_with_images': 0
+        }
+
+def search_templates(search_term):
+    """Ищет шаблоны по названию или тексту"""
+    try:
+        templates = load_templates()
+        results = {}
+        
+        search_term_lower = search_term.lower()
+        
+        for template_id, template in templates.items():
+            name_match = search_term_lower in template.get('name', '').lower()
+            text_match = search_term_lower in template.get('text', '').lower()
+            
+            if name_match or text_match:
+                results[template_id] = template
+        
+        return results
+    except Exception as e:
+        print(f"❌ Ошибка поиска шаблонов по запросу '{search_term}': {e}")
+        return {}
+
+def delete_template_and_image(template_id):
+    """Удаляет шаблон и связанное с ним изображение"""
+    try:
+        # Получаем информацию о шаблоне
+        template = get_template_by_id(template_id)
+        if not template:
+            return False, "Шаблон не найден"
+        
+        # Удаляем изображение если есть
+        if template.get('image'):
+            delete_image(template['image'])
+        
+        # Удаляем шаблон из базы данных
+        success = delete_template(template_id)
         
         if success:
-            if is_test:
-                # Для тестовых задач сразу планируем выполнение
-                from task_scheduler import schedule_test_task
-                schedule_success = schedule_test_task(task_id, task)
-                if schedule_success:
-                    print(f"✅ Тестовая задача запланирована на выполнение")
-                else:
-                    print(f"❌ Ошибка планирования тестовой задачи")
-            else:
-                # Для обычных задач планируем по расписанию
-                from task_scheduler import schedule_task
-                schedule_success = schedule_task(task_id, task)
-                if schedule_success:
-                    print(f"✅ Обычная задача запланирована по расписанию")
-                else:
-                    print(f"❌ Ошибка планирования обычной задачи")
-            
-            print(f"✅ Задача успешно создана: {task_id}")
+            return True, f"Шаблон '{template['name']}' успешно удален"
         else:
-            print("❌ Ошибка при вызове create_task")
+            return False, "Ошибка при удалении шаблона"
+    except Exception as e:
+        print(f"❌ Ошибка удаления шаблона и изображения {template_id}: {e}")
+        return False, f"Ошибка удаления: {e}"
+
+def get_user_template_access(user_id):
+    """Возвращает информацию о доступе пользователя к шаблонам"""
+    try:
+        accessible_groups = get_user_accessible_groups(user_id)
+        all_templates = get_all_templates()
+        
+        user_templates = {}
+        templates_by_group = {}
+        
+        # Фильтруем шаблоны по доступным группам
+        for template_id, template in all_templates.items():
+            template_group = template.get('group')
+            if template_group in accessible_groups:
+                user_templates[template_id] = template
+                
+                # Группируем по группам
+                if template_group not in templates_by_group:
+                    templates_by_group[template_group] = []
+                templates_by_group[template_group].append((template_id, template))
+        
+        return {
+            'accessible_groups': accessible_groups,
+            'user_templates': user_templates,
+            'templates_by_group': templates_by_group,
+            'total_templates': len(user_templates),
+            'total_groups': len(accessible_groups)
+        }
+    except Exception as e:
+        print(f"❌ Ошибка получения доступа пользователя {user_id} к шаблонам: {e}")
+        return {
+            'accessible_groups': {},
+            'user_templates': {},
+            'templates_by_group': {},
+            'total_templates': 0,
+            'total_groups': 0
+        }
+
+def format_all_templates_info(user_id):
+    """Форматирует информацию о всех шаблонах пользователя"""
+    try:
+        access_info = get_user_template_access(user_id)
+        
+        if not access_info['user_templates']:
+            return "📭 У вас нет доступных шаблонов"
+        
+        message = "📋 **Все ваши шаблоны:**\n\n"
+        
+        # Группируем по группам для лучшего отображения
+        for group_id, templates in access_info['templates_by_group'].items():
+            group_name = access_info['accessible_groups'].get(group_id, {}).get('name', group_id)
+            message += f"**🏷️ {group_name}:**\n"
             
-        return success, task_id
+            for i, (template_id, template) in enumerate(templates, 1):
+                has_image = "🖼️" if template.get('image') else ""
+                template_name = safe_get_template_value(template, 'name', 'Без названия')
+                
+                message += f"  {i}. **{template_name}** {has_image}\n"
+                message += f"     📄 {template['text'][:50]}...\n\n"
         
+        message += f"**Всего:** {access_info['total_templates']} шаблонов в {access_info['total_groups']} группах"
+        
+        return message
     except Exception as e:
-        print(f"❌ Критическая ошибка в create_task_from_template: {e}")
-        import traceback
-        traceback.print_exc()
-        return False, None
+        print(f"❌ Ошибка форматирования всех шаблонов: {e}")
+        return "❌ Ошибка загрузки информации о шаблонах"
 
-def update_task_execution_time(task_id):
-    """Обновляет время последнего выполнения задачи"""
+def format_group_templates_detailed(group_id):
+    """Детальная информация о шаблонах группы"""
     try:
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        return update_task_field(task_id, 'last_executed', current_time)
+        templates = get_templates_by_group(group_id)
+        
+        if not templates:
+            return f"📭 В этой группе нет шаблонов"
+        
+        groups_data = load_groups()
+        group_name = groups_data['groups'].get(group_id, {}).get('name', group_id)
+        
+        message = f"**🏷️ Группа: {group_name}**\n\n"
+        
+        for i, (template_id, template) in enumerate(templates, 1):
+            has_image = "✅ Есть" if template.get('image') else "❌ Нет"
+            
+            message += f"**{i}. {template['name']}**\n"
+            message += f"   📄 Текст: {template['text'][:80]}...\n"
+            message += f"   🖼️ Изображение: {has_image}\n\n"
+        
+        return message
     except Exception as e:
-        print(f"❌ Ошибка обновления времени выполнения задачи {task_id}: {e}")
-        return False
-
-def update_task_next_execution(task_id):
-    """Обновляет следующее время выполнения задачи"""
-    try:
-        task = get_task_by_id(task_id)
-        if not task:
-            return False
-        
-        next_execution = TaskScheduleCalculator.calculate_next_execution(task)
-        if next_execution:
-            task.next_execution = next_execution.strftime("%Y-%m-%d %H:%M:%S")
-            return update_task(task_id, task)
-        
-        return False
-    except Exception as e:
-        print(f"❌ Ошибка обновления следующего выполнения задачи {task_id}: {e}")
-        return False
-
-def create_task_with_schedule(template_data, created_by, target_chat_id, schedule_data):
-    """Создает задачу с полным расписанием"""
-    try:
-        # Создаем объект задачи
-        task = TaskData()
-        task.template_id = template_data.get('id')
-        task.template_name = template_data.get('name', 'Без названия')
-        task.template_text = template_data.get('text', '')
-        task.template_image = template_data.get('image')
-        task.group_name = template_data.get('group', '')
-        task.created_by = created_by
-        task.is_active = True
-        task.is_test = False
-        task.target_chat_id = target_chat_id
-        
-        # Устанавливаем расписание
-        task.schedule.schedule_type = schedule_data.get('schedule_type')
-        task.schedule.times = schedule_data.get('times', [])
-        task.schedule.week_days = schedule_data.get('week_days', [])
-        task.schedule.month_days = schedule_data.get('month_days', [])
-        task.schedule.frequency = schedule_data.get('frequency', 'weekly')
-        
-        print(f"📦 Создание задачи с расписанием: {task.template_name}")
-        print(f"   Тип расписания: {task.schedule.schedule_type}")
-        print(f"   Время: {task.schedule.times}")
-        print(f"   Частота: {task.schedule.frequency}")
-        
-        # Создаем задачу
-        success, task_id = create_task(task)
-        
-        if success:
-            # Планируем задачу
-            from task_scheduler import schedule_task
-            schedule_success = schedule_task(task_id, task)
-            if schedule_success:
-                print(f"✅ Задача запланирована по расписанию")
-            else:
-                print(f"❌ Ошибка планирования задачи")
-        
-        return success, task_id
-        
-    except Exception as e:
-        print(f"❌ Ошибка создания задачи с расписанием: {e}")
-        import traceback
-        traceback.print_exc()
-        return False, None
+        print(f"❌ Ошибка форматирования детальной информации группы {group_id}: {e}")
+        return f"❌ Ошибка загрузки информации о группе"
 
 # Инициализация при импорте
-print("📥 Task_manager загружен")
-init_task_files()
+print("📥 Template_manager загружен")
+init_files()
 init_database()
-print("✅ Task_manager инициализирован")
+print("✅ Template_manager инициализирован")
