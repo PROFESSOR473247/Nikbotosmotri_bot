@@ -146,7 +146,11 @@ async def execute_test_task(template, update, context, target_chat_id=None):
         message_text = template.get('text', '')
         image_path = template.get('image')
         
+        logger.info(f"📊 Тестовые данные: текст='{message_text[:50]}...', изображение='{image_path}'")
+
+        # ПРОВЕРЯЕМ И ОТПРАВЛЯЕМ ИЗОБРАЖЕНИЕ С ТЕКСТОМ
         if image_path and os.path.exists(image_path):
+            logger.info(f"🖼️ Попытка отправки тестового изображения: {image_path}")
             with open(image_path, 'rb') as photo:
                 await context.bot.send_photo(
                     chat_id=target_chat_id,
@@ -155,6 +159,10 @@ async def execute_test_task(template, update, context, target_chat_id=None):
                 )
             logger.info(f"✅ Тест: отправлено фото + текст в чат {target_chat_id}")
         else:
+            # Если изображения нет или файл не существует, отправляем только текст
+            if image_path:
+                logger.warning(f"⚠️ Файл тестового изображения не найден: {image_path}")
+            
             await context.bot.send_message(
                 chat_id=target_chat_id,
                 text=message_text
