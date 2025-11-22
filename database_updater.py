@@ -14,22 +14,70 @@ def update_database_structure():
     try:
         cursor = conn.cursor()
         
-        # Проверяем существование столбца target_chat_id в таблице tasks
-        cursor.execute('''
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'tasks' AND column_name = 'target_chat_id'
-        ''')
+        # Проверяем существование новых столбцов в таблице tasks
+        new_columns = [
+            'schedule_type',
+            'times', 
+            'week_days',
+            'month_days',
+            'frequency'
+        ]
         
-        if not cursor.fetchone():
-            print("📝 Добавляем столбец target_chat_id в таблицу tasks...")
+        for column in new_columns:
             cursor.execute('''
-                ALTER TABLE tasks 
-                ADD COLUMN target_chat_id BIGINT
-            ''')
-            print("✅ Столбец target_chat_id добавлен в таблицу tasks")
-        else:
-            print("✅ Столбец target_chat_id уже существует в таблице tasks")
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'tasks' AND column_name = %s
+            ''', (column,))
+            
+            if not cursor.fetchone():
+                print(f"📝 Добавляем столбец {column} в таблицу tasks...")
+                
+                if column == 'schedule_type':
+                    cursor.execute('''
+                        ALTER TABLE tasks 
+                        ADD COLUMN schedule_type TEXT CHECK (schedule_type IN ('week_days', 'month_days'))
+                    ''')
+                elif column == 'times':
+                    cursor.execute('''
+                        ALTER TABLE tasks 
+                        ADD COLUMN times JSONB DEFAULT '[]'::jsonb
+                    ''')
+                elif column == 'week_days':
+                    cursor.execute('''
+                        ALTER TABLE tasks 
+                        ADD COLUMN week_days JSONB DEFAULT '[]'::jsonb
+                    ''')
+                elif column == 'month_days':
+                    cursor.execute('''
+                        ALTER TABLE tasks 
+                        ADD COLUMN month_days JSONB DEFAULT '[]'::jsonb
+                    ''')
+                elif column == 'frequency':
+                    cursor.execute('''
+                        ALTER TABLE tasks 
+                        ADD COLUMN frequency TEXT DEFAULT 'weekly' CHECK (frequency IN ('weekly', 'biweekly', 'monthly'))
+                    ''')
+                
+                print(f"✅ Столбец {column} добавлен в таблицу tasks")
+            else:
+                print(f"✅ Столбец {column} уже существует в таблице tasks")
+        
+        # Удаляем старые столбцы из таблицы templates (time, days, frequency)
+        old_columns = ['time', 'days', 'frequency']
+        for column in old_columns:
+            cursor.execute('''
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'templates' AND column_name = %s
+            ''', (column,))
+            
+            if cursor.fetchone():
+                print(f"📝 Удаляем старый столбец {column} из таблицы templates...")
+                cursor.execute(f'ALTER TABLE templates DROP COLUMN {column}')
+                print(f"✅ Столбец {column} удален из таблицы templates")
+            else:
+                print(f"✅ Столбец {column} уже удален из таблицы templates")
         
         conn.commit()
         cursor.close()
