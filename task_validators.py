@@ -7,7 +7,7 @@ from typing import List, Tuple
 
 class TaskValidator:
     """Валидатор данных задач"""
-    
+    
     @staticmethod
     def validate_time_input(time_text: str) -> Tuple[bool, List[str]]:
         """
@@ -16,30 +16,30 @@ class TaskValidator:
         """
         if not time_text.strip():
             return False, ["Время не может быть пустым"]
-        
+        
         times = [t.strip() for t in time_text.split(',')]
         valid_times = []
         errors = []
-        
+        
         for time_str in times:
             if not time_str:
                 continue
-                
+                
             # Проверяем формат ЧЧ:ММ
             if not re.match(r'^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$', time_str):
                 errors.append(f"Неверный формат времени: {time_str}")
                 continue
-            
+            
             valid_times.append(time_str)
-        
+        
         if errors:
             return False, errors
-        
+        
         if not valid_times:
             return False, ["Не указано ни одного корректного времени"]
-        
+        
         return True, valid_times
-    
+    
     @staticmethod
     def validate_month_days_input(days_text: str) -> Tuple[bool, List[int]]:
         """
@@ -48,15 +48,15 @@ class TaskValidator:
         """
         if not days_text.strip():
             return False, ["Числа месяца не могут быть пустыми"]
-        
+        
         days = []
         errors = []
-        
+        
         for day_str in days_text.split(','):
             day_str = day_str.strip()
             if not day_str:
                 continue
-                
+                
             try:
                 day = int(day_str)
                 if 1 <= day <= 31:
@@ -65,17 +65,17 @@ class TaskValidator:
                     errors.append(f"Число должно быть от 1 до 31: {day_str}")
             except ValueError:
                 errors.append(f"Неверный формат числа: {day_str}")
-        
+        
         if errors:
             return False, errors
-        
+        
         if not days:
             return False, ["Не указано ни одного корректного числа"]
-        
+        
         # Убираем дубликаты и сортируем
         days = sorted(list(set(days)))
         return True, days
-    
+    
     @staticmethod
     def validate_week_days(days: List[int]) -> Tuple[bool, str]:
         """Валидирует дни недели"""
