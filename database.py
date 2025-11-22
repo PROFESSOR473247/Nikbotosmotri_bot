@@ -33,7 +33,7 @@ class DatabaseManager:
         try:
             cursor = conn.cursor()
             
-            # ==== ТАБЛИЦА ШАБЛОНОВ ====
+            # ==== ТАБЛИЦА ШАБЛОНОВ (УПРОЩЕННАЯ) ====
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS templates (
                     id VARCHAR(20) PRIMARY KEY,
@@ -41,12 +41,8 @@ class DatabaseManager:
                     group_name TEXT NOT NULL,
                     text TEXT,
                     image_path TEXT,
-                    time TEXT,
-                    days JSONB,
-                    frequency TEXT,
                     created_by BIGINT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    subgroup TEXT
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
             print("✅ Таблица 'templates' создана/проверена")
@@ -110,7 +106,7 @@ class DatabaseManager:
             ''')
             print("✅ Таблица 'user_template_group_access' создана/проверена")
             
-            # ===== ТАБЛИЦА ЗАДАЧ =====
+            # ===== ТАБЛИЦА ЗАДАЧ (ОБНОВЛЕННАЯ) =====
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS tasks (
                     id VARCHAR(20) PRIMARY KEY,
@@ -119,16 +115,19 @@ class DatabaseManager:
                     template_text TEXT,
                     template_image TEXT,
                     group_name TEXT NOT NULL,
-                    time TEXT,
-                    days JSONB,
-                    frequency TEXT,
                     created_by BIGINT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     is_active BOOLEAN DEFAULT TRUE,
                     is_test BOOLEAN DEFAULT FALSE,
                     last_executed TIMESTAMP,
                     next_execution TIMESTAMP,
-                    target_chat_id BIGINT  -- НОВЫЙ СТОЛБЕЦ ДЛЯ ЦЕЛЕВОГО ЧАТА
+                    target_chat_id BIGINT,
+                    -- Новые поля для расписания
+                    schedule_type TEXT CHECK (schedule_type IN ('week_days', 'month_days')),
+                    times JSONB DEFAULT '[]'::jsonb,
+                    week_days JSONB DEFAULT '[]'::jsonb,
+                    month_days JSONB DEFAULT '[]'::jsonb,
+                    frequency TEXT DEFAULT 'weekly' CHECK (frequency IN ('weekly', 'biweekly', 'monthly'))
                 )
             ''')
             print("✅ Таблица 'tasks' создана/проверена")
@@ -171,9 +170,9 @@ class DatabaseManager:
                 pass
             return False
 
-    # ... остальные методы остаются без изменений
+    # ... остальные методы остаются без изменений до методов для задач
     
-    # ===== МЕТОДЫ ДЛЯ ШАБЛОНОВ =====
+    # ===== МЕТОДЫ ДЛЯ ШАБЛОНОВ (УПРОЩЕННЫЕ) =====
     
     def save_template(self, template_data):
         """Сохраняет шаблон в базу данных"""
@@ -187,58 +186,37 @@ class DatabaseManager:
         try:
             cursor = conn.cursor()
             
-            # Подготавливаем данные
+            # Подготавливаем данные (упрощенные)
             template_id = template_data.get('id')
             name = template_data.get('name', '')
             group_name = template_data.get('group', '')
             text = template_data.get('text', '')
             image_path = template_data.get('image')
-            time_str = template_data.get('time', '')
-            
-            # Обрабатываем дни - гарантируем что это JSON строка
-            days_data = template_data.get('days', [])
-            if isinstance(days_data, list):
-                days_json = json.dumps(days_data, ensure_ascii=False)
-            else:
-                days_json = '[]'
-                
-            frequency = template_data.get('frequency', '')
             created_by = template_data.get('created_by')
-            subgroup = template_data.get('subgroup')
             
-            print(f"📊 Данные для сохранения:")
+            print(f"📊 Данные для сохранения шаблона:")
             print(f"   ID: {template_id}")
             print(f"   Name: {name}")
             print(f"   Group: {group_name}")
             print(f"   Text: {text[:50]}...")
-            print(f"   Time: {time_str}")
-            print(f"   Days: {days_data}")
-            print(f"   Frequency: {frequency}")
             print(f"   Created_by: {created_by}")
             
             cursor.execute('''
-                INSERT INTO templates (id, name, group_name, text, image_path, time, days, frequency, created_by, subgroup)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO templates (id, name, group_name, text, image_path, created_by)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT (id) DO UPDATE SET
                     name = EXCLUDED.name,
                     group_name = EXCLUDED.group_name,
                     text = EXCLUDED.text,
                     image_path = EXCLUDED.image_path,
-                    time = EXCLUDED.time,
-                    days = EXCLUDED.days,
-                    frequency = EXCLUDED.frequency,
-                    subgroup = EXCLUDED.subgroup
+                    created_by = EXCLUDED.created_by
             ''', (
                 template_id,
                 name,
                 group_name,
                 text,
                 image_path,
-                time_str,
-                days_json,
-                frequency,
-                created_by,
-                subgroup
+                created_by
             ))
             
             conn.commit()
@@ -267,7 +245,7 @@ class DatabaseManager:
             except:
                 pass
             return False
-    
+
     def load_templates(self):
         """Загружает все шаблоны из базы данных"""
         print("📂 Загрузка шаблонов из базы данных...")
@@ -286,30 +264,14 @@ class DatabaseManager:
             templates = {}
             for row in rows:
                 try:
-                    # Обрабатываем дни
-                    days_data = []
-                    if row[6]:  # days field
-                        try:
-                            if isinstance(row[6], (str, bytes, bytearray)):
-                                days_data = json.loads(row[6])
-                            else:
-                                days_data = row[6]
-                        except Exception as e:
-                            print(f"⚠️ Ошибка парсинга дней для шаблона {row[0]}: {e}")
-                            days_data = []
-                    
                     template = {
                         'id': row[0],
                         'name': row[1],
                         'group': row[2],
                         'text': row[3],
                         'image': row[4],
-                        'time': row[5],
-                        'days': days_data,
-                        'frequency': row[7],
-                        'created_by': row[8],
-                        'created_at': row[9].strftime("%Y-%m-%d %H:%M:%S") if row[9] else None,
-                        'subgroup': row[10]
+                        'created_by': row[5],
+                        'created_at': row[6].strftime("%Y-%m-%d %H:%M:%S") if row[6] else None
                     }
                     templates[template['id']] = template
                     print(f"📥 Загружен шаблон: {template['name']} (ID: {template['id']})")
@@ -333,84 +295,301 @@ class DatabaseManager:
             except:
                 pass
             return {}
+
+    # ===== МЕТОДЫ ДЛЯ ЗАДАЧ (ОБНОВЛЕННЫЕ) =====
     
-    def delete_template(self, template_id):
-        """Удаляет шаблон из базы данных"""
-        print(f"🗑️ Попытка удаления шаблона {template_id}")
+    def save_task(self, task_data):
+        """Сохраняет задачу в базу данных с новой структурой"""
+        from task_models import TaskData
+        
+        print(f"💾 Попытка сохранения задачи в базу данных: {task_data.get('template_name')}")
         
         conn = self.get_connection()
         if not conn:
+            print("❌ Не удалось подключиться к базе данных для сохранения задачи")
             return False
             
         try:
             cursor = conn.cursor()
             
-            cursor.execute('DELETE FROM templates WHERE id = %s', (template_id,))
+            # Подготавливаем данные
+            if isinstance(task_data, TaskData):
+                data_dict = task_data.to_dict()
+            else:
+                data_dict = task_data
+            
+            task_id = data_dict.get('id')
+            template_id = data_dict.get('template_id')
+            template_name = data_dict.get('template_name', '')
+            template_text = data_dict.get('template_text', '')
+            template_image = data_dict.get('template_image')
+            group_name = data_dict.get('group_name', '')
+            created_by = data_dict.get('created_by')
+            is_active = data_dict.get('is_active', True)
+            is_test = data_dict.get('is_test', False)
+            last_executed = data_dict.get('last_executed')
+            next_execution = data_dict.get('next_execution')
+            target_chat_id = data_dict.get('target_chat_id')
+            
+            # Новые поля расписания
+            schedule_type = data_dict.get('schedule_type')
+            times = data_dict.get('times', '[]')
+            week_days = data_dict.get('week_days', '[]')
+            month_days = data_dict.get('month_days', '[]')
+            frequency = data_dict.get('frequency', 'weekly')
+            
+            print(f"📊 Данные задачи для сохранения:")
+            print(f"   ID: {task_id}")
+            print(f"   Name: {template_name}")
+            print(f"   Group: {group_name}")
+            print(f"   Target Chat: {target_chat_id}")
+            print(f"   Schedule Type: {schedule_type}")
+            print(f"   Times: {times}")
+            print(f"   Frequency: {frequency}")
+            
+            cursor.execute('''
+                INSERT INTO tasks (id, template_id, template_name, template_text, template_image, 
+                                 group_name, created_by, is_active, is_test, last_executed, 
+                                 next_execution, target_chat_id, schedule_type, times, week_days, 
+                                 month_days, frequency)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET
+                    template_id = EXCLUDED.template_id,
+                    template_name = EXCLUDED.template_name,
+                    template_text = EXCLUDED.template_text,
+                    template_image = EXCLUDED.template_image,
+                    group_name = EXCLUDED.group_name,
+                    created_by = EXCLUDED.created_by,
+                    is_active = EXCLUDED.is_active,
+                    is_test = EXCLUDED.is_test,
+                    last_executed = EXCLUDED.last_executed,
+                    next_execution = EXCLUDED.next_execution,
+                    target_chat_id = EXCLUDED.target_chat_id,
+                    schedule_type = EXCLUDED.schedule_type,
+                    times = EXCLUDED.times,
+                    week_days = EXCLUDED.week_days,
+                    month_days = EXCLUDED.month_days,
+                    frequency = EXCLUDED.frequency
+            ''', (
+                task_id,
+                template_id,
+                template_name,
+                template_text,
+                template_image,
+                group_name,
+                created_by,
+                is_active,
+                is_test,
+                last_executed,
+                next_execution,
+                target_chat_id,
+                schedule_type,
+                times,
+                week_days,
+                month_days,
+                frequency
+            ))
             
             conn.commit()
+            
+            # Проверим что действительно сохранилось
+            cursor.execute('SELECT COUNT(*) FROM tasks WHERE id = %s', (task_id,))
+            count = cursor.fetchone()[0]
+            
             cursor.close()
             conn.close()
             
-            print(f"✅ Шаблон {template_id} удален из базы данных")
-            return True
+            if count > 0:
+                print(f"✅ Задача {task_id} успешно сохранена в базе данных (проверено: {count} записей)")
+                return True
+            else:
+                print(f"❌ Задача {task_id} не была сохранена в базу данных")
+                return False
             
         except Exception as e:
-            print(f"❌ Ошибка удаления шаблона: {e}")
+            print(f"❌ Ошибка сохранения задачи: {e}")
+            import trace
+            
+            import traceback
+            traceback.print_exc()
             try:
                 conn.rollback()
                 conn.close()
             except:
                 pass
             return False
-    
-    def load_groups(self):
-        """Загружает группы из базы данных"""
-        print("📂 Загрузка групп из базы данных...")
+
+    def load_tasks(self):
+        """Загружает все задачи из базы данных с новой структурой"""
+        from task_models import TaskData
+        
+        print("📂 Загрузка задач из базы данных...")
         
         conn = self.get_connection()
         if not conn:
-            print("❌ Не удалось подключиться к базе данных для загрузки групп")
-            return {"groups": {}}
+            print("❌ Не удалось подключиться к базе данных для загрузки задач")
+            return {}
             
         try:
             cursor = conn.cursor()
             
-            cursor.execute('SELECT * FROM template_groups')
+            cursor.execute('SELECT * FROM tasks ORDER BY created_at DESC')
             rows = cursor.fetchall()
             
-            groups = {"groups": {}}
+            tasks = {}
             for row in rows:
-                # Исправляем обработку JSON данных
-                allowed_users = []
-                if row[2]:
-                    try:
-                        if isinstance(row[2], (str, bytes, bytearray)):
-                            allowed_users = json.loads(row[2])
-                        else:
-                            allowed_users = row[2]  # Уже список
-                    except:
-                        allowed_users = []
-                
-                groups["groups"][row[0]] = {
-                    "name": row[1],
-                    "allowed_users": allowed_users
-                }
-                print(f"📥 Загружена группа: {row[1]} (ID: {row[0]})")
+                try:
+                    # Создаем словарь с данными задачи
+                    task_dict = {
+                        'id': row[0],
+                        'template_id': row[1],
+                        'template_name': row[2],
+                        'template_text': row[3],
+                        'template_image': row[4],
+                        'group_name': row[5],
+                        'created_by': row[6],
+                        'created_at': row[7].strftime("%Y-%m-%d %H:%M:%S") if row[7] else None,
+                        'is_active': row[8],
+                        'is_test': row[9],
+                        'last_executed': row[10].strftime("%Y-%m-%d %H:%M:%S") if row[10] else None,
+                        'next_execution': row[11].strftime("%Y-%m-%d %H:%M:%S") if row[11] else None,
+                        'target_chat_id': row[12],
+                        # Новые поля расписания
+                        'schedule_type': row[13],
+                        'times': row[14],
+                        'week_days': row[15],
+                        'month_days': row[16],
+                        'frequency': row[17]
+                    }
+                    
+                    # Конвертируем в объект TaskData
+                    task = TaskData.from_dict(task_dict)
+                    tasks[task.id] = task
+                    print(f"📥 Загружена задача: {task.template_name} (ID: {task.id})")
+                    
+                except Exception as e:
+                    print(f"❌ Ошибка обработки строки задачи: {e}")
+                    continue
             
             cursor.close()
             conn.close()
             
-            print(f"✅ Загружено {len(groups['groups'])} групп из базы данных")
-            return groups
+            print(f"✅ Загружено {len(tasks)} задач из базы данных")
+            return tasks
             
         except Exception as e:
-            print(f"❌ Ошибка загрузки групп: {e}")
+            print(f"❌ Ошибка загрузки задач: {e}")
+            import traceback
+            traceback.print_exc()
             try:
                 conn.close()
             except:
                 pass
-            return {"groups": {}}
-    
+            return {}
+
+    def update_task(self, task_id, task_data):
+        """Обновляет задачу в базе данных"""
+        from task_models import TaskData
+        
+        print(f"🔄 Обновление задачи {task_id} в базе данных")
+        
+        conn = self.get_connection()
+        if not conn:
+            return False
+            
+        try:
+            cursor = conn.cursor()
+            
+            # Подготавливаем данные
+            if isinstance(task_data, TaskData):
+                data_dict = task_data.to_dict()
+            else:
+                data_dict = task_data
+            
+            cursor.execute('''
+                UPDATE tasks SET
+                    template_id = %s,
+                    template_name = %s,
+                    template_text = %s,
+                    template_image = %s,
+                    group_name = %s,
+                    created_by = %s,
+                    is_active = %s,
+                    is_test = %s,
+                    last_executed = %s,
+                    next_execution = %s,
+                    target_chat_id = %s,
+                    schedule_type = %s,
+                    times = %s,
+                    week_days = %s,
+                    month_days = %s,
+                    frequency = %s
+                WHERE id = %s
+            ''', (
+                data_dict.get('template_id'),
+                data_dict.get('template_name'),
+                data_dict.get('template_text'),
+                data_dict.get('template_image'),
+                data_dict.get('group_name'),
+                data_dict.get('created_by'),
+                data_dict.get('is_active', True),
+                data_dict.get('is_test', False),
+                data_dict.get('last_executed'),
+                data_dict.get('next_execution'),
+                data_dict.get('target_chat_id'),
+                data_dict.get('schedule_type'),
+                data_dict.get('times'),
+                data_dict.get('week_days'),
+                data_dict.get('month_days'),
+                data_dict.get('frequency', 'weekly'),
+                task_id
+            ))
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            print(f"✅ Задача {task_id} обновлена в базе данных")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Ошибка обновления задачи: {e}")
+            try:
+                conn.rollback()
+                conn.close()
+            except:
+                pass
+            return False
+
+    def delete_task(self, task_id):
+        """Удаляет задачу из базы данных"""
+        print(f"🗑️ Попытка удаления задачи {task_id}")
+        
+        conn = self.get_connection()
+        if not conn:
+            return False
+            
+        try:
+            cursor = conn.cursor()
+            
+            cursor.execute('DELETE FROM tasks WHERE id = %s', (task_id,))
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            print(f"✅ Задача {task_id} удалена из базы данных")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Ошибка удаления задачи: {e}")
+            try:
+                conn.rollback()
+                conn.close()
+            except:
+                pass
+            return False
+
     # ===== МЕТОДЫ ДЛЯ ПОЛЬЗОВАТЕЛЕЙ =====
     
     def add_user(self, user_id, username, full_name, role='guest'):
