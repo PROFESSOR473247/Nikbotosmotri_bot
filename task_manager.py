@@ -533,7 +533,7 @@ def create_task_from_template(template_data, created_by, target_chat_id=None, is
                 'template_id': template_data.get('id'),
                 'template_name': template_data.get('name', 'Без названия'),
                 'template_text': template_data.get('text', ''),
-                'template_image': template_data.get('image'),
+                'template_image': template_data.get('image'),  # ВАЖНО: передаем путь к изображению
                 'group_name': template_data.get('group', ''),
                 'time': None,  # Для тестовых задач время не важно
                 'days': [],    # Для тестовых задач дни не важны
@@ -549,7 +549,7 @@ def create_task_from_template(template_data, created_by, target_chat_id=None, is
                 'template_id': template_data.get('id'),
                 'template_name': template_data.get('name', 'Без названия'),
                 'template_text': template_data.get('text', ''),
-                'template_image': template_data.get('image'),
+                'template_image': template_data.get('image'),  # ВАЖНО: передаем путь к изображению
                 'group_name': template_data.get('group', ''),
                 'time': template_data.get('time', ''),
                 'days': template_data.get('days', []),
@@ -561,6 +561,7 @@ def create_task_from_template(template_data, created_by, target_chat_id=None, is
             }
         
         print(f"📦 Данные для сохранения задачи: {task_data}")
+        print(f"🖼️ Путь к изображению: {task_data.get('template_image')}")
         
         # Создаем задачу
         success, task_id = create_task(task_data)
