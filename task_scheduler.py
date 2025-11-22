@@ -56,62 +56,82 @@ async def execute_task(task_id, task_data):
         
         logger.info(f"📨 Попытка отправки в чат: {target_chat_id}")
         
-        # Проверяем права бота в чате
-        try:
-            chat = await bot_instance.get_chat(target_chat_id)
-            logger.info(f"✅ Чат найден: {chat.title if hasattr(chat, 'title') else 'личные сообщения'}")
-        except Exception as e:
-            logger.error(f"❌ Бот не имеет доступа к чату {target_chat_id}: {e}")
-            # Деактивируем задачу если чат недоступен
-            deactivate_task(task_id)
-            return
-        
-        # Подготавливаем сообщение
+        # ПОДГОТАВЛИВАЕМ СООБЩЕНИЕ
         message_text = task_data.get('template_text', '')
         image_path = task_data.get('template_image')
         
-        # Отправляем сообщение
-        if image_path and os.path.exists(image_path):
-            with open(image_path, 'rb') as photo:
-                await bot_instance.send_photo(
-                    chat_id=target_chat_id,
-                    photo=photo,
-                    caption=message_text
-                )
-            logger.info(f"✅ Отправлено фото + текст в чат {target_chat_id}")
+        logger.info(f"📊 Данные для отправки: текст='{message_text[:50]}...', изображение='{image_path}'")
+        
+        # ПРОБУЕМ РАЗНЫЕ ФОРМАТЫ ID ДЛЯ ЧАТОВ
+        chat_ids_to_try = [target_chat_id]
+        
+        # Если ID положительное, пробуем с минусом (для супергрупп)
+        if target_chat_id > 0:
+            chat_ids_to_try.append(-target_chat_id)
+        # Если ID отрицательное, пробуем без минуса
         else:
-            await bot_instance.send_message(
-                chat_id=target_chat_id,
-                text=message_text
-            )
-            logger.info(f"✅ Отправлен текст в чат {target_chat_id}")
+            chat_ids_to_try.append(abs(target_chat_id))
         
-        # Обновляем время выполнения
-        update_task_execution_time(task_id)
+        success = False
+        last_error = None
         
-        # ДЛЯ ТЕСТОВЫХ ЗАДАЧ: деактивируем после выполнения
-        if task_data.get('is_test', False):
-            success, message = deactivate_task(task_id)
-            if success:
-                logger.info(f"✅ Тестовая задача {task_id} деактивирована после выполнения")
-                # Удаляем задачу из планировщика
-                unschedule_task(task_id)
-            else:
-                logger.error(f"❌ Ошибка деактивации тестовой задачи {task_id}: {message}")
+        for chat_id in chat_ids_to_try:
+            try:
+                # ПРОВЕРЯЕМ И ОТПРАВЛЯЕМ ИЗОБРАЖЕНИЕ С ТЕКСТОМ
+                if image_path and os.path.exists(image_path):
+                    logger.info(f"🖼️ Попытка отправки изображения: {image_path}")
+                    with open(image_path, 'rb') as photo:
+                        await bot_instance.send_photo(
+                            chat_id=chat_id,
+                            photo=photo,
+                            caption=message_text
+                        )
+                    logger.info(f"✅ Отправлено фото + текст в чат {chat_id}")
+                else:
+                    # Если изображения нет или файл не существует, отправляем только текст
+                    if image_path:
+                        logger.warning(f"⚠️ Файл изображения не найден: {image_path}")
+                    
+                    await bot_instance.send_message(
+                        chat_id=chat_id,
+                        text=message_text
+                    )
+                    logger.info(f"✅ Отправлен текст в чат {chat_id}")
+                
+                success = True
+                break
+                
+            except TelegramError as e:
+                last_error = e
+                logger.warning(f"⚠️ Не удалось отправить в чат {chat_id}: {e}")
+                continue
+            except Exception as e:
+                last_error = e
+                logger.warning(f"⚠️ Ошибка отправки в чат {chat_id}: {e}")
+                continue
         
-        logger.info(f"✅ Задача выполнена: {task_data['template_name']}")
-        
-    except TelegramError as e:
-        logger.error(f"❌ Ошибка Telegram при выполнении задачи {task_id}: {e}")
-        
-        # Если чат не найден или бот заблокирован, деактивируем задачу
-        if "Chat not found" in str(e) or "bot was blocked" in str(e) or "Forbidden" in str(e):
-            logger.warning(f"⚠️ Чат {target_chat_id} недоступен, деактивируем задачу {task_id}")
+        if success:
+            # Обновляем время выполнения
+            update_task_execution_time(task_id)
+            
+            # ДЛЯ ТЕСТОВЫХ ЗАДАЧ: деактивируем после выполнения
+            if task_data.get('is_test', False):
+                success_deactivate, message = deactivate_task(task_id)
+                if success_deactivate:
+                    logger.info(f"✅ Тестовая задача {task_id} деактивирована после выполнения")
+                    unschedule_task(task_id)
+                else:
+                    logger.error(f"❌ Ошибка деактивации тестовой задачи {task_id}: {message}")
+            
+            logger.info(f"✅ Задача выполнена: {task_data['template_name']}")
+        else:
+            logger.error(f"❌ Не удалось отправить сообщение ни в один вариант чата. Последняя ошибка: {last_error}")
+            # Деактивируем задачу при неудаче
             deactivate_task(task_id)
             unschedule_task(task_id)
-            
+        
     except Exception as e:
-        logger.error(f"❌ Ошибка выполнения задачи {task_id}: {e}")
+        logger.error(f"❌ Общая ошибка выполнения задачи {task_id}: {e}")
 
 async def execute_test_task(template, update, context, target_chat_id=None):
     """Выполняет тестовую задачу немедленно в указанный чат"""
