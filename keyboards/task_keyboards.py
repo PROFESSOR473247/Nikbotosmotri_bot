@@ -36,20 +36,6 @@ def get_task_confirmation_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-def get_task_edit_keyboard():
-    """Клавиатура редактирования задачи на этапе подтверждения"""
-    keyboard = [
-        ["🏷️ Изменить группу", "📝 Выбрать другой шаблон"],
-        ["⚙️ Изменить настройки шаблона", "💬 Изменить чат"],
-        ["🔙 Назад"]
-    ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
-def get_template_edit_keyboard():
-    """Клавиатура редактирования шаблона (используется из template_keyboards)"""
-    from keyboards.template_keyboards import get_template_edit_keyboard as get_template_edit_kb
-    return get_template_edit_kb()
-
 def get_back_keyboard():
     """Простая кнопка назад"""
     keyboard = [
@@ -75,3 +61,65 @@ def get_deactivate_confirmation_keyboard():
         ["❌ Нет, оставить активной"]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_schedule_type_keyboard():
+    """Клавиатура выбора типа расписания"""
+    keyboard = [
+        ["📅 По дням недели", "📆 По числам месяца"],
+        ["🔙 Назад"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_week_days_keyboard(selected_days=None):
+    """Клавиатура выбора дней недели"""
+    if selected_days is None:
+        selected_days = []
+    
+    days = [
+        "Понедельник", "Вторник", "Среда",
+        "Четверг", "Пятница", "Суббота", "Воскресенье"
+    ]
+    
+    keyboard = []
+    row = []
+    
+    for i, day in enumerate(days):
+        # Помечаем выбранные дни
+        display_name = f"✅ {day}" if i in selected_days else day
+        row.append(display_name)
+        
+        if len(row) == 2:  # 2 кнопки в строке
+            keyboard.append(row)
+            row = []
+    
+    if row:  # Добавляем последнюю неполную строку
+        keyboard.append(row)
+    
+    # Кнопка завершения выбора
+    if selected_days:
+        keyboard.append(["✅ Завершить выбор дней"])
+    
+    keyboard.append(["🔙 Назад"])
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_frequency_keyboard():
+    """Клавиатура выбора периодичности"""
+    keyboard = [
+        ["📅 1 раз в неделю", "🔄 1 раз в 2 недели"],
+        ["📆 1 раз в месяц", "🔙 Назад"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_task_edit_keyboard():
+    """Клавиатура редактирования задачи на этапе подтверждения"""
+    keyboard = [
+        ["🏷️ Изменить группу", "📝 Выбрать другой шаблон"],
+        ["⚙️ Изменить настройки шаблона", "💬 Изменить чат"],
+        ["🔙 Назад"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_template_edit_keyboard():
+    """Клавиатура редактирования шаблона (используется из template_keyboards)"""
+    from keyboards.template_keyboards import get_template_edit_keyboard as get_template_edit_kb
+    return get_template_edit_kb()
