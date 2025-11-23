@@ -52,40 +52,29 @@ def save_task(task_data):
     logger = logging.getLogger(__name__)
     
     try:
+        logger.info(f"💾 Попытка сохранения задачи в БД...")
+        
         if isinstance(task_data, TaskData):
-            return db.save_task(task_data)
+            logger.info(f"📝 Сохраняем объект TaskData: {task_data.template_name}")
+            # Преобразуем TaskData в словарь для сохранения
+            task_dict = task_data.to_dict()
+            success = db.save_task(task_dict)
+            
+            if success:
+                logger.info(f"✅ TaskData успешно сохранен")
+            else:
+                logger.error(f"❌ Ошибка сохранения TaskData")
+                
+            return success
         else:
-            # Конвертируем старый формат в новый
-            task = TaskData()
-            task.id = task_data.get('id')
-            task.template_id = task_data.get('template_id')
-            task.template_name = task_data.get('template_name', '')
-            task.template_text = task_data.get('template_text', '')
-            task.template_image = task_data.get('template_image')
-            task.group_name = task_data.get('group_name', '')
-            task.created_by = task_data.get('created_by')
-            task.created_at = task_data.get('created_at')
-            task.is_active = task_data.get('is_active', True)
-            task.is_test = task_data.get('is_test', False)
-            task.last_executed = task_data.get('last_executed')
-            task.next_execution = task_data.get('next_execution')
-            task.target_chat_id = task_data.get('target_chat_id')
+            # Это уже словарь
+            logger.info(f"📝 Сохраняем словарь: {task_data.get('template_name', 'Без названия')}")
+            return db.save_task(task_data)
             
-            # Старые поля расписания конвертируем в новые
-            if task_data.get('time'):
-                task.schedule.times = [task_data['time']]
-            if task_data.get('days'):
-                task.schedule.week_days = task_data['days']
-                task.schedule.schedule_type = 'week_days'
-            if task_data.get('frequency'):
-                task.schedule.frequency = task_data['frequency']
-            
-            logger.info(f"💾 Сохранение задачи в БД: {task.template_name}")
-            return db.save_task(task)
     except Exception as e:
-        logger.error(f"❌ Ошибка сохранения задачи: {e}")
+        logger.error(f"❌ Критическая ошибка сохранения задачи: {e}")
         import traceback
-        traceback.print_exc()
+        logger.error(f"Трассировка: {traceback.format_exc()}")
         return False
 
 def load_tasks():
