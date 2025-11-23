@@ -413,6 +413,8 @@ def create_task_with_schedule(template_data, created_by, target_chat_id, schedul
         print(f"📦 Создание задачи с расписанием: {task.template_name}")
         print(f"   Тип расписания: {task.schedule.schedule_type}")
         print(f"   Время: {task.schedule.times}")
+        print(f"   Дни недели: {task.schedule.week_days}")
+        print(f"   Числа месяца: {task.schedule.month_days}")
         print(f"   Частота: {task.schedule.frequency}")
         
         # Создаем задачу
