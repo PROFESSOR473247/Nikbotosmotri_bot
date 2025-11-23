@@ -5,6 +5,7 @@ import threading
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from template_debug import debug_list_all_templates
+from handlers.debug_handlers import get_debug_handlers
 import requests
 
 
