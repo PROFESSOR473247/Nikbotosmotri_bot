@@ -328,8 +328,9 @@ def get_template_by_id(template_id):
         return None
 
 def delete_template(template_id):
-    """Удаляет шаблон"""
+    """Удаляет шаблон (совместимость)"""
     try:
+        from database import db
         return db.delete_template(template_id)
     except Exception as e:
         print(f"❌ Ошибка удаления шаблона {template_id}: {e}")
@@ -358,12 +359,13 @@ def get_user_accessible_groups(user_id):
         return {}
 
 def get_templates_by_group(group_id):
-    """Возвращает шаблоны определенной группы"""
+    """Возвращает шаблоны определенной группы (совместимость)"""
     try:
-        templates = load_templates()
+        from template_manager_simplified import simplified_template_manager
+        templates_data = simplified_template_manager.load_templates()
         group_templates = []
         
-        for template_id, template in templates.items():
+        for template_id, template in templates_data.items():
             if template.get('group') == group_id:
                 group_templates.append((template_id, template))
         
@@ -511,11 +513,13 @@ def update_template_field(template_id, field_name, field_value):
         return False, f"Ошибка обновления: {e}"
 
 def get_template_by_name_and_group(template_name, group_id):
-    """Возвращает шаблон по имени и группе"""
+    """Возвращает шаблон по имени и группе (совместимость)"""
     try:
-        templates = get_templates_by_group(group_id)
-        for template_id, template in templates:
-            if template.get('name') == template_name:
+        from template_manager_simplified import simplified_template_manager
+        templates_data = simplified_template_manager.load_templates()
+        
+        for template_id, template in templates_data.items():
+            if template.get('name') == template_name and template.get('group') == group_id:
                 return template_id, template
         return None, None
     except Exception as e:
@@ -625,11 +629,13 @@ def get_template_by_name(template_name):
         return None
 
 def template_exists(template_name, group_id):
-    """Проверяет, существует ли шаблон с таким именем в группе"""
+    """Проверяет, существует ли шаблон с таким именем в группе (совместимость)"""
     try:
-        templates = get_templates_by_group(group_id)
-        for template_id, template in templates:
-            if template.get('name') == template_name:
+        from template_manager_simplified import simplified_template_manager
+        templates_data = simplified_template_manager.load_templates()
+        
+        for template in templates_data.values():
+            if template.get('name') == template_name and template.get('group') == group_id:
                 return True
         return False
     except Exception as e:
