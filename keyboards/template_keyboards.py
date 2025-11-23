@@ -49,11 +49,10 @@ def get_template_confirmation_keyboard():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def get_template_edit_keyboard():
-    """Клавиатура редактирования шаблона"""
+    """Клавиатура редактирования упрощенного шаблона"""
     keyboard = [
         ["🏷️ Название", "📝 Текст"],
-        ["🖼️ Изображение", "⏰ Время"],
-        ["📅 Дни отправки", "🔄 Периодичность"],
+        ["🖼️ Изображение"],
         ["✅ Завершить редактирование"],
         ["🔙 Назад"]
     ]
@@ -63,51 +62,6 @@ def get_back_keyboard():
     """Простая кнопка назад"""
     keyboard = [
         ["🔙 Назад"]
-    ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
-def get_days_keyboard(selected_days=None, is_additional=False):
-    """Клавиатура выбора дней недели"""
-    if selected_days is None:
-        selected_days = []
-    
-    days = {
-        '0': 'Понедельник', '1': 'Вторник', '2': 'Среда',
-        '3': 'Четверг', '4': 'Пятница', '5': 'Суббота', '6': 'Воскресенье'
-    }
-    
-    keyboard = []
-    row = []
-    
-    for day_num, day_name in days.items():
-        # Помечаем выбранные дни
-        display_name = f"✅ {day_name}" if day_num in selected_days else day_name
-        row.append(display_name)
-        
-        if len(row) == 2:  # 2 кнопки в строке
-            keyboard.append(row)
-            row = []
-    
-    if row:  # Добавляем последнюю неполную строку
-        keyboard.append(row)
-    
-    # Кнопки действий
-    if is_additional:
-        keyboard.append(["✅ Завершить выбор дней"])
-    else:
-        if selected_days:
-            keyboard.append(["✅ Завершить выбор дней"])
-        else:
-            keyboard.append(["➕ Выбрать еще день"])
-    
-    keyboard.append(["🔙 Назад"])
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
-def get_frequency_keyboard():
-    """Клавиатура выбора периодичности"""
-    keyboard = [
-        ["📅 1 в неделю", "🗓️ 2 в месяц"],
-        ["📆 1 в месяц", "🔙 Назад"]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
