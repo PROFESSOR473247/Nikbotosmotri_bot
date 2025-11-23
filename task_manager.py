@@ -48,6 +48,9 @@ def init_database():
 
 def save_task(task_data):
     """Сохраняет задачу в базу данных"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
         if isinstance(task_data, TaskData):
             return db.save_task(task_data)
@@ -77,9 +80,12 @@ def save_task(task_data):
             if task_data.get('frequency'):
                 task.schedule.frequency = task_data['frequency']
             
+            logger.info(f"💾 Сохранение задачи в БД: {task.template_name}")
             return db.save_task(task)
     except Exception as e:
-        print(f"❌ Ошибка сохранения задачи: {e}")
+        logger.error(f"❌ Ошибка сохранения задачи: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def load_tasks():
@@ -92,6 +98,9 @@ def load_tasks():
 
 def create_task(task_data):
     """Создает новую задачу"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
         # Генерируем ID для задачи
         task_id = create_task_id()
@@ -101,13 +110,13 @@ def create_task(task_data):
         else:
             task_data['id'] = task_id
         
-        print(f"🆔 Сгенерирован ID задачи: {task_id}")
+        logger.info(f"🆔 Сгенерирован ID задачи: {task_id}")
         
         # Сохраняем в базу данных
         success = save_task(task_data)
         
         if success:
-            print(f"✅ Задача создана: {task_data.template_name if isinstance(task_data, TaskData) else task_data.get('template_name', 'Без названия')} (ID: {task_id})")
+            logger.info(f"✅ Задача сохранена в БД: {task_data.template_name if isinstance(task_data, TaskData) else task_data.get('template_name', 'Без названия')} (ID: {task_id})")
             
             # Рассчитываем следующее выполнение
             if isinstance(task_data, TaskData):
@@ -115,10 +124,11 @@ def create_task(task_data):
             
             return True, task_id
         else:
-            print(f"❌ Ошибка создания задачи")
+            logger.error(f"❌ Ошибка сохранения задачи в БД")
             return False, None
+            
     except Exception as e:
-        print(f"❌ Ошибка создания задачи: {e}")
+        logger.error(f"❌ Ошибка создания задачи: {e}")
         import traceback
         traceback.print_exc()
         return False, None
@@ -390,6 +400,11 @@ def update_task_next_execution(task_id):
 
 def create_task_with_schedule(template_data, created_by, target_chat_id, schedule_data):
     """Создает задачу с полным расписанием"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"🔄 Создание задачи с расписанием...")
+    
     try:
         # Создаем объект задачи
         task = TaskData()
@@ -410,31 +425,38 @@ def create_task_with_schedule(template_data, created_by, target_chat_id, schedul
         task.schedule.month_days = schedule_data.get('month_days', [])
         task.schedule.frequency = schedule_data.get('frequency', 'weekly')
         
-        print(f"📦 Создание задачи с расписанием: {task.template_name}")
-        print(f"   Тип расписания: {task.schedule.schedule_type}")
-        print(f"   Время: {task.schedule.times}")
-        print(f"   Дни недели: {task.schedule.week_days}")
-        print(f"   Числа месяца: {task.schedule.month_days}")
-        print(f"   Частота: {task.schedule.frequency}")
+        logger.info(f"📦 Данные задачи:")
+        logger.info(f"   Шаблон: {task.template_name}")
+        logger.info(f"   Группа: {task.group_name}")
+        logger.info(f"   Чат: {task.target_chat_id}")
+        logger.info(f"   Тип расписания: {task.schedule.schedule_type}")
+        logger.info(f"   Время: {task.schedule.times}")
+        logger.info(f"   Дни недели: {task.schedule.week_days}")
+        logger.info(f"   Числа месяца: {task.schedule.month_days}")
+        logger.info(f"   Частота: {task.schedule.frequency}")
         
         # Создаем задачу
         success, task_id = create_task(task)
         
         if success:
+            logger.info(f"✅ Задача создана, ID: {task_id}")
+            
             # Планируем задачу
             from task_scheduler import schedule_task
             schedule_success = schedule_task(task_id, task)
             if schedule_success:
-                print(f"✅ Задача запланирована по расписанию")
+                logger.info(f"✅ Задача запланирована по расписанию")
             else:
-                print(f"❌ Ошибка планирования задачи")
+                logger.warning(f"⚠️ Ошибка планирования задачи")
+        else:
+            logger.error(f"❌ Ошибка при создании задачи")
         
         return success, task_id
         
     except Exception as e:
-        print(f"❌ Ошибка создания задачи с расписанием: {e}")
+        logger.error(f"❌ Критическая ошибка создания задачи с расписанием: {e}")
         import traceback
-        traceback.print_exc()
+        logger.error(f"Трассировка: {traceback.format_exc()}")
         return False, None
 
 # Инициализация при импорте
