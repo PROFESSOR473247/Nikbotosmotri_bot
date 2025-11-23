@@ -945,8 +945,21 @@ async def delete_template_confirm(update: Update, context: ContextTypes.DEFAULT_
     
     if user_choice == "✅ Да, удалить":
         if template_id and template:
-            # Используем функцию удаления из simplified_template_manager
-            success = simplified_template_manager.delete_template(template_id)
+            print(f"🔄 Начало удаления шаблона {template_id}")
+            
+            # ВРЕМЕННО: используем отладочную функцию
+            from template_debug import debug_delete_template, debug_list_all_templates
+            
+            # Показываем текущие шаблоны до удаления
+            print("📋 ШАБЛОНЫ ДО УДАЛЕНИЯ:")
+            debug_list_all_templates()
+            
+            # Пробуем удалить
+            success = debug_delete_template(template_id)
+            
+            # Показываем шаблоны после удаления
+            print("📋 ШАБЛОНЫ ПОСЛЕ УДАЛЕНИЯ:")
+            debug_list_all_templates()
             
             if success:
                 await update.message.reply_text(
@@ -955,7 +968,9 @@ async def delete_template_confirm(update: Update, context: ContextTypes.DEFAULT_
                 )
             else:
                 await update.message.reply_text(
-                    f"❌ Ошибка при удалении шаблона '{template['name']}'",
+                    f"❌ Ошибка при удалении шаблона '{template['name']}'\n\n"
+                    f"ID шаблона: {template_id}\n"
+                    "Проверьте логи для детальной информации.",
                     reply_markup=get_templates_main_keyboard()
                 )
         else:
