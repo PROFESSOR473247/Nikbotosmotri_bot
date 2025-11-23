@@ -110,6 +110,14 @@ async def run_bot():
             logger.info("Database structure updated")
         except Exception as e:
             logger.error(f"Database update error: {e}")
+
+        # Миграция структуры БД
+        try:
+            from database_migration import migrate_templates_table
+            migrate_templates_table()
+            logger.info("Database migration completed")
+        except Exception as e:
+            logger.error(f"Database migration error: {e}")
         
         # Инициализация файлов
         try:
