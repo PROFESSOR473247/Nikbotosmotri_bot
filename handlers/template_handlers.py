@@ -945,32 +945,32 @@ async def delete_template_confirm(update: Update, context: ContextTypes.DEFAULT_
     
     if user_choice == "✅ Да, удалить":
         if template_id and template:
-            print(f"🔄 Начало удаления шаблона {template_id}")
+            print(f"🔄 Попытка удаления шаблона: {template_id}")
             
-            # ВРЕМЕННО: используем отладочную функцию
-            from template_debug import debug_delete_template, debug_list_all_templates
-            
-            # Показываем текущие шаблоны до удаления
-            print("📋 ШАБЛОНЫ ДО УДАЛЕНИЯ:")
-            debug_list_all_templates()
-            
-            # Пробуем удалить
-            success = debug_delete_template(template_id)
-            
-            # Показываем шаблоны после удаления
-            print("📋 ШАБЛОНЫ ПОСЛЕ УДАЛЕНИЯ:")
-            debug_list_all_templates()
-            
-            if success:
+            # ПРОСТАЯ ВЕРСИЯ - используем прямую работу с БД
+            try:
+                from database import db
+                conn = db.get_connection()
+                if conn:
+                    cursor = conn.cursor()
+                    cursor.execute('DELETE FROM templates WHERE id = %s', (template_id,))
+                    conn.commit()
+                    cursor.close()
+                    conn.close()
+                    
+                    await update.message.reply_text(
+                        f"✅ Шаблон '{template['name']}' успешно удален!",
+                        reply_markup=get_templates_main_keyboard()
+                    )
+                else:
+                    await update.message.reply_text(
+                        f"❌ Ошибка подключения к базе данных",
+                        reply_markup=get_templates_main_keyboard()
+                    )
+            except Exception as e:
+                print(f"❌ Ошибка удаления: {e}")
                 await update.message.reply_text(
-                    f"✅ Шаблон '{template['name']}' успешно удален!",
-                    reply_markup=get_templates_main_keyboard()
-                )
-            else:
-                await update.message.reply_text(
-                    f"❌ Ошибка при удалении шаблона '{template['name']}'\n\n"
-                    f"ID шаблона: {template_id}\n"
-                    "Проверьте логи для детальной информации.",
+                    f"❌ Ошибка при удалении шаблона: {e}",
                     reply_markup=get_templates_main_keyboard()
                 )
         else:
