@@ -226,7 +226,43 @@ class SimplifiedTemplateManager:
         except Exception as e:
             print(f"❌ Ошибка форматирования превью упрощенного шаблона: {e}")
             return "❌ Ошибка загрузки превью шаблона"
-
+            
+    def delete_template(self, template_id):
+        """Удаляет шаблон и связанное с ним изображение"""
+        try:
+        # Сначала загружаем шаблон, чтобы получить путь к изображению
+            templates = self.load_templates()
+            template = templates.get(template_id)
+        
+            if not template:
+                print(f"❌ Шаблон {template_id} не найден")
+            return False
+        
+            # Удаляем изображение если есть
+            if template.get('image'):
+                self.delete_image(template['image'])
+        
+        # Удаляем шаблон из базы данных
+            conn = db.get_connection()
+            if not conn:
+                return False
+            
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM templates WHERE id = %s', (template_id,))
+        
+            conn.commit()
+            cursor.close()
+            conn.close()
+        
+            print(f"✅ Шаблон {template_id} успешно удален")
+            return True
+        
+        except Exception as e:
+            print(f"❌ Ошибка удаления шаблона {template_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+            
     def save_image(self, image_bytes, template_id):
         """Сохраняет изображение для шаблона"""
         try:
