@@ -73,12 +73,18 @@ async def enhanced_create_task_start(update: Update, context: ContextTypes.DEFAU
         )
         return TASKS_MAIN
     
-    # Инициализируем данные для создания задачи
+    # Инициализируем данные для создания задачи (ВСЕГДА с schedule_data)
     context.user_data['task_creation'] = {
         'created_by': user_id,
         'is_test': False,
         'accessible_chats': accessible_chats,
-        'schedule_data': {}
+        'schedule_data': {
+            'times': [],
+            'week_days': [],
+            'month_days': [],
+            'schedule_type': None,
+            'frequency': 'weekly'
+        }
     }
     
     await update.message.reply_text(
@@ -277,6 +283,10 @@ async def enhanced_create_task_input_time(update: Update, context: ContextTypes.
         )
         return CREATE_TASK_TIME
     
+    # Гарантируем что schedule_data существует
+    if 'schedule_data' not in context.user_data['task_creation']:
+        context.user_data['task_creation']['schedule_data'] = {}
+    
     # Сохраняем время
     context.user_data['task_creation']['schedule_data']['times'] = result
     
@@ -312,8 +322,15 @@ async def enhanced_create_task_select_schedule_type(update: Update, context: Con
         )
         return CREATE_TASK_SCHEDULE_TYPE
     
+    # Гарантируем что schedule_data существует
+    if 'schedule_data' not in context.user_data['task_creation']:
+        context.user_data['task_creation']['schedule_data'] = {}
+    
     # Сохраняем тип расписания
     context.user_data['task_creation']['schedule_data']['schedule_type'] = schedule_type
+    
+    print(f"🔍 DEBUG: Установлен тип расписания: {schedule_type}")
+    print(f"🔍 DEBUG: Все данные задачи: {context.user_data['task_creation']}")
     
     if schedule_type == 'week_days':
         # Переходим к выбору дней недели
@@ -479,6 +496,17 @@ async def enhanced_create_task_select_frequency(update: Update, context: Context
 async def show_enhanced_task_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает подтверждение создания задачи с новой структурой"""
     task_data = context.user_data['task_creation']
+    
+    # Гарантируем что schedule_data существует
+    if 'schedule_data' not in task_data:
+        task_data['schedule_data'] = {
+            'times': [],
+            'week_days': [],
+            'month_days': [],
+            'schedule_type': None,
+            'frequency': 'weekly'
+        }
+    
     template = task_data['template']
     schedule_data = task_data['schedule_data']
     
