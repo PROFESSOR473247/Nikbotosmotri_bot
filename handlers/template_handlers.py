@@ -1,4 +1,4 @@
-from telegram import Update, ReplyKeyboardMarkup
+Upfrom telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, filters
 from keyboards.template_keyboards import (
     get_templates_main_keyboard, get_groups_keyboard,
@@ -942,13 +942,8 @@ async def delete_template_confirm(update: Update, context: ContextTypes.DEFAULT_
     
     if user_choice == "✅ Да, удалить":
         if template_id and template:
-            # Удаляем изображение если есть
-            if template.get('image'):
-                simplified_template_manager.delete_image(template['image'])
-            
-            # Удаляем шаблон из базы данных
-            from template_manager import delete_template
-            success = delete_template(template_id)
+            # Используем функцию удаления из simplified_template_manager
+            success = simplified_template_manager.delete_template(template_id)
             
             if success:
                 await update.message.reply_text(
@@ -957,7 +952,7 @@ async def delete_template_confirm(update: Update, context: ContextTypes.DEFAULT_
                 )
             else:
                 await update.message.reply_text(
-                    f"❌ Ошибка при удалении шаблона",
+                    f"❌ Ошибка при удалении шаблона '{template['name']}'",
                     reply_markup=get_templates_main_keyboard()
                 )
         else:
