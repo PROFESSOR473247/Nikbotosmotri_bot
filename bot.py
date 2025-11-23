@@ -4,7 +4,9 @@ import asyncio
 import threading
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from template_debug import debug_list_all_templates
 import requests
+
 
 # Настройка логирования
 logging.basicConfig(
@@ -110,8 +112,8 @@ async def run_bot():
             logger.info("Database structure updated")
         except Exception as e:
             logger.error(f"Database update error: {e}")
-
-        # Миграция структуры БД
+        
+        # Миграция структуры БД для шаблонов
         try:
             from database_migration import migrate_templates_table
             migrate_templates_table()
@@ -121,9 +123,9 @@ async def run_bot():
         
         # Инициализация файлов
         try:
-            from template_manager import init_files
+            from template_manager_simplified import simplified_template_manager
             from task_manager import init_task_files
-            init_files()
+            simplified_template_manager.init_files()
             init_task_files()
             logger.info("Files initialized")
         except Exception as e:
@@ -166,6 +168,20 @@ async def run_bot():
         application.add_handler(CommandHandler("admin_stats", admin_stats))
         application.add_handler(CommandHandler("check_access", check_access))
         application.add_handler(CommandHandler("cancel", cancel))
+        
+        # Команда для отладки шаблонов
+        async def debug_templates(update: Update, context: ContextTypes.DEFAULT_TYPE):
+            """Команда для отладки шаблонов"""
+            user_id = update.effective_user.id
+            if user_id != 812934047:  # Ваш ID суперадмина
+                await update.message.reply_text("❌ Нет доступа")
+                return
+            
+            from template_debug import debug_list_all_templates
+            debug_list_all_templates()
+            await update.message.reply_text("✅ Информация о шаблонах выведена в логи")
+        
+        application.add_handler(CommandHandler("debug_templates", debug_templates))
         
         # Текстовый обработчик
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
