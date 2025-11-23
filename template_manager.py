@@ -331,9 +331,34 @@ def delete_template(template_id):
     """Удаляет шаблон (совместимость)"""
     try:
         from database import db
-        return db.delete_template(template_id)
+        
+        # Сначала получаем шаблон, чтобы удалить изображение если есть
+        templates_data = simplified_template_manager.load_templates()
+        template = templates_data.get(template_id)
+        
+        if template and template.get('image'):
+            # Удаляем изображение
+            simplified_template_manager.delete_image(template['image'])
+        
+        # Удаляем шаблон из базы данных
+        conn = db.get_connection()
+        if not conn:
+            return False
+            
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM templates WHERE id = %s', (template_id,))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        print(f"✅ Шаблон {template_id} удален из базы данных")
+        return True
+        
     except Exception as e:
         print(f"❌ Ошибка удаления шаблона {template_id}: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def delete_template_by_id(template_id):
