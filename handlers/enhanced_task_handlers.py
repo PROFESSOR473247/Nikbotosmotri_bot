@@ -83,7 +83,7 @@ async def enhanced_create_task_start(update: Update, context: ContextTypes.DEFAU
     
     await update.message.reply_text(
         "➕ **Создание новой задачи**\n\n"
-        "Шаг 1 из 7: Выберите группу шаблонов:",
+        "Шаг 1 из 6: Выберите группу шаблонов:",
         parse_mode='Markdown',
         reply_markup=get_groups_keyboard(user_id, "task")
     )
@@ -140,7 +140,7 @@ async def enhanced_create_task_select_group(update: Update, context: ContextType
     keyboard.append(["🔙 Назад"])
     
     await update.message.reply_text(
-        f"➕ **Шаг 2 из 7: Выберите шаблон для задачи:**\n\n"
+        f"➕ **Шаг 2 из 6: Выберите шаблон для задачи:**\n\n"
         f"Группа шаблонов: {group_name}\n"
         f"Доступно шаблонов: {len(templates)}",
         parse_mode='Markdown',
@@ -189,7 +189,7 @@ async def enhanced_create_task_select_template(update: Update, context: ContextT
     accessible_chats = context.user_data['task_creation']['accessible_chats']
     
     await update.message.reply_text(
-        f"💬 **Шаг 3 из 7: Выберите Telegram чат для отправки:**\n\n"
+        f"💬 **Шаг 3 из 6: Выберите Telegram чат для отправки:**\n\n"
         f"Шаблон: {template_name}\n"
         f"Группа шаблонов: {context.user_data['task_creation']['group_name']}\n\n"
         f"Доступные чаты:",
@@ -231,14 +231,16 @@ async def enhanced_create_task_select_chat(update: Update, context: ContextTypes
             context.user_data['task_creation']['target_chat_id'] = selected_chat['chat_id']
             context.user_data['task_creation']['target_chat_name'] = selected_chat['chat_name']
             
-            # Переходим к выбору типа расписания
+            # Переходим к вводу времени
             await update.message.reply_text(
-                "📅 **Шаг 4 из 7: Выберите тип расписания:**\n\n"
-                "Как вы хотите настроить отправку сообщений?",
+                "⏰ **Шаг 4 из 6: Укажите время отправки:**\n\n"
+                "Напишите время в формате ЧЧ:ММ через запятую.\n"
+                "Например: 12:35, 15:20, 23:00\n\n"
+                "Можно указать несколько вариантов времени.",
                 parse_mode='Markdown',
-                reply_markup=get_schedule_type_keyboard()
+                reply_markup=get_back_keyboard()
             )
-            return CREATE_TASK_SCHEDULE_TYPE
+            return CREATE_TASK_TIME
             
         else:
             raise ValueError("Неверный номер чата")
@@ -250,11 +252,11 @@ async def enhanced_create_task_select_chat(update: Update, context: ContextTypes
         )
         return CREATE_TASK_CHAT_SELECT
 
-async def enhanced_create_task_select_schedule_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Выбор типа расписания"""
-    user_text = update.message.text
+async def enhanced_create_task_input_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ввод времени отправки"""
+    time_text = update.message.text
     
-    if user_text == "🔙 Назад":
+    if time_text == "🔙 Назад":
         # Возвращаемся к выбору чата
         accessible_chats = context.user_data['task_creation']['accessible_chats']
         await update.message.reply_text(
@@ -262,43 +264,6 @@ async def enhanced_create_task_select_schedule_type(update: Update, context: Con
             reply_markup=get_chat_selection_keyboard(accessible_chats)
         )
         return CREATE_TASK_CHAT_SELECT
-    
-    schedule_type = None
-    if user_text == "📅 По дням недели":
-        schedule_type = 'week_days'
-    elif user_text == "📆 По числам месяца":
-        schedule_type = 'month_days'
-    else:
-        await update.message.reply_text(
-            "❌ Пожалуйста, выберите тип расписания из списка:",
-            reply_markup=get_schedule_type_keyboard()
-        )
-        return CREATE_TASK_SCHEDULE_TYPE
-    
-    # Сохраняем тип расписания
-    context.user_data['task_creation']['schedule_data']['schedule_type'] = schedule_type
-    
-    # Переходим к вводу времени
-    await update.message.reply_text(
-        "⏰ **Шаг 5 из 7: Укажите время отправки:**\n\n"
-        "Напишите время в формате ЧЧ:ММ через запятую.\n"
-        "Например: 12:35, 15:20, 23:00\n\n"
-        "Можно указать несколько вариантов времени.",
-        parse_mode='Markdown',
-        reply_markup=get_back_keyboard()
-    )
-    return CREATE_TASK_TIME
-
-async def enhanced_create_task_input_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ввод времени отправки"""
-    time_text = update.message.text
-    
-    if time_text == "🔙 Назад":
-        await update.message.reply_text(
-            "🔄 Возврат к выбору типа расписания:",
-            reply_markup=get_schedule_type_keyboard()
-        )
-        return CREATE_TASK_SCHEDULE_TYPE
     
     # Валидируем ввод времени
     is_valid, result = TaskValidator.validate_time_input(time_text)
@@ -315,12 +280,45 @@ async def enhanced_create_task_input_time(update: Update, context: ContextTypes.
     # Сохраняем время
     context.user_data['task_creation']['schedule_data']['times'] = result
     
-    schedule_type = context.user_data['task_creation']['schedule_data']['schedule_type']
+    # Переходим к выбору типа расписания
+    await update.message.reply_text(
+        "📅 **Шаг 5 из 6: Выберите тип расписания:**\n\n"
+        "Как вы хотите настроить отправку сообщений?",
+        parse_mode='Markdown',
+        reply_markup=get_schedule_type_keyboard()
+    )
+    return CREATE_TASK_SCHEDULE_TYPE
+
+async def enhanced_create_task_select_schedule_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор типа расписания"""
+    user_text = update.message.text
+    
+    if user_text == "🔙 Назад":
+        await update.message.reply_text(
+            "🔄 Возврат к вводу времени:",
+            reply_markup=get_back_keyboard()
+        )
+        return CREATE_TASK_TIME
+    
+    schedule_type = None
+    if user_text == "📅 По дням недели":
+        schedule_type = 'week_days'
+    elif user_text == "📆 По числам месяца":
+        schedule_type = 'month_days'
+    else:
+        await update.message.reply_text(
+            "❌ Пожалуйста, выберите тип расписания из списка:",
+            reply_markup=get_schedule_type_keyboard()
+        )
+        return CREATE_TASK_SCHEDULE_TYPE
+    
+    # Сохраняем тип расписания
+    context.user_data['task_creation']['schedule_data']['schedule_type'] = schedule_type
     
     if schedule_type == 'week_days':
         # Переходим к выбору дней недели
         await update.message.reply_text(
-            "📅 **Шаг 6 из 7: Выберите дни недели для отправки:**\n\n"
+            "📅 **Выберите дни недели для отправки:**\n\n"
             "Выберите один или несколько дней:",
             parse_mode='Markdown',
             reply_markup=get_week_days_keyboard()
@@ -329,7 +327,7 @@ async def enhanced_create_task_input_time(update: Update, context: ContextTypes.
     else:
         # Переходим к вводу чисел месяца
         await update.message.reply_text(
-            "📆 **Шаг 6 из 7: Укажите числа месяца для отправки:**\n\n"
+            "📆 **Укажите числа месяца для отправки:**\n\n"
             "Напишите числа через запятую (от 1 до 31).\n"
             "Например: 1, 10, 15, 28\n\n"
             "Можно указать несколько чисел.",
@@ -344,10 +342,10 @@ async def enhanced_create_task_select_week_days(update: Update, context: Context
     
     if user_text == "🔙 Назад":
         await update.message.reply_text(
-            "🔄 Возврат к вводу времени:",
-            reply_markup=get_back_keyboard()
+            "🔄 Возврат к выбору типа расписания:",
+            reply_markup=get_schedule_type_keyboard()
         )
-        return CREATE_TASK_TIME
+        return CREATE_TASK_SCHEDULE_TYPE
     
     if user_text == "✅ Завершить выбор дней":
         selected_days = context.user_data['task_creation']['schedule_data'].get('week_days', [])
@@ -360,7 +358,7 @@ async def enhanced_create_task_select_week_days(update: Update, context: Context
         
         # Переходим к выбору периодичности
         await update.message.reply_text(
-            "🔄 **Шаг 7 из 7: Выберите периодичность отправки:**",
+            "🔄 **Шаг 6 из 6: Выберите периодичность отправки:**",
             parse_mode='Markdown',
             reply_markup=get_frequency_keyboard()
         )
@@ -410,10 +408,10 @@ async def enhanced_create_task_input_month_days(update: Update, context: Context
     
     if days_text == "🔙 Назад":
         await update.message.reply_text(
-            "🔄 Возврат к вводу времени:",
-            reply_markup=get_back_keyboard()
+            "🔄 Возврат к выбору типа расписания:",
+            reply_markup=get_schedule_type_keyboard()
         )
-        return CREATE_TASK_TIME
+        return CREATE_TASK_SCHEDULE_TYPE
     
     # Валидируем ввод чисел месяца
     is_valid, result = TaskValidator.validate_month_days_input(days_text)
@@ -432,7 +430,7 @@ async def enhanced_create_task_input_month_days(update: Update, context: Context
     
     # Переходим к выбору периодичности
     await update.message.reply_text(
-        "🔄 **Шаг 7 из 7: Выберите периодичность отправки:**",
+        "🔄 **Шаг 6 из 6: Выберите периодичность отправки:**",
         parse_mode='Markdown',
         reply_markup=get_frequency_keyboard()
     )
@@ -602,7 +600,7 @@ async def enhanced_create_task_confirm(update: Update, context: ContextTypes.DEF
         )
         return CREATE_TASK_CONFIRM
 
-# ===== ОСТАЛЬНЫЕ ФУНКЦИИ =====
+# ===== ОСТАЛЬНЫЕ ФУНКЦИИ (без изменений) =====
 
 async def show_tasks_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает статус всех активных задач"""
@@ -1021,13 +1019,13 @@ def get_enhanced_task_conversation_handler():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, enhanced_create_task_select_chat),
                 MessageHandler(filters.Regex("^🔙 Назад$"), enhanced_create_task_select_template)
             ],
-            CREATE_TASK_SCHEDULE_TYPE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, enhanced_create_task_select_schedule_type),
-                MessageHandler(filters.Regex("^🔙 Назад$"), enhanced_create_task_select_chat)
-            ],
             CREATE_TASK_TIME: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, enhanced_create_task_input_time),
-                MessageHandler(filters.Regex("^🔙 Назад$"), enhanced_create_task_select_schedule_type)
+                MessageHandler(filters.Regex("^🔙 Назад$"), enhanced_create_task_select_chat)
+            ],
+            CREATE_TASK_SCHEDULE_TYPE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, enhanced_create_task_select_schedule_type),
+                MessageHandler(filters.Regex("^🔙 Назад$"), enhanced_create_task_input_time)
             ],
             CREATE_TASK_WEEK_DAYS: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, enhanced_create_task_select_week_days),
