@@ -4,10 +4,7 @@ import asyncio
 import threading
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from template_debug import debug_list_all_templates
-from handlers.debug_handlers import get_debug_handlers
 import requests
-
 
 # Настройка логирования
 logging.basicConfig(
@@ -138,9 +135,23 @@ async def run_bot():
         # Настраиваем обработчик ошибок
         async def error_handler(update, context):
             try:
+                # Логируем полную информацию об ошибке
+                logger.error(f"Handler error: {context.error}")
+                logger.error(f"Error type: {type(context.error)}")
+                
+                # Логируем данные контекста если есть
+                if hasattr(context, 'user_data') and context.user_data:
+                    logger.error(f"User data: {context.user_data}")
+                
+                # Логируем данные update если есть
+                if update and update.message:
+                    logger.error(f"Update message: {update.message.text}")
+                    
                 raise context.error
             except Exception as e:
-                logger.error(f"Handler error: {e}")
+                logger.error(f"Error in error handler: {e}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
         
         application.add_error_handler(error_handler)
         
@@ -154,7 +165,7 @@ async def run_bot():
         from handlers.template_handlers import get_template_conversation_handler
         from handlers.enhanced_task_handlers import get_enhanced_task_conversation_handler
         from handlers.admin_handlers import get_admin_conversation_handler
-        from handlers.debug_handlers import get_debug_handlers  # Добавляем этот импорт
+        from handlers.debug_handlers import get_debug_handlers
         
         # ConversationHandler
         application.add_handler(get_admin_conversation_handler())
