@@ -918,6 +918,9 @@ async def delete_template_select(update: Update, context: ContextTypes.DEFAULT_T
         )
         return TEMPLATES_MAIN
     
+    # Добавляем отладочную информацию
+    print(f"🔍 Найден шаблон для удаления: ID={template_id}, Name={template_name}")
+    
     # Сохраняем данные для удаления
     context.user_data['deleting_template_id'] = template_id
     context.user_data['deleting_template'] = template
