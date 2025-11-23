@@ -299,125 +299,125 @@ class DatabaseManager:
     # ===== МЕТОДЫ ДЛЯ ЗАДАЧ (ОБНОВЛЕННЫЕ) =====
     
     def save_task(self, task_data):
-        """Сохраняет задачу в базу данных с новой структурой"""
-        from task_models import TaskData
+    """Сохраняет задачу в базу данных с новой структурой"""
+    from task_models import TaskData
+    
+    print(f"💾 Попытка сохранения задачи в базу данных: {task_data.get('template_name')}")
+    
+    conn = self.get_connection()
+    if not conn:
+        print("❌ Не удалось подключиться к базе данных для сохранения задачи")
+        return False
         
-        print(f"💾 Попытка сохранения задачи в базу данных: {task_data.get('template_name')}")
+    try:
+        cursor = conn.cursor()
         
-        conn = self.get_connection()
-        if not conn:
-            print("❌ Не удалось подключиться к базе данных для сохранения задачи")
-            return False
+        # Подготавливаем данные
+        if isinstance(task_data, TaskData):
+            # Если передали объект TaskData, конвертируем в словарь
+            data_dict = task_data.to_dict()
+        else:
+            # Если уже словарь, используем как есть
+            data_dict = task_data
             
+        task_id = data_dict.get('id')
+        template_id = data_dict.get('template_id')
+        template_name = data_dict.get('template_name', '')
+        template_text = data_dict.get('template_text', '')
+        template_image = data_dict.get('template_image')
+        group_name = data_dict.get('group_name', '')
+        created_by = data_dict.get('created_by')
+        is_active = data_dict.get('is_active', True)
+        is_test = data_dict.get('is_test', False)
+        last_executed = data_dict.get('last_executed')
+        next_execution = data_dict.get('next_execution')
+        target_chat_id = data_dict.get('target_chat_id')
+        
+        # Новые поля расписания
+        schedule_type = data_dict.get('schedule_type')
+        times = data_dict.get('times', '[]')
+        week_days = data_dict.get('week_days', '[]')
+        month_days = data_dict.get('month_days', '[]')
+        frequency = data_dict.get('frequency', 'weekly')
+        
+        print(f"📊 Данные задачи для сохранения:")
+        print(f"   ID: {task_id}")
+        print(f"   Name: {template_name}")
+        print(f"   Group: {group_name}")
+        print(f"   Target Chat: {target_chat_id}")
+        print(f"   Schedule Type: {schedule_type}")
+        print(f"   Times: {times}")
+        print(f"   Frequency: {frequency}")
+        
+        cursor.execute('''
+            INSERT INTO tasks (id, template_id, template_name, template_text, template_image, 
+                             group_name, created_by, is_active, is_test, last_executed, 
+                             next_execution, target_chat_id, schedule_type, times, week_days, 
+                             month_days, frequency)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (id) DO UPDATE SET
+                template_id = EXCLUDED.template_id,
+                template_name = EXCLUDED.template_name,
+                template_text = EXCLUDED.template_text,
+                template_image = EXCLUDED.template_image,
+                group_name = EXCLUDED.group_name,
+                created_by = EXCLUDED.created_by,
+                is_active = EXCLUDED.is_active,
+                is_test = EXCLUDED.is_test,
+                last_executed = EXCLUDED.last_executed,
+                next_execution = EXCLUDED.next_execution,
+                target_chat_id = EXCLUDED.target_chat_id,
+                schedule_type = EXCLUDED.schedule_type,
+                times = EXCLUDED.times,
+                week_days = EXCLUDED.week_days,
+                month_days = EXCLUDED.month_days,
+                frequency = EXCLUDED.frequency
+        ''', (
+            task_id,
+            template_id,
+            template_name,
+            template_text,
+            template_image,
+            group_name,
+            created_by,
+            is_active,
+            is_test,
+            last_executed,
+            next_execution,
+            target_chat_id,
+            schedule_type,
+            times,
+            week_days,
+            month_days,
+            frequency
+        ))
+        
+        conn.commit()
+        
+        # Проверим что действительно сохранилось
+        cursor.execute('SELECT COUNT(*) FROM tasks WHERE id = %s', (task_id,))
+        count = cursor.fetchone()[0]
+        
+        cursor.close()
+        conn.close()
+        
+        if count > 0:
+            print(f"✅ Задача {task_id} успешно сохранена в базе данных (проверено: {count} записей)")
+            return True
+        else:
+            print(f"❌ Задача {task_id} не была сохранена в базу данных")
+            return False
+        
+    except Exception as e:
+        print(f"❌ Ошибка сохранения задачи: {e}")
+        import traceback
+        traceback.print_exc()
         try:
-            cursor = conn.cursor()
-            
-            # Подготавливаем данные
-            if isinstance(task_data, TaskData):
-                data_dict = task_data.to_dict()
-            else:
-                data_dict = task_data
-            
-            task_id = data_dict.get('id')
-            template_id = data_dict.get('template_id')
-            template_name = data_dict.get('template_name', '')
-            template_text = data_dict.get('template_text', '')
-            template_image = data_dict.get('template_image')
-            group_name = data_dict.get('group_name', '')
-            created_by = data_dict.get('created_by')
-            is_active = data_dict.get('is_active', True)
-            is_test = data_dict.get('is_test', False)
-            last_executed = data_dict.get('last_executed')
-            next_execution = data_dict.get('next_execution')
-            target_chat_id = data_dict.get('target_chat_id')
-            
-            # Новые поля расписания
-            schedule_type = data_dict.get('schedule_type')
-            times = data_dict.get('times', '[]')
-            week_days = data_dict.get('week_days', '[]')
-            month_days = data_dict.get('month_days', '[]')
-            frequency = data_dict.get('frequency', 'weekly')
-            
-            print(f"📊 Данные задачи для сохранения:")
-            print(f"   ID: {task_id}")
-            print(f"   Name: {template_name}")
-            print(f"   Group: {group_name}")
-            print(f"   Target Chat: {target_chat_id}")
-            print(f"   Schedule Type: {schedule_type}")
-            print(f"   Times: {times}")
-            print(f"   Frequency: {frequency}")
-            
-            cursor.execute('''
-                INSERT INTO tasks (id, template_id, template_name, template_text, template_image, 
-                                 group_name, created_by, is_active, is_test, last_executed, 
-                                 next_execution, target_chat_id, schedule_type, times, week_days, 
-                                 month_days, frequency)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (id) DO UPDATE SET
-                    template_id = EXCLUDED.template_id,
-                    template_name = EXCLUDED.template_name,
-                    template_text = EXCLUDED.template_text,
-                    template_image = EXCLUDED.template_image,
-                    group_name = EXCLUDED.group_name,
-                    created_by = EXCLUDED.created_by,
-                    is_active = EXCLUDED.is_active,
-                    is_test = EXCLUDED.is_test,
-                    last_executed = EXCLUDED.last_executed,
-                    next_execution = EXCLUDED.next_execution,
-                    target_chat_id = EXCLUDED.target_chat_id,
-                    schedule_type = EXCLUDED.schedule_type,
-                    times = EXCLUDED.times,
-                    week_days = EXCLUDED.week_days,
-                    month_days = EXCLUDED.month_days,
-                    frequency = EXCLUDED.frequency
-            ''', (
-                task_id,
-                template_id,
-                template_name,
-                template_text,
-                template_image,
-                group_name,
-                created_by,
-                is_active,
-                is_test,
-                last_executed,
-                next_execution,
-                target_chat_id,
-                schedule_type,
-                times,
-                week_days,
-                month_days,
-                frequency
-            ))
-            
-            conn.commit()
-            
-            # Проверим что действительно сохранилось
-            cursor.execute('SELECT COUNT(*) FROM tasks WHERE id = %s', (task_id,))
-            count = cursor.fetchone()[0]
-            
-            cursor.close()
+            conn.rollback()
             conn.close()
-            
-            if count > 0:
-                print(f"✅ Задача {task_id} успешно сохранена в базе данных (проверено: {count} записей)")
-                return True
-            else:
-                print(f"❌ Задача {task_id} не была сохранена в базу данных")
-                return False
-            
-        except Exception as e:
-            print(f"❌ Ошибка сохранения задачи: {e}")
-            import trace
-            
-            import traceback
-            traceback.print_exc()
-            try:
-                conn.rollback()
-                conn.close()
-            except:
-                pass
-            return False
+        except:
+            pass
+        return False
 
     def load_tasks(self):
         """Загружает все задачи из базы данных с новой структурой"""
