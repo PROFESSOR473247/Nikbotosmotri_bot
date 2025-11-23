@@ -12,7 +12,7 @@ async def debug_templates(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id != 812934047:  # Ваш ID суперадмина
         await update.message.reply_text("❌ Нет доступа")
         return
-    
+    
     debug_list_all_templates()
     await update.message.reply_text("✅ Информация о шаблонах выведена в логи")
 
