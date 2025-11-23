@@ -10,7 +10,7 @@ from keyboards.main_keyboards import get_main_keyboard
 from template_manager_simplified import simplified_template_manager
 from auth_manager import auth_manager
 
-# === СОСТОЯНИЯ CONVERSATION HANDLER ===
+# === СОСТОЯНИЯ CONVERSATION HANDLER === 
 (
     TEMPLATES_MAIN, TEMPLATE_LIST_MENU, TEMPLATE_LIST_ALL, 
     TEMPLATE_LIST_BY_GROUP, CREATE_TEMPLATE_GROUP, CREATE_TEMPLATE_NAME, 
