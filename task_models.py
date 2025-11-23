@@ -36,27 +36,27 @@ class TaskData:
         self.schedule = TaskSchedule()
     
     def to_dict(self) -> Dict[str, Any]:
-        """Конвертирует в словарь для сохранения в БД"""
-        return {
-            'id': self.id,
-            'template_id': self.template_id,
-            'template_name': self.template_name,
-            'template_text': self.template_text,
-            'template_image': self.template_image,
-            'group_name': self.group_name,
-            'created_by': self.created_by,
-            'created_at': self.created_at,
-            'is_active': self.is_active,
-            'is_test': self.is_test,
-            'last_executed': self.last_executed,
-            'next_execution': self.next_execution,
-            'target_chat_id': self.target_chat_id,
-            'schedule_type': self.schedule.schedule_type,
-            'times': json.dumps(self.schedule.times),
-            'week_days': json.dumps(self.schedule.week_days),
-            'month_days': json.dumps(self.schedule.month_days),
-            'frequency': self.schedule.frequency
-        }
+    """Конвертирует в словарь для сохранения в БД"""
+    return {
+        'id': self.id,
+        'template_id': self.template_id,
+        'template_name': self.template_name,
+        'template_text': self.template_text,
+        'template_image': self.template_image,
+        'group_name': self.group_name,
+        'created_by': self.created_by,
+        'created_at': self.created_at,
+        'is_active': self.is_active,
+        'is_test': self.is_test,
+        'last_executed': self.last_executed,
+        'next_execution': self.next_execution,
+        'target_chat_id': self.target_chat_id,
+        'schedule_type': self.schedule.schedule_type,
+        'times': json.dumps(self.schedule.times),
+        'week_days': json.dumps(self.schedule.week_days),
+        'month_days': json.dumps(self.schedule.month_days),
+        'frequency': self.schedule.frequency
+    }
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'TaskData':
