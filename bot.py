@@ -153,6 +153,7 @@ async def run_bot():
         from handlers.template_handlers import get_template_conversation_handler
         from handlers.enhanced_task_handlers import get_enhanced_task_conversation_handler
         from handlers.admin_handlers import get_admin_conversation_handler
+        from handlers.debug_handlers import get_debug_handlers  # Добавляем этот импорт
         
         # ConversationHandler
         application.add_handler(get_admin_conversation_handler())
@@ -168,6 +169,10 @@ async def run_bot():
         application.add_handler(CommandHandler("admin_stats", admin_stats))
         application.add_handler(CommandHandler("check_access", check_access))
         application.add_handler(CommandHandler("cancel", cancel))
+        
+        # Отладочные команды
+        for handler in get_debug_handlers():
+            application.add_handler(handler)
         
         # Текстовый обработчик
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
